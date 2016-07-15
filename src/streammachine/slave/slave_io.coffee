@@ -97,6 +97,8 @@ module.exports = class SlaveIO extends require("events").EventEmitter
         @io.on "disconnect", =>
             @connected = false
             @_log.debug "Disconnected from master."
+
+            @emit "disconnect"
             # FIXME: Exit?
 
         # -- RPC calls -- #
