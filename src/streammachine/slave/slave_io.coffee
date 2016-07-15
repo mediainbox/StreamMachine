@@ -49,7 +49,7 @@ module.exports = class SlaveIO extends require("events").EventEmitter
     #----------
 
     _connect: (master) ->
-        @_log.info "Slave trying connection to master [#{ master }] :: attempt #{ @attempts }"
+        @_log.info "Slave trying connection to master #{ master }"
 
         @io = Socket.connect master, reconnection:true, timeout:@opts.timeout
 
