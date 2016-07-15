@@ -14,10 +14,13 @@ module.exports = SlaveIO = (function(_super) {
     this.connected = false;
     this.io = null;
     this.id = null;
+    this.attempts = 1;
+    this.masterIndex = -1;
+    this.forceDisconnect = false;
     this._log.debug("Connecting to master at ", {
       master: this.opts.master
     });
-    this._connect();
+    this._start();
   }
 
   SlaveIO.prototype.once_connected = function(cb) {
@@ -32,16 +35,33 @@ module.exports = SlaveIO = (function(_super) {
     }
   };
 
+  SlaveIO.prototype._start = function() {
+    var master;
+    master = this.opts.master;
+    if (typeof master !== "string") {
+      if (master.length !== (this.masterIndex + 1)) {
+        this.masterIndex = this.masterIndex + 1;
+      }
+      if (this.attempts >= this.opts.retry) {
+        this.attempts = 1;
+      }
+      master = master[this.masterIndex];
+    }
+    this.disconnect();
+    return this._connect(master);
+  };
+
   SlaveIO.prototype.disconnect = function() {
     var _ref;
+    this.forceDisconnect = true;
     return (_ref = this.io) != null ? _ref.disconnect() : void 0;
   };
 
-  SlaveIO.prototype._connect = function() {
-    this._log.info("Slave trying connection to master.");
-    this.io = Socket.connect(this.opts.master, {
+  SlaveIO.prototype._connect = function(master) {
+    this._log.info("Slave trying connection to master [" + master + "] :: attempt " + this.attempts);
+    this.io = Socket.connect(master, {
       reconnection: true,
-      timeout: 2000
+      timeout: this.opts.timeout
     });
     this.io.on("connect", (function(_this) {
       return function() {
@@ -66,20 +86,23 @@ module.exports = SlaveIO = (function(_super) {
     this.io.on("connect_error", (function(_this) {
       return function(err) {
         if (err.code = ~/ECONNREFUSED/) {
-          return _this._log.info("Slave connection refused: " + err);
+          _this._log.info("Slave connection refused: " + err);
         } else {
           _this._log.info("Slave got connection error of " + err, {
             error: err
           });
-          return console.log("got connection error of ", err);
+          console.log("got connection error of ", err);
+        }
+        _this.attempts = _this.attempts + 1;
+        if (_this.isNecesaryReconnect()) {
+          return _this._start();
         }
       };
     })(this));
     this.io.on("disconnect", (function(_this) {
       return function() {
         _this.connected = false;
-        _this._log.debug("Disconnected from master.");
-        return _this.emit("disconnect");
+        return _this._log.debug("Disconnected from master.");
       };
     })(this));
     this.io.on("config", (function(_this) {
@@ -121,6 +144,19 @@ module.exports = SlaveIO = (function(_super) {
         return _this.emit("hls_snapshot:" + obj.stream, obj.snapshot);
       };
     })(this));
+  };
+
+  SlaveIO.prototype.isNecesaryReconnect = function() {
+    var master;
+    master = this.opts.master;
+    if (typeof master !== "string") {
+      if (this.attempts < this.opts.retry) {
+        return false;
+      } else if (master.length !== (this.masterIndex + 1)) {
+        return true;
+      }
+    }
+    return false;
   };
 
   SlaveIO.prototype.vitals = function(key, cb) {
