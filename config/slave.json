@@ -1,10 +1,7 @@
 {
   "mode": "slave",
   "slave": {
-    "master": [
-      "ws://localhost:8020?password=super_secure_password",
-      "ws://localhost:8022?password=super_secure_password2"
-    ],
+    "master": "ws://localhost:8020?password=super_secure_password",
     "timeout": 2000,
     "retry": 3
   },
