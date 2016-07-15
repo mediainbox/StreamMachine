@@ -58,7 +58,7 @@ module.exports = SlaveIO = (function(_super) {
   };
 
   SlaveIO.prototype._connect = function(master) {
-    this._log.info("Slave trying connection to master [" + master + "] :: attempt " + this.attempts);
+    this._log.info("Slave trying connection to master " + master);
     this.io = Socket.connect(master, {
       reconnection: true,
       timeout: this.opts.timeout
