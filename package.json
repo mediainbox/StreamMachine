@@ -34,7 +34,7 @@
     "cors": "^2.7.1",
     "debug": "~2.2.0",
     "dissolve": "~0.3.1",
-    "elasticsearch": "~8.1.0",
+    "elasticsearch": "~11.0.1",
     "express": "~3.3.0",
     "express-api-helper": "~0.0.1",
     "fluent-ffmpeg": "~1.7.1",
