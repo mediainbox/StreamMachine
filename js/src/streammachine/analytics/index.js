@@ -48,7 +48,7 @@ module.exports = Analytics = (function() {
     }
     this.es = new elasticsearch.Client({
       hosts: hosts,
-      apiVersion: "1.4",
+      apiVersion: "2.3",
       requestTimeout: this.opts.config.request_timeout || 30000
     });
     this.idx_batch = new BatchedQueue({
