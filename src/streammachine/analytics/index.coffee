@@ -46,7 +46,7 @@ module.exports = class Analytics
             es_uri = "http://#{uri.hostname}:#{uri.port||9200}"
 
             @log.debug "Connecting to Elasticsearch at #{es_uri}"
-            hosts.push uri
+            hosts.push es_uri
 
         @es = new elasticsearch.Client
             hosts:          hosts

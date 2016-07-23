@@ -44,7 +44,7 @@ module.exports = Analytics = (function() {
       uri = URL.parse(uri);
       es_uri = "http://" + uri.hostname + ":" + (uri.port || 9200);
       this.log.debug("Connecting to Elasticsearch at " + es_uri);
-      hosts.push(uri);
+      hosts.push(es_uri);
     }
     this.es = new elasticsearch.Client({
       hosts: hosts,
