@@ -24,21 +24,31 @@ debug = require("debug")("sm:analytics");
 
 module.exports = Analytics = (function() {
   function Analytics(opts, cb) {
-    var es_uri;
+    var es_uri, hosts, uri, uris, _i, _len;
     this.opts = opts;
-    this._uri = URL.parse(this.opts.config.es_uri);
     this.log = this.opts.log;
     this._timeout_sec = Number(this.opts.config.finalize_secs);
     if (this.opts.redis) {
       this.redis = this.opts.redis.client;
     }
-    es_uri = "http://" + this._uri.hostname + ":" + (this._uri.port || 9200);
+    uris = this.opts.config.es_uri;
+    hosts = [];
+    if (typeof uris === "string") {
+      uris = [uris];
+    }
+    this._uri = URL.parse(uris[0]);
     this.idx_prefix = this._uri.pathname.substr(1);
-    this.log.debug("Connecting to Elasticsearch at " + es_uri + " with prefix of " + this.idx_prefix);
-    debug("Connecting to ES at " + es_uri + ", prefix " + this.idx_prefix);
+    debug("Connecting to Elasticsearch with prefix " + this.idx_prefix);
+    for (_i = 0, _len = uris.length; _i < _len; _i++) {
+      uri = uris[_i];
+      uri = URL.parse(uri);
+      es_uri = "http://" + uri.hostname + ":" + (uri.port || 9200);
+      this.log.debug("Connecting to Elasticsearch at " + es_uri);
+      hosts.push(es_uri);
+    }
     this.es = new elasticsearch.Client({
-      host: es_uri,
-      apiVersion: "1.4",
+      hosts: hosts,
+      apiVersion: "2.3",
       requestTimeout: this.opts.config.request_timeout || 30000
     });
     this.idx_batch = new BatchedQueue({
