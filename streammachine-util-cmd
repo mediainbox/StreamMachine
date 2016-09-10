@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+try { require('newrelic') } catch (e) {}
+
 var path = require('path');
 var fs   = require('fs');
 var src  = path.dirname(fs.realpathSync(__filename));
