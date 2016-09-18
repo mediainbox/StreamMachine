@@ -1,8 +1,8 @@
 {
  "mode": "master",
- "source_port": 8005,
+ "source_port": 8006,
  "master": {
-   "port": 8020,
+   "port": 8022,
    "password": "super_secure_password"
  },
  "log": {

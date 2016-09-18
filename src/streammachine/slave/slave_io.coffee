@@ -2,15 +2,18 @@ Socket = require "socket.io-client"
 
 module.exports = class SlaveIO extends require("events").EventEmitter
     constructor: (@slave,@_log,@opts) ->
-        @connected  = false
-        @io         = null
-        @id         = null
+        @connected       = false
+        @io              = null
+        @id              = null
+        @attempts        = 1
+        @masterIndex     = -1
+        @forceDisconnect = false
 
         # -- connect to the master server -- #
 
         @_log.debug "Connecting to master at ", master:@opts.master
 
-        @_connect()
+        @_start()
 
     #----------
 
@@ -22,15 +25,33 @@ module.exports = class SlaveIO extends require("events").EventEmitter
 
     #----------
 
+    _start: ->
+        master = @opts.master
+
+        if typeof master != "string"
+            if master.length isnt (@masterIndex + 1)
+                @masterIndex = @masterIndex + 1
+
+            if @attempts >= @opts.retry
+                @attempts = 1
+
+            master = master[@masterIndex]
+
+        @disconnect()
+        @_connect(master)
+
+    #----------
+
     disconnect: ->
+        @forceDisconnect = true
         @io?.disconnect()
 
     #----------
 
-    _connect: ->
-        @_log.info "Slave trying connection to master."
+    _connect: (master) ->
+        @_log.info "Slave trying connection to master #{ master }"
 
-        @io = Socket.connect @opts.master, reconnection:true, timeout:2000
+        @io = Socket.connect master, reconnection:true, timeout:@opts.timeout
 
         # -- handle new connections -- #
 
@@ -65,6 +86,11 @@ module.exports = class SlaveIO extends require("events").EventEmitter
             else
                 @_log.info "Slave got connection error of #{err}", error:err
                 console.log "got connection error of ", err
+
+            @attempts = @attempts + 1
+
+            if @isNecesaryReconnect()
+                @_start()
 
         # -- handle disconnects -- #
 
@@ -104,6 +130,19 @@ module.exports = class SlaveIO extends require("events").EventEmitter
                     s[k] = new Date(s[k]) if s[k]
 
             @emit "hls_snapshot:#{obj.stream}", obj.snapshot
+
+    #----------
+
+    isNecesaryReconnect: ->
+        master = @opts.master
+
+        if typeof master != "string"
+            if @attempts < @opts.retry
+                return false
+
+            else if master.length isnt (@masterIndex + 1)
+                return true
+        false
 
     #----------
 
