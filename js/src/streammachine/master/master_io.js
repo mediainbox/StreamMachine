@@ -70,7 +70,7 @@ module.exports = MasterIO = (function(_super) {
     return this.io.on("connection", (function(_this) {
       return function(sock) {
         debug("Master got connection");
-        return sock.once("ok", nr.createWebTransaction("/slave/ok", function(cb) {
+        return sock.once("ok", nr.createWebTransaction("slave/ok", function(cb) {
           debug("Got OK from incoming slave connection at " + sock.id);
           cb("OK");
           _this.log.debug("slave connection is " + sock.id);

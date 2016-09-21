@@ -51,7 +51,7 @@ module.exports = class MasterIO extends require("events").EventEmitter
             debug "Master got connection"
             # a slave may make multiple connections to test transports. we're
             # only interested in the one that gives us the OK
-            sock.once "ok", nr.createWebTransaction "/slave/ok", (cb) =>
+            sock.once "ok", nr.createWebTransaction "slave/ok", (cb) =>
                 debug "Got OK from incoming slave connection at #{sock.id}"
 
                 # ping back to let the slave know we're here
