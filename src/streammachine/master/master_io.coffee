@@ -1,3 +1,4 @@
+nr = require "newrelic"
 _ = require "underscore"
 
 debug = require("debug")("sm:master:master_io")
@@ -50,7 +51,7 @@ module.exports = class MasterIO extends require("events").EventEmitter
             debug "Master got connection"
             # a slave may make multiple connections to test transports. we're
             # only interested in the one that gives us the OK
-            sock.once "ok", (cb) =>
+            sock.once "ok", nr.createWebTransaction "/slave/ok", (cb) =>
                 debug "Got OK from incoming slave connection at #{sock.id}"
 
                 # ping back to let the slave know we're here
@@ -65,6 +66,8 @@ module.exports = class MasterIO extends require("events").EventEmitter
                 @slaves[sock.id].on "disconnect", =>
                     delete @slaves[ sock.id ]
                     @emit "disconnect", sock.id
+
+                nr.endTransaction()
 
     #----------
 

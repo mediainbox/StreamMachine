@@ -20,7 +20,14 @@
   "main": "./js/streamer.js",
   "license": "MIT",
   "scripts": {
-    "test": "./node_modules/.bin/mocha"
+    "test": "./node_modules/.bin/mocha",
+    "start": "./streammachine-runner-cmd",
+    "start:debug": "grunt; DEBUG='sm*' ./streammachine-runner-cmd",
+    "docker": "docker run -ti --rm -v $PWD:/data -p 9001:9001 sm",
+    "docker:start": "npm run docker -- npm start",
+    "docker:start:debug": "npm run docker -- npm run start:debug",
+    "docker:start:debug:master": "npm run docker:start:debug -- -- --config config/master.json",
+    "docker:build": "docker build -t 'sm' ."
   },
   "engines": {
     "node": ">=0.10.0"

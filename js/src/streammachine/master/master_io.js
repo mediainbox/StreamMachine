@@ -1,6 +1,8 @@
-var MasterIO, debug, _,
+var MasterIO, debug, nr, _,
   __hasProp = {}.hasOwnProperty,
   __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
+
+nr = require("newrelic");
 
 _ = require("underscore");
 
@@ -68,7 +70,7 @@ module.exports = MasterIO = (function(_super) {
     return this.io.on("connection", (function(_this) {
       return function(sock) {
         debug("Master got connection");
-        return sock.once("ok", function(cb) {
+        return sock.once("ok", nr.createWebTransaction("/slave/ok", function(cb) {
           debug("Got OK from incoming slave connection at " + sock.id);
           cb("OK");
           _this.log.debug("slave connection is " + sock.id);
@@ -76,11 +78,12 @@ module.exports = MasterIO = (function(_super) {
             sock.emit("config", _this._config);
           }
           _this.slaves[sock.id] = new Slave(_this, sock);
-          return _this.slaves[sock.id].on("disconnect", function() {
+          _this.slaves[sock.id].on("disconnect", function() {
             delete _this.slaves[sock.id];
             return _this.emit("disconnect", sock.id);
           });
-        });
+          return nr.endTransaction();
+        }));
       };
     })(this));
   };
