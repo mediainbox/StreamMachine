@@ -120,7 +120,7 @@ module.exports = Server = (function(_super) {
       this.app.use((function(_this) {
         return function(req, res, next) {
           var ua, _ref6;
-          ua = _.compact([req.params.ua, (_ref6 = req.headers) != null ? _ref6['user-agent'] : void 0]).join(" | ");
+          ua = _.compact([req.param("ua"), (_ref6 = req.headers) != null ? _ref6['user-agent'] : void 0]).join(" | ");
           if (idx_match.test(ua)) {
 
           } else {
@@ -206,7 +206,7 @@ module.exports = Server = (function(_super) {
         return new _this.core.Outputs.live_streaming(req.stream, {
           req: req,
           res: res,
-          format: req.params.format
+          format: req.param("format")
         });
       };
     })(this));
@@ -219,7 +219,7 @@ module.exports = Server = (function(_super) {
     this.app.get("/:stream", (function(_this) {
       return function(req, res) {
         res.set("X-Powered-By", "StreamMachine");
-        if (req.params.pump) {
+        if (req.param("pump")) {
           return new _this.core.Outputs.pumper(req.stream, {
             req: req,
             res: res

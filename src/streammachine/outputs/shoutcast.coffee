@@ -20,7 +20,7 @@ module.exports = class Shoutcast extends BaseOutput
             debug "Incoming Request Headers: ", @opts.req.headers
             # -- startup mode...  sending headers -- #
 
-            @client.offsetSecs  = @opts.req.params.offset || -1
+            @client.offsetSecs  = @opts.req.param("offset") || -1
             @client.meta_int    = @stream.opts.meta_interval
 
             @opts.res.chunkedEncoding = false
@@ -72,7 +72,7 @@ module.exports = class Shoutcast extends BaseOutput
         # connect the icecast metadata injector to our output
         @ice.pipe(@socket)
 
-        if initial && @stream.preroll && !@opts.req.params.preskip
+        if initial && @stream.preroll && !@opts.req.param("preskip")
             debug "Pumping preroll"
             @stream.preroll.pump @, @ice, (err) =>
                 debug "Back from preroll. Connecting to stream."

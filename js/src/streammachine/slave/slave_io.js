@@ -102,8 +102,7 @@ module.exports = SlaveIO = (function(_super) {
     this.io.on("disconnect", (function(_this) {
       return function() {
         _this.connected = false;
-        _this._log.debug("Disconnected from master.");
-        return _this.emit("disconnect");
+        return _this._log.debug("Disconnected from master.");
       };
     })(this));
     this.io.on("config", (function(_this) {
