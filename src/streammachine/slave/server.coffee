@@ -106,8 +106,7 @@ module.exports = class Server extends require('events').EventEmitter
         if @config.hls?.limit_full_index
             idx_match = ///#{@config.hls.limit_full_index}///
             @app.use (req,res,next) =>
-                ua = _.compact([req.param("ua"),req.headers?['user-agent']]).join(" | ")
-
+                ua = _.compact([req.query.ua, req.headers?['user-agent']]).join(" | ")
                 if idx_match.test(ua)
                     # do nothing...
                 else
@@ -183,7 +182,7 @@ module.exports = class Server extends require('events').EventEmitter
             new @core.Outputs.live_streaming.Index req.stream, req:req, res:res
 
         @app.get "/:stream/ts/:seg.(:format)", (req,res) =>
-            new @core.Outputs.live_streaming req.stream, req:req, res:res, format:req.param("format")
+            new @core.Outputs.live_streaming req.stream, req:req, res:res, format:req.params.format
 
 
         # head request
@@ -196,8 +195,7 @@ module.exports = class Server extends require('events').EventEmitter
             res.set "X-Powered-By", "StreamMachine"
 
             # -- Stream match! -- #
-
-            if req.param("pump")
+            if req.query.pump
                 # pump listener pushes from the buffer as fast as possible
                 new @core.Outputs.pumper req.stream, req:req, res:res
 

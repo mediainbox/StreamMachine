@@ -19,7 +19,7 @@ module.exports = class BaseOutput extends require("events").EventEmitter
 
             #@client.ip          = @opts.req.connection.remoteAddress
             @client.path        = @opts.req.url
-            @client.ua          = _.compact([@opts.req.param("ua"),@opts.req.headers?['user-agent']]).join(" | ")
+            @client.ua          = _.compact([@opts.req.query.ua, @opts.req.headers?['user-agent']]).join(" | ")
             @client.user_id     = @opts.req.user_id
 
             @client.pass_session    = true
@@ -28,11 +28,9 @@ module.exports = class BaseOutput extends require("events").EventEmitter
                 if a_session = @opts.req.headers?['x-playback-session-id']
                     @client.pass_session = false
                     a_session
-
-                else if @opts.req.param("session_id")
+                else if @opts.req.query.session_id
                     # use passed-in session id
-                    @opts.req.param("session_id")
-
+                    @opts.req.query.session_id
                 else
                     # generate session id
                     uuid.v4()

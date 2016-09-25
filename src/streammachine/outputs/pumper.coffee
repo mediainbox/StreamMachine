@@ -8,8 +8,8 @@ module.exports = class Pumper extends BaseOutput
 
         # figure out what we're pulling
         @stream.listen @,
-            offsetSecs: @opts.req.param("from") || @opts.req.param("pump")
-            pump:       @opts.req.param("pump")
+            offsetSecs: @opts.req.query.from || @opts.req.query.pump
+            pump:       @opts.req.query.pump
             pumpOnly:   true
         , (err,@source,info) =>
             if err

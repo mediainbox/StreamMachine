@@ -17,7 +17,7 @@ module.exports = class LiveStreaming extends BaseOutput
         super "live_streaming"
 
         @stream.listen @,
-            live_segment:   @opts.req.param("seg")
+            live_segment:   @opts.req.params.seg
             pumpOnly:       true
         , (err,playHead,info) =>
             if err
@@ -75,8 +75,8 @@ module.exports = class LiveStreaming extends BaseOutput
 
             # HACK: This is needed to get ua information on segments until we
             # can fix client ua for AppleCoreMedia
-            if @opts.req.param("ua")
-                session_info = if session_info then "#{session_info}&ua=#{@opts.req.param("ua")}" else "?ua=#{@opts.req.param("ua")}"
+            if @opts.req.query.ua
+                session_info = if session_info then "#{session_info}&ua=#{@opts.req.query.ua}" else "?ua=#{@opts.req.query.ua}"
 
             if !@stream.hls
                 @opts.res.status(500).end "No data."
@@ -123,8 +123,8 @@ module.exports = class LiveStreaming extends BaseOutput
                     if @client.pass_session
                         session_bits.push "session_id=#{@client.session_id}"
 
-                    if @opts.req.param("ua")
-                        session_bits.push "ua=#{@opts.req.param("ua")}"
+                    if @opts.req.query.ua
+                        session_bits.push "ua=#{@opts.req.query.ua}"
 
                     if session_bits.length > 0
                         url = "#{url}?#{session_bits.join("&")}"

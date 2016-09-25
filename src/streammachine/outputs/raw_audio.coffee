@@ -13,8 +13,7 @@ module.exports = class RawAudio extends BaseOutput
         @pump = true
 
         if @opts.req && @opts.res
-            @client.offsetSecs  = @opts.req.param("offset") || -1
-
+            @client.offsetSecs  = @opts.req.query.offset || -1
             @opts.res.chunkedEncoding = false
             @opts.res.useChunkedEncodingByDefault = false
 
@@ -34,8 +33,7 @@ module.exports = class RawAudio extends BaseOutput
                     @client.session_id = session_id
 
                     # -- send a preroll if we have one -- #
-
-                    if @stream.preroll && !@opts.req.param("preskip")
+                    if @stream.preroll && !@opts.req.query.preskip
                         debug "making preroll request on stream #{@stream.key}"
                         @stream.preroll.pump @, @socket,
                             (err) => @connectToStream()
