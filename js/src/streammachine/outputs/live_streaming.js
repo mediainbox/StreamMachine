@@ -29,7 +29,7 @@ module.exports = LiveStreaming = (function(_super) {
     this.opts = opts;
     LiveStreaming.__super__.constructor.call(this, "live_streaming");
     this.stream.listen(this, {
-      live_segment: this.opts.req.param("seg"),
+      live_segment: this.opts.req.params.seg,
       pumpOnly: true
     }, (function(_this) {
       return function(err, playHead, info) {
@@ -84,8 +84,8 @@ module.exports = LiveStreaming = (function(_super) {
       this.opts = opts;
       Index.__super__.constructor.call(this, "live_streaming");
       session_info = this.client.session_id && this.client.pass_session ? "?session_id=" + this.client.session_id : void 0;
-      if (this.opts.req.param("ua")) {
-        session_info = session_info ? "" + session_info + "&ua=" + (this.opts.req.param("ua")) : "?ua=" + (this.opts.req.param("ua"));
+      if (this.opts.req.params.ua) {
+        session_info = session_info ? "" + session_info + "&ua=" + this.opts.req.params.ua : "?ua=" + this.opts.req.params.ua;
       }
       if (!this.stream.hls) {
         this.opts.res.status(500).end("No data.");
@@ -137,8 +137,8 @@ module.exports = LiveStreaming = (function(_super) {
             if (_this.client.pass_session) {
               session_bits.push("session_id=" + _this.client.session_id);
             }
-            if (_this.opts.req.param("ua")) {
-              session_bits.push("ua=" + (_this.opts.req.param("ua")));
+            if (_this.opts.req.params.ua) {
+              session_bits.push("ua=" + _this.opts.req.params.ua);
             }
             if (session_bits.length > 0) {
               url = "" + url + "?" + (session_bits.join("&"));

@@ -23,7 +23,7 @@ module.exports = Shoutcast = (function(_super) {
     this._lastMeta = null;
     if (this.opts.req && this.opts.res) {
       debug("Incoming Request Headers: ", this.opts.req.headers);
-      this.client.offsetSecs = this.opts.req.param("offset") || -1;
+      this.client.offsetSecs = this.opts.req.params.offset || -1;
       this.client.meta_int = this.stream.opts.meta_interval;
       this.opts.res.chunkedEncoding = false;
       this.opts.res.useChunkedEncodingByDefault = false;
@@ -75,7 +75,7 @@ module.exports = Shoutcast = (function(_super) {
     this.ice.metaint = this.client.meta_int;
     delete this.client.bytesToNextMeta;
     this.ice.pipe(this.socket);
-    if (initial && this.stream.preroll && !this.opts.req.param("preskip")) {
+    if (initial && this.stream.preroll && !this.opts.req.params.preskip) {
       debug("Pumping preroll");
       return this.stream.preroll.pump(this, this.ice, (function(_this) {
         return function(err) {

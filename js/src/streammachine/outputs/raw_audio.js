@@ -18,7 +18,7 @@ module.exports = RawAudio = (function(_super) {
     RawAudio.__super__.constructor.call(this, "raw");
     this.pump = true;
     if (this.opts.req && this.opts.res) {
-      this.client.offsetSecs = this.opts.req.param("offset") || -1;
+      this.client.offsetSecs = this.opts.req.params.offset || -1;
       this.opts.res.chunkedEncoding = false;
       this.opts.res.useChunkedEncodingByDefault = false;
       headers = {
@@ -31,7 +31,7 @@ module.exports = RawAudio = (function(_super) {
         return function() {
           return _this.stream.startSession(_this.client, function(err, session_id) {
             _this.client.session_id = session_id;
-            if (_this.stream.preroll && !_this.opts.req.param("preskip")) {
+            if (_this.stream.preroll && !_this.opts.req.params.preskip) {
               debug("making preroll request on stream " + _this.stream.key);
               return _this.stream.preroll.pump(_this, _this.socket, function(err) {
                 return _this.connectToStream();
