@@ -29,7 +29,7 @@ module.exports = LiveStreaming = (function(_super) {
     this.opts = opts;
     LiveStreaming.__super__.constructor.call(this, "live_streaming");
     this.stream.listen(this, {
-      live_segment: this.opts.req.param("seg"),
+      live_segment: this.opts.req.params.seg,
       pumpOnly: true
     }, (function(_this) {
       return function(err, playHead, info) {
