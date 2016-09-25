@@ -106,7 +106,7 @@ module.exports = class Server extends require('events').EventEmitter
         if @config.hls?.limit_full_index
             idx_match = ///#{@config.hls.limit_full_index}///
             @app.use (req,res,next) =>
-                ua = _.compact([req.params.ua, req.headers?['user-agent']]).join(" | ")
+                ua = _.compact([req.query.ua, req.headers?['user-agent']]).join(" | ")
 
                 if idx_match.test(ua)
                     # do nothing...
@@ -197,7 +197,7 @@ module.exports = class Server extends require('events').EventEmitter
 
             # -- Stream match! -- #
 
-            if req.params.pump
+            if req.query.pump
                 # pump listener pushes from the buffer as fast as possible
                 new @core.Outputs.pumper req.stream, req:req, res:res
 

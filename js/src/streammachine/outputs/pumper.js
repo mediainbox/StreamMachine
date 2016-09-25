@@ -14,8 +14,8 @@ module.exports = Pumper = (function(_super) {
     this.opts = opts;
     Pumper.__super__.constructor.call(this, "pumper");
     this.stream.listen(this, {
-      offsetSecs: this.opts.req.params.from || this.opts.req.params.pump,
-      pump: this.opts.req.params.pump,
+      offsetSecs: this.opts.req.query.from || this.opts.req.query.pump,
+      pump: this.opts.req.query.pump,
       pumpOnly: true
     }, (function(_this) {
       return function(err, source, info) {
