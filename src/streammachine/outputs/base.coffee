@@ -28,11 +28,9 @@ module.exports = class BaseOutput extends require("events").EventEmitter
                 if a_session = @opts.req.headers?['x-playback-session-id']
                     @client.pass_session = false
                     a_session
-
                 else if @opts.req.query.session_id
                     # use passed-in session id
                     @opts.req.query.session_id
-
                 else
                     # generate session id
                     uuid.v4()

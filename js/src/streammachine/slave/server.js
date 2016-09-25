@@ -206,7 +206,7 @@ module.exports = Server = (function(_super) {
         return new _this.core.Outputs.live_streaming(req.stream, {
           req: req,
           res: res,
-          format: req.params.format
+          format: req.param("format")
         });
       };
     })(this));

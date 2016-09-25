@@ -17,7 +17,7 @@ module.exports = class LiveStreaming extends BaseOutput
         super "live_streaming"
 
         @stream.listen @,
-            live_segment:   @opts.req.params.seg
+            live_segment:   @opts.req.param("seg")
             pumpOnly:       true
         , (err,playHead,info) =>
             if err
