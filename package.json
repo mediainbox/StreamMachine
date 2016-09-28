@@ -1,6 +1,6 @@
 {
   "name": "streammachine",
-  "version": "0.7.1",
+  "version": "0.7.2",
   "description": "Flexible live streaming for broadcast audio.",
   "keywords": [
     "audio",
