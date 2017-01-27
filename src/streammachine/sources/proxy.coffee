@@ -98,6 +98,8 @@ module.exports = class ProxySource extends require("./base")
                 @icecast = null
 
         ireq = Icy.get url_opts, (ice) =>
+            if ice.statusCode == 302
+                @url = ice.headers.location
             @icecast = ice
 
             @icecast.once "end", =>

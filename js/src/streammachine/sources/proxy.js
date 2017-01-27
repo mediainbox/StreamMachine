@@ -116,6 +116,9 @@ module.exports = ProxySource = (function(_super) {
     })(this));
     ireq = Icy.get(url_opts, (function(_this) {
       return function(ice) {
+        if (ice.statusCode === 302) {
+          _this.url = ice.headers.location;
+        }
         _this.icecast = ice;
         _this.icecast.once("end", function() {
           debug("Got end event");
