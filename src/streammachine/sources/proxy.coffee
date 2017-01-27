@@ -2,6 +2,7 @@ Icy     = require 'icy'
 util    = require 'util'
 url     = require 'url'
 domain  = require "domain"
+moment  = require "moment"
 _       = require "underscore"
 
 debug   = require("debug")("sm:sources:proxy")
@@ -98,6 +99,8 @@ module.exports = class ProxySource extends require("./base")
                 @icecast = null
 
         ireq = Icy.get url_opts, (ice) =>
+            if ice.statusCode == 302
+                @url = ice.headers.location
             @icecast = ice
 
             @icecast.once "end", =>
@@ -127,6 +130,16 @@ module.exports = class ProxySource extends require("./base")
             @connected = true
             @connected_at = new Date()
             @emit "connect"
+
+            _checkStatus = () =>
+                debug "Checking last_ts: #{@last_ts}"
+                return unless @connected and not @_in_disconnect
+                unless @last_ts
+                    return setTimeout _checkStatus, 5000
+                if moment(@last_ts).isBefore(moment().subtract(1, "minutes"))
+                    return _reconnect()
+                setTimeout _checkStatus, 30000
+            setTimeout _checkStatus, 30000
 
         ireq.once "error", (err) =>
             @_niceError err
