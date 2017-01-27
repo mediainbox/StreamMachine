@@ -1,4 +1,4 @@
-var Icy, ProxySource, debug, domain, url, util, _,
+var Icy, ProxySource, debug, domain, moment, url, util, _,
   __hasProp = {}.hasOwnProperty,
   __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
 
@@ -9,6 +9,8 @@ util = require('util');
 url = require('url');
 
 domain = require("domain");
+
+moment = require("moment");
 
 _ = require("underscore");
 
@@ -116,6 +118,7 @@ module.exports = ProxySource = (function(_super) {
     })(this));
     ireq = Icy.get(url_opts, (function(_this) {
       return function(ice) {
+        var _checkStatus;
         if (ice.statusCode === 302) {
           _this.url = ice.headers.location;
         }
@@ -149,7 +152,21 @@ module.exports = ProxySource = (function(_super) {
         });
         _this.connected = true;
         _this.connected_at = new Date();
-        return _this.emit("connect");
+        _this.emit("connect");
+        _checkStatus = function() {
+          debug("Checking last_ts: " + _this.last_ts);
+          if (!(_this.connected && !_this._in_disconnect)) {
+            return;
+          }
+          if (!_this.last_ts) {
+            return setTimeout(_checkStatus, 5000);
+          }
+          if (moment(_this.last_ts).isBefore(moment().subtract(1, "minutes"))) {
+            return _reconnect();
+          }
+          return setTimeout(_checkStatus, 30000);
+        };
+        return setTimeout(_checkStatus, 30000);
       };
     })(this));
     ireq.once("error", (function(_this) {
