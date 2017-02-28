@@ -1,16 +1,102 @@
-var StreamMachine, core, heapdump, nconf;
+var Streamer, debug, heapdump, nconf, request, streamer, _;
 
-StreamMachine = require("./src/streammachine");
+_ = require("underscore");
 
 nconf = require("nconf");
+
+request = require("request");
+
+debug = require("debug")("sm:master:streamer");
+
+Streamer = (function() {
+  function Streamer(config) {
+    this.config = config;
+    this.mode = nconf.get("mode");
+    debug("Created as " + this.mode);
+  }
+
+  Streamer.prototype.initialize = function() {
+    return this.getRadio((function(_this) {
+      return function(radio) {
+        _this.ping();
+        return _this.createStreamMachine(radio);
+      };
+    })(this));
+  };
+
+  Streamer.prototype.getRadio = function(callback) {
+    return request.get(this.config.uri, {
+      json: true,
+      qs: {
+        ping: this.mode
+      }
+    }, (function(_this) {
+      return function(error, response, body) {
+        if (error) {
+          debug(error);
+          return _this.retry(callback);
+        }
+        if (!body) {
+          debug("No radio available");
+          return _this.retry(callback);
+        }
+        return callback(body);
+      };
+    })(this));
+  };
+
+  Streamer.prototype.retry = function(callback) {
+    return setTimeout((function(_this) {
+      return function() {
+        debug("Retry");
+        return _this.getRadio(callback);
+      };
+    })(this), this.config.ping / 2);
+  };
+
+  Streamer.prototype.createStreamMachine = function(radio) {
+    this.radio = radio;
+    _.defaults(this.radio.options, this.getStreamMachine().Defaults);
+    switch (this.mode) {
+      case "master":
+        return new (this.getStreamMachine()).MasterMode(this.radio.options);
+      case "slave":
+        return new (this.getStreamMachine()).SlaveMode(this.radio.options);
+      default:
+        return new (this.getStreamMachine()).StandaloneMode(this.radio.options);
+    }
+  };
+
+  Streamer.prototype.getStreamMachine = function() {
+    this.streamMachine = this.streamMachine || require("./src/streammachine");
+    return this.streamMachine;
+  };
+
+  Streamer.prototype.ping = function() {
+    return setTimeout((function(_this) {
+      return function() {
+        debug("Ping");
+        return request.put(_this.config.uri, {
+          qs: {
+            ping: _this.mode,
+            name: _this.radio.name
+          }
+        }, function() {
+          return _this.ping();
+        });
+      };
+    })(this), this.config.ping);
+  };
+
+  return Streamer;
+
+})();
 
 nconf.env().argv();
 
 nconf.file({
   file: nconf.get("config") || nconf.get("CONFIG") || "/etc/streammachine.conf"
 });
-
-nconf.defaults(StreamMachine.Defaults);
 
 if (nconf.get("enable-heapdump")) {
   console.log("ENABLING HEAPDUMP (trigger via USR2)");
@@ -35,15 +121,8 @@ if (nconf.get("heapdump-interval")) {
   })(this), Number(nconf.get("heapdump-interval")) * 1000);
 }
 
-core = (function() {
-  switch (nconf.get("mode")) {
-    case "master":
-      return new StreamMachine.MasterMode(nconf.get());
-    case "slave":
-      return new StreamMachine.SlaveMode(nconf.get());
-    default:
-      return new StreamMachine.StandaloneMode(nconf.get());
-  }
-})();
+streamer = new Streamer(nconf.get());
+
+streamer.initialize();
 
 //# sourceMappingURL=streamer.js.map
