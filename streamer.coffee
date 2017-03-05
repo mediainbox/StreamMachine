@@ -5,7 +5,7 @@ debug = require("debug") "sm:master:streamer"
 
 class Streamer
     constructor: (@config) ->
-        @mode = nconf.get "mode"
+        @mode = nconf.get("mode") or "standalone"
         debug "Created as #{@mode}"
 
     #----------

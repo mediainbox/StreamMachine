@@ -11,7 +11,7 @@ debug = require("debug")("sm:master:streamer");
 Streamer = (function() {
   function Streamer(config) {
     this.config = config;
-    this.mode = nconf.get("mode");
+    this.mode = nconf.get("mode") || "standalone";
     debug("Created as " + this.mode);
   }
 
