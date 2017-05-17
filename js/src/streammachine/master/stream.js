@@ -129,9 +129,11 @@ module.exports = Stream = (function(_super) {
               logger: this.log
             });
           case "http:":
+          case "https:":
             return new ProxySource({
               format: this.opts.format,
               url: this.opts.fallback,
+              headers: this.opts.headers,
               fallback: true,
               logger: this.log
             });

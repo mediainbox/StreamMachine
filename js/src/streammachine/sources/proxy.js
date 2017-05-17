@@ -34,6 +34,9 @@ module.exports = ProxySource = (function(_super) {
       _ref.debug("ProxySource created for " + this.url);
     }
     this.isFallback = this.opts.fallback || false;
+    this.defaultHeaders = this.opts.headers || {
+      "user-agent": "StreamMachine 0.1.0"
+    };
     this.connected = false;
     this.framesPerSec = null;
     this.last_ts = null;
@@ -93,9 +96,7 @@ module.exports = ProxySource = (function(_super) {
       _ref.debug("connecting to " + this.url);
     }
     url_opts = url.parse(this.url);
-    url_opts.headers = {
-      "user-agent": "StreamMachine 0.1.0"
-    };
+    url_opts.headers = _.clone(this.defaultHeaders);
     debug("Connecting to " + this.url);
     _reconnect = _.once((function(_this) {
       return function() {
