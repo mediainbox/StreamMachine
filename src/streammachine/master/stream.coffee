@@ -130,10 +130,11 @@ module.exports = class Stream extends require('events').EventEmitter
                         filePath:   uri.path
                         logger:     @log
 
-                when "http:"
+                when "http:", "https:"
                     new ProxySource
                         format:     @opts.format
                         url:        @opts.fallback
+                        headers:    @opts.headers
                         fallback:   true
                         logger:     @log
 

@@ -22,7 +22,9 @@ module.exports = class ProxySource extends require("./base")
 
         debug "ProxySource created for #{@url}"
 
-        @isFallback     = @opts.fallback || false
+        @isFallback     = @opts.fallback or false
+
+        @defaultHeaders = @opts.headers or "user-agent": "StreamMachine 0.1.0"
 
         @connected      = false
         @framesPerSec   = null
@@ -82,7 +84,7 @@ module.exports = class ProxySource extends require("./base")
         debug "Connecting to #{@url}"
 
         url_opts = url.parse @url
-        url_opts.headers = "user-agent":"StreamMachine 0.1.0"
+        url_opts.headers = _.clone @defaultHeaders
 
         _reconnect = _.once =>
             unless @_in_disconnect
