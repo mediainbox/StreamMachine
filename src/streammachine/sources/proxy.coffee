@@ -89,7 +89,7 @@ module.exports = class ProxySource extends require("./base")
         _reconnect = _.once =>
             unless @_in_disconnect
                 debug "Engaging reconnect logic"
-                setTimeout ( => @connect() ), 1000
+                setTimeout ( => @connect() ), 5000
 
                 debug "Lost or failed to make connection to #{@url}. Retrying in one second."
                 @connected = false

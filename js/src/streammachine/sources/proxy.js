@@ -99,7 +99,7 @@ module.exports = ProxySource = (function(_super) {
           debug("Engaging reconnect logic");
           setTimeout((function() {
             return _this.connect();
-          }), 1000);
+          }), 5000);
           debug("Lost or failed to make connection to " + _this.url + ". Retrying in one second.");
           _this.connected = false;
           if ((_ref = _this.icecast) != null) {
