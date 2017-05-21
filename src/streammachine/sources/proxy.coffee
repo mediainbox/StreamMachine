@@ -20,7 +20,7 @@ module.exports = class ProxySource extends require("./base")
 
         @url = @opts.url
 
-        @log?.debug "ProxySource created for #{@url}"
+        debug "ProxySource created for #{@url}"
 
         @isFallback     = @opts.fallback or false
 
@@ -81,19 +81,17 @@ module.exports = class ProxySource extends require("./base")
     #----------
 
     connect: ->
-        @log?.debug "connecting to #{@url}"
+        debug "Connecting to #{@url}"
 
         url_opts = url.parse @url
         url_opts.headers = _.clone @defaultHeaders
 
-        debug "Connecting to #{@url}"
-
         _reconnect = _.once =>
             unless @_in_disconnect
                 debug "Engaging reconnect logic"
-                setTimeout ( => @connect() ), 1000
+                setTimeout ( => @connect() ), 5000
 
-                @log?.debug "Lost or failed to make connection to #{@url}. Retrying in one second."
+                debug "Lost or failed to make connection to #{@url}. Retrying in one second."
                 @connected = false
 
                 # unpipe everything
@@ -139,6 +137,7 @@ module.exports = class ProxySource extends require("./base")
                 unless @last_ts
                     return setTimeout _checkStatus, 5000
                 if moment(@last_ts).isBefore(moment().subtract(1, "minutes"))
+                    ireq.end()
                     return _reconnect()
                 setTimeout _checkStatus, 30000
             setTimeout _checkStatus, 30000
@@ -167,6 +166,6 @@ module.exports = class ProxySource extends require("./base")
             @parser = null
             @icecast = null
 
-            @log?.debug "ProxySource disconnected."
+            debug "ProxySource disconnected."
 
             @removeAllListeners()

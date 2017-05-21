@@ -24,15 +24,12 @@ module.exports = ProxySource = (function(_super) {
   };
 
   function ProxySource(opts) {
-    var _ref;
     this.opts = opts;
     ProxySource.__super__.constructor.call(this, {
       useHeartbeat: false
     });
     this.url = this.opts.url;
-    if ((_ref = this.log) != null) {
-      _ref.debug("ProxySource created for " + this.url);
-    }
+    debug("ProxySource created for " + this.url);
     this.isFallback = this.opts.fallback || false;
     this.defaultHeaders = this.opts.headers || {
       "user-agent": "StreamMachine 0.1.0"
@@ -91,27 +88,22 @@ module.exports = ProxySource = (function(_super) {
   };
 
   ProxySource.prototype.connect = function() {
-    var ireq, url_opts, _reconnect, _ref;
-    if ((_ref = this.log) != null) {
-      _ref.debug("connecting to " + this.url);
-    }
+    var ireq, url_opts, _reconnect;
+    debug("Connecting to " + this.url);
     url_opts = url.parse(this.url);
     url_opts.headers = _.clone(this.defaultHeaders);
-    debug("Connecting to " + this.url);
     _reconnect = _.once((function(_this) {
       return function() {
-        var _ref1, _ref2;
+        var _ref;
         if (!_this._in_disconnect) {
           debug("Engaging reconnect logic");
           setTimeout((function() {
             return _this.connect();
-          }), 1000);
-          if ((_ref1 = _this.log) != null) {
-            _ref1.debug("Lost or failed to make connection to " + _this.url + ". Retrying in one second.");
-          }
+          }), 5000);
+          debug("Lost or failed to make connection to " + _this.url + ". Retrying in one second.");
           _this.connected = false;
-          if ((_ref2 = _this.icecast) != null) {
-            _ref2.removeAllListeners();
+          if ((_ref = _this.icecast) != null) {
+            _ref.removeAllListeners();
           }
           return _this.icecast = null;
         }
@@ -163,6 +155,7 @@ module.exports = ProxySource = (function(_super) {
             return setTimeout(_checkStatus, 5000);
           }
           if (moment(_this.last_ts).isBefore(moment().subtract(1, "minutes"))) {
+            ireq.end();
             return _reconnect();
           }
           return setTimeout(_checkStatus, 30000);
@@ -185,7 +178,7 @@ module.exports = ProxySource = (function(_super) {
   };
 
   ProxySource.prototype.disconnect = function() {
-    var _ref, _ref1;
+    var _ref;
     this._in_disconnect = true;
     if (this.connected) {
       if ((_ref = this.icecast) != null) {
@@ -196,9 +189,7 @@ module.exports = ProxySource = (function(_super) {
       this.icecast.end();
       this.parser = null;
       this.icecast = null;
-      if ((_ref1 = this.log) != null) {
-        _ref1.debug("ProxySource disconnected.");
-      }
+      debug("ProxySource disconnected.");
       return this.removeAllListeners();
     }
   };
