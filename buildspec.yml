@@ -5,8 +5,6 @@ phases:
     commands:
       - echo Install Docker
       - apk --no-cache update && apk add openrc --no-cache && apk --no-cache add docker
-      - service docker stop
-      - service docker start
       - which docker
       - echo Installing AWSCLI
       - apk --no-cache update && apk --no-cache add python py-pip py-setuptools ca-certificates groff less && pip --no-cache-dir install awscli && rm -rf /var/cache/apk/*
