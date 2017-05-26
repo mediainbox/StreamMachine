@@ -4,7 +4,7 @@ phases:
   pre_build:
     commands:
       - echo Installing AWSCLI
-      - pip --no-cache-dir install awscli
+      - apk --no-cache update && apk --no-cache add python py-pip py-setuptools ca-certificates groff less && pip --no-cache-dir install awscli && rm -rf /var/cache/apk/*
       - echo Logging in to Amazon ECR...
       - $(aws ecr get-login --region $AWS_DEFAULT_REGION)
   build:
