@@ -1,0 +1,6 @@
+{
+  "mode": "master",
+  "port": "{{ MASTER_PORT|default('8020') }}",
+  "uri": "{{ API_GATEWAY_URL|default('') }}",
+  "ping": "{{ API_GATEWAY_PING|default('30000') }}"
+}
