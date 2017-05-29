@@ -27,6 +27,7 @@ RUN git clone https://github.com/mediainbox/StreamMachine.git
 RUN cd StreamMachine && npm install
 COPY master.json.j2 /config/
 COPY docker-entrypoint.sh /
+RUN chmod +x /docker-entrypoint.sh
 
 VOLUME "/config"
 
