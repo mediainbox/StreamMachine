@@ -1,7 +1,7 @@
 version: 0.2
 
 phases:
- install:
+  install:
     commands:
       - printenv
   pre_build:
