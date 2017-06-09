@@ -1,5 +1,7 @@
 bs = require 'binary-search'
 
+debug = require("debug")("sm:rewind:memory_store")
+
 module.exports = class MemoryStore extends require("./base_store")
     constructor: (@max_length = null) ->
         @buffer = []
@@ -123,6 +125,7 @@ module.exports = class MemoryStore extends require("./base_store")
 
         else
             # need to insert in the middle.
+            debug "Push in the middle not implemented #{cts}, #{fb}, #{lb}"
             console.error "PUSH IN MIDDLE NOT IMPLEMENTED", cts, fb, lb
 
         @_truncate()

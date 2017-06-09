@@ -88,30 +88,35 @@ module.exports = class ProxySource extends require("./base")
 
         _reconnect = _.once =>
             unless @_in_disconnect
-                debug "Engaging reconnect logic"
-                setTimeout ( => @connect() ), 5000
+                msWaitToConnect = 5000
+                debug "Engaging reconnect logic to #{@url} in #{msWaitToConnect}ms"
 
-                debug "Lost or failed to make connection to #{@url}. Retrying in one second."
                 @connected = false
 
                 # unpipe everything
                 @icecast?.removeAllListeners()
                 @icecast = null
 
+                setTimeout ( => @connect() ), msWaitToConnect
+
         ireq = Icy.get url_opts, (ice) =>
+            debug "Connected to Icecast client on #{@url}"
+
             if ice.statusCode == 302
                 @url = ice.headers.location
             @icecast = ice
 
             @icecast.once "end", =>
-                debug "Got end event"
+                debug "Got Icecast end event"
                 _reconnect()
 
             @icecast.once "close", =>
-                debug "Got close event"
+                debug "Got Icecast close event"
                 _reconnect()
 
             @icecast.on "metadata", (data) =>
+                debug "Received Icecast metadata"
+
                 unless @_in_disconnect
                     meta = Icy.parse(data)
 
@@ -126,11 +131,6 @@ module.exports = class ProxySource extends require("./base")
             # incoming -> Parser
             @icecast.on "data", (chunk) => @parser.write chunk
 
-            # return with success
-            @connected = true
-            @connected_at = new Date()
-            @emit "connect"
-
             _checkStatus = () =>
                 debug "Checking last_ts: #{@last_ts}"
                 return unless @connected and not @_in_disconnect
@@ -140,6 +140,12 @@ module.exports = class ProxySource extends require("./base")
                     ireq.end()
                     return _reconnect()
                 setTimeout _checkStatus, 30000
+
+            # return with success
+            @connected = true
+            @connected_at = new Date()
+            @emit "connect"
+
             setTimeout _checkStatus, 30000
 
         ireq.once "error", (err) =>
