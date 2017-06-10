@@ -123,9 +123,10 @@ module.exports = MemoryStore = (function(_super) {
     } else if (cts < fb) {
       this.buffer.unshift(chunk);
       this.emit("unshift", chunk);
+    } else if (cts === fb) {
+      debug("Chunk timestamp already found in the buffer! [cts: " + cts + ", fb: " + fb + ", lb: " + lb + "]");
     } else {
-      debug("Push in the middle not implemented " + cts + ", " + fb + ", " + lb);
-      console.error("PUSH IN MIDDLE NOT IMPLEMENTED", cts, fb, lb);
+      debug("Push in the middle not implemented! [cts: " + cts + ", fb: " + fb + ", lb: " + lb + "]");
     }
     this._truncate();
     return true;

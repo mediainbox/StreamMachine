@@ -174,13 +174,13 @@ module.exports = class Source extends require("events").EventEmitter
                     else
                         @initialTime
 
+                @_last_ts = ts
+
                 @push
                     data:       buf
                     ts:         ts
                     duration:   duration
                     frames:     frames
                     streamKey:  obj.header.stream_key
-
-                @_last_ts = ts
 
             cb()

@@ -113,20 +113,29 @@ module.exports = class MemoryStore extends require("./base_store")
         lb = Number(lb.ts) if lb
         cts = Number(chunk.ts)
 
+        # If there is no last chunk (= no chunks) or current chunk's timestamp
+        # is greather than the last one's, insert it at the end
         if !lb || cts > lb
             # append
             @buffer.push chunk
             @emit "push", chunk
 
+        # If the current chunk's timestamp is lower than the first one's, i
+        # insert it at the beginning of the array
         else if cts < fb
             # prepend
             @buffer.unshift chunk
             @emit "unshift", chunk
 
+        # If the current chunk's timestamp matches the last chunk's,
+        # it's probable that insert() was called again using the same chunk
+        # Often related to dangling event handlers that were not properly removed
+        else if cts == fb
+            debug "Chunk timestamp already found in the buffer! [cts: #{cts}, fb: #{fb}, lb: #{lb}]"
+
         else
             # need to insert in the middle.
-            debug "Push in the middle not implemented #{cts}, #{fb}, #{lb}"
-            console.error "PUSH IN MIDDLE NOT IMPLEMENTED", cts, fb, lb
+            debug "Push in the middle not implemented! [cts: #{cts}, fb: #{fb}, lb: #{lb}]"
 
         @_truncate()
 
