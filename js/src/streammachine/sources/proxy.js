@@ -94,38 +94,40 @@ module.exports = ProxySource = (function(_super) {
     url_opts.headers = _.clone(this.defaultHeaders);
     _reconnect = _.once((function(_this) {
       return function() {
-        var _ref;
+        var msWaitToConnect, _ref;
         if (!_this._in_disconnect) {
-          debug("Engaging reconnect logic");
-          setTimeout((function() {
-            return _this.connect();
-          }), 5000);
-          debug("Lost or failed to make connection to " + _this.url + ". Retrying in one second.");
+          msWaitToConnect = 5000;
+          debug("Engaging reconnect logic to " + _this.url + " in " + msWaitToConnect + "ms");
           _this.connected = false;
           if ((_ref = _this.icecast) != null) {
             _ref.removeAllListeners();
           }
-          return _this.icecast = null;
+          _this.icecast = null;
+          return setTimeout((function() {
+            return _this.connect();
+          }), msWaitToConnect);
         }
       };
     })(this));
     ireq = Icy.get(url_opts, (function(_this) {
       return function(ice) {
         var _checkStatus;
+        debug("Connected to Icecast client on " + _this.url);
         if (ice.statusCode === 302) {
           _this.url = ice.headers.location;
         }
         _this.icecast = ice;
         _this.icecast.once("end", function() {
-          debug("Got end event");
+          debug("Got Icecast end event");
           return _reconnect();
         });
         _this.icecast.once("close", function() {
-          debug("Got close event");
+          debug("Got Icecast close event");
           return _reconnect();
         });
         _this.icecast.on("metadata", function(data) {
           var meta;
+          debug("Received Icecast metadata");
           if (!_this._in_disconnect) {
             meta = Icy.parse(data);
             if (meta.StreamTitle) {
@@ -143,9 +145,6 @@ module.exports = ProxySource = (function(_super) {
         _this.icecast.on("data", function(chunk) {
           return _this.parser.write(chunk);
         });
-        _this.connected = true;
-        _this.connected_at = new Date();
-        _this.emit("connect");
         _checkStatus = function() {
           debug("Checking last_ts: " + _this.last_ts);
           if (!(_this.connected && !_this._in_disconnect)) {
@@ -160,6 +159,9 @@ module.exports = ProxySource = (function(_super) {
           }
           return setTimeout(_checkStatus, 30000);
         };
+        _this.connected = true;
+        _this.connected_at = new Date();
+        _this.emit("connect");
         return setTimeout(_checkStatus, 30000);
       };
     })(this));

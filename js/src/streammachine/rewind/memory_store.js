@@ -1,8 +1,10 @@
-var MemoryStore, bs,
+var MemoryStore, bs, debug,
   __hasProp = {}.hasOwnProperty,
   __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
 
 bs = require('binary-search');
+
+debug = require("debug")("sm:rewind:memory_store");
 
 module.exports = MemoryStore = (function(_super) {
   __extends(MemoryStore, _super);
@@ -122,6 +124,7 @@ module.exports = MemoryStore = (function(_super) {
       this.buffer.unshift(chunk);
       this.emit("unshift", chunk);
     } else {
+      debug("Push in the middle not implemented " + cts + ", " + fb + ", " + lb);
       console.error("PUSH IN MIDDLE NOT IMPLEMENTED", cts, fb, lb);
     }
     this._truncate();
