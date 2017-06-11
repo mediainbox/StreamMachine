@@ -189,6 +189,7 @@ module.exports = Source = (function(_super) {
           simple_dur += simple_rem;
         }
         ts = this._last_ts ? new Date(Number(this._last_ts) + simple_dur) : this.initialTime;
+        this._last_ts = ts;
         this.push({
           data: buf,
           ts: ts,
@@ -196,7 +197,6 @@ module.exports = Source = (function(_super) {
           frames: frames,
           streamKey: obj.header.stream_key
         });
-        this._last_ts = ts;
       }
       return cb();
     };

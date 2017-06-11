@@ -29,7 +29,6 @@ module.exports = class ProxySource extends require("./base")
         @connected      = false
         @framesPerSec   = null
 
-        @last_ts        = null
         @connected_at   = null
 
         @_in_disconnect = false
@@ -53,7 +52,7 @@ module.exports = class ProxySource extends require("./base")
 
     #----------
 
-    _niceError: (err) ->
+    _niceError: (err) =>
         debug "Caught error: #{err}", err.stack
         nice_err = switch err.syscall
             when "getaddrinfo"
@@ -67,7 +66,7 @@ module.exports = class ProxySource extends require("./base")
 
     #----------
 
-    status: ->
+    status: =>
         source:         @TYPE?() ? @TYPE
         connected:      @connected
         url:            @url
@@ -80,42 +79,33 @@ module.exports = class ProxySource extends require("./base")
 
     #----------
 
-    connect: ->
-        debug "Connecting to #{@url}"
+    connect: =>
+        debug "Begin connection to Icecast from #{@url}"
 
         url_opts = url.parse @url
         url_opts.headers = _.clone @defaultHeaders
 
-        _reconnect = _.once =>
-            unless @_in_disconnect
-                msWaitToConnect = 5000
-                debug "Engaging reconnect logic to #{@url} in #{msWaitToConnect}ms"
+        @last_ts = null
+        @chunker.resetTime new Date()
 
-                @connected = false
-
-                # unpipe everything
-                @icecast?.removeAllListeners()
-                @icecast = null
-
-                setTimeout ( => @connect() ), msWaitToConnect
-
-        ireq = Icy.get url_opts, (ice) =>
-            debug "Connected to Icecast client on #{@url}"
+        @ireq = Icy.get url_opts, (ice) =>
+            debug "Connected to Icecast from #{@url}"
 
             if ice.statusCode == 302
                 @url = ice.headers.location
+
             @icecast = ice
 
             @icecast.once "end", =>
-                debug "Got Icecast end event"
-                _reconnect()
+                debug "Received Icecast END event"
+                @reconnect()
 
             @icecast.once "close", =>
-                debug "Got Icecast close event"
-                _reconnect()
+                debug "Received Icecast CLOSE event"
+                @reconnect()
 
             @icecast.on "metadata", (data) =>
-                debug "Received Icecast metadata"
+                debug "Received Icecast METADATA event"
 
                 unless @_in_disconnect
                     meta = Icy.parse(data)
@@ -129,33 +119,64 @@ module.exports = class ProxySource extends require("./base")
                     @emit "metadata", StreamTitle:@StreamTitle||"", StreamUrl:@StreamUrl||""
 
             # incoming -> Parser
-            @icecast.on "data", (chunk) => @parser.write chunk
-
-            _checkStatus = () =>
-                debug "Checking last_ts: #{@last_ts}"
-                return unless @connected and not @_in_disconnect
-                unless @last_ts
-                    return setTimeout _checkStatus, 5000
-                if moment(@last_ts).isBefore(moment().subtract(1, "minutes"))
-                    ireq.end()
-                    return _reconnect()
-                setTimeout _checkStatus, 30000
+            @icecast.on "data", (chunk) =>
+                @parser.write chunk
 
             # return with success
             @connected = true
             @connected_at = new Date()
             @emit "connect"
 
-            setTimeout _checkStatus, 30000
+            setTimeout @checkStatus, 30000
 
-        ireq.once "error", (err) =>
+        @ireq.once "error", (err) =>
             @_niceError err
-            _reconnect()
+            @reconnect()
 
         # outgoing -> Stream
-        @on "_chunk", (chunk) =>
-            @last_ts = chunk.ts
-            @emit "data", chunk
+        @on "_chunk", @broadcastData
+
+    #----------
+
+    broadcastData: (chunk) =>
+        @last_ts = chunk.ts
+        @emit "data", chunk
+
+    #----------
+
+    checkStatus: =>
+        debug "Check status: last chunk timestamp is #{@last_ts}"
+
+        return unless @connected and not @_in_disconnect
+
+        unless @last_ts
+            return setTimeout @checkStatus, 5000
+
+        if moment(@last_ts).isBefore(moment().subtract(1, "minutes"))
+            @ireq.end()
+            return @reconnect()
+
+        setTimeout @checkStatus, 30000
+
+    #----------
+
+    reconnect: =>
+        unless @_in_disconnect and not @connected
+
+            msWaitToConnect = 5000
+            debug "Reconnect to Icecast source from #{@url} in #{msWaitToConnect}ms"
+
+            @connected = false
+
+            # Clean proxy listeners
+            @removeListener "_chunk", @broadcastData
+
+            # Clean icecast
+            @icecast?.removeAllListeners()
+            @icecast = null
+            @ireq = null
+
+            setTimeout @connect, msWaitToConnect
 
     #----------
 

@@ -1,4 +1,5 @@
 var Icy, ProxySource, debug, domain, moment, url, util, _,
+  __bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; },
   __hasProp = {}.hasOwnProperty,
   __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
 
@@ -25,6 +26,12 @@ module.exports = ProxySource = (function(_super) {
 
   function ProxySource(opts) {
     this.opts = opts;
+    this.reconnect = __bind(this.reconnect, this);
+    this.checkStatus = __bind(this.checkStatus, this);
+    this.broadcastData = __bind(this.broadcastData, this);
+    this.connect = __bind(this.connect, this);
+    this.status = __bind(this.status, this);
+    this._niceError = __bind(this._niceError, this);
     ProxySource.__super__.constructor.call(this, {
       useHeartbeat: false
     });
@@ -36,7 +43,6 @@ module.exports = ProxySource = (function(_super) {
     };
     this.connected = false;
     this.framesPerSec = null;
-    this.last_ts = null;
     this.connected_at = null;
     this._in_disconnect = false;
     this._maxBounces = 10;
@@ -88,46 +94,30 @@ module.exports = ProxySource = (function(_super) {
   };
 
   ProxySource.prototype.connect = function() {
-    var ireq, url_opts, _reconnect;
-    debug("Connecting to " + this.url);
+    var url_opts;
+    debug("Begin connection to Icecast from " + this.url);
     url_opts = url.parse(this.url);
     url_opts.headers = _.clone(this.defaultHeaders);
-    _reconnect = _.once((function(_this) {
-      return function() {
-        var msWaitToConnect, _ref;
-        if (!_this._in_disconnect) {
-          msWaitToConnect = 5000;
-          debug("Engaging reconnect logic to " + _this.url + " in " + msWaitToConnect + "ms");
-          _this.connected = false;
-          if ((_ref = _this.icecast) != null) {
-            _ref.removeAllListeners();
-          }
-          _this.icecast = null;
-          return setTimeout((function() {
-            return _this.connect();
-          }), msWaitToConnect);
-        }
-      };
-    })(this));
-    ireq = Icy.get(url_opts, (function(_this) {
+    this.last_ts = null;
+    this.chunker.resetTime(new Date());
+    this.ireq = Icy.get(url_opts, (function(_this) {
       return function(ice) {
-        var _checkStatus;
-        debug("Connected to Icecast client on " + _this.url);
+        debug("Connected to Icecast from " + _this.url);
         if (ice.statusCode === 302) {
           _this.url = ice.headers.location;
         }
         _this.icecast = ice;
         _this.icecast.once("end", function() {
-          debug("Got Icecast end event");
-          return _reconnect();
+          debug("Received Icecast END event");
+          return _this.reconnect();
         });
         _this.icecast.once("close", function() {
-          debug("Got Icecast close event");
-          return _reconnect();
+          debug("Received Icecast CLOSE event");
+          return _this.reconnect();
         });
         _this.icecast.on("metadata", function(data) {
           var meta;
-          debug("Received Icecast metadata");
+          debug("Received Icecast METADATA event");
           if (!_this._in_disconnect) {
             meta = Icy.parse(data);
             if (meta.StreamTitle) {
@@ -145,38 +135,55 @@ module.exports = ProxySource = (function(_super) {
         _this.icecast.on("data", function(chunk) {
           return _this.parser.write(chunk);
         });
-        _checkStatus = function() {
-          debug("Checking last_ts: " + _this.last_ts);
-          if (!(_this.connected && !_this._in_disconnect)) {
-            return;
-          }
-          if (!_this.last_ts) {
-            return setTimeout(_checkStatus, 5000);
-          }
-          if (moment(_this.last_ts).isBefore(moment().subtract(1, "minutes"))) {
-            ireq.end();
-            return _reconnect();
-          }
-          return setTimeout(_checkStatus, 30000);
-        };
         _this.connected = true;
         _this.connected_at = new Date();
         _this.emit("connect");
-        return setTimeout(_checkStatus, 30000);
+        return setTimeout(_this.checkStatus, 30000);
       };
     })(this));
-    ireq.once("error", (function(_this) {
+    this.ireq.once("error", (function(_this) {
       return function(err) {
         _this._niceError(err);
-        return _reconnect();
+        return _this.reconnect();
       };
     })(this));
-    return this.on("_chunk", (function(_this) {
-      return function(chunk) {
-        _this.last_ts = chunk.ts;
-        return _this.emit("data", chunk);
-      };
-    })(this));
+    return this.on("_chunk", this.broadcastData);
+  };
+
+  ProxySource.prototype.broadcastData = function(chunk) {
+    this.last_ts = chunk.ts;
+    return this.emit("data", chunk);
+  };
+
+  ProxySource.prototype.checkStatus = function() {
+    debug("Check status: last chunk timestamp is " + this.last_ts);
+    if (!(this.connected && !this._in_disconnect)) {
+      return;
+    }
+    if (!this.last_ts) {
+      return setTimeout(this.checkStatus, 5000);
+    }
+    if (moment(this.last_ts).isBefore(moment().subtract(1, "minutes"))) {
+      this.ireq.end();
+      return this.reconnect();
+    }
+    return setTimeout(this.checkStatus, 30000);
+  };
+
+  ProxySource.prototype.reconnect = function() {
+    var msWaitToConnect, _ref;
+    if (!(this._in_disconnect && !this.connected)) {
+      msWaitToConnect = 5000;
+      debug("Reconnect to Icecast source from " + this.url + " in " + msWaitToConnect + "ms");
+      this.connected = false;
+      this.removeListener("_chunk", this.broadcastData);
+      if ((_ref = this.icecast) != null) {
+        _ref.removeAllListeners();
+      }
+      this.icecast = null;
+      this.ireq = null;
+      return setTimeout(this.connect, msWaitToConnect);
+    }
   };
 
   ProxySource.prototype.disconnect = function() {
