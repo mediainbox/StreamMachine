@@ -179,22 +179,3 @@ module.exports = class ProxySource extends require("./base")
             @ireq = null
 
             setTimeout @connect, msWaitToConnect
-
-    #----------
-
-    disconnect: ->
-        @_in_disconnect = true
-
-        if @connected
-            @icecast?.removeAllListeners()
-            @parser.removeAllListeners()
-            @removeAllListeners()
-
-            @icecast.end()
-
-            @parser = null
-            @icecast = null
-
-            debug "ProxySource disconnected."
-
-            @removeAllListeners()
