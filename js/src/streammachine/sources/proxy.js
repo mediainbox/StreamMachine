@@ -151,6 +151,7 @@ module.exports = ProxySource = (function(_super) {
   };
 
   ProxySource.prototype.broadcastData = function(chunk) {
+    debug("Received chunk from parser (" + chunk.ts + ")");
     this.last_ts = chunk.ts;
     return this.emit("data", chunk);
   };
@@ -164,21 +165,28 @@ module.exports = ProxySource = (function(_super) {
       return setTimeout(this.checkStatus, 5000);
     }
     if (moment(this.last_ts).isBefore(moment().subtract(1, "minutes"))) {
-      this.ireq.end();
       return this.reconnect();
     }
     return setTimeout(this.checkStatus, 30000);
   };
 
   ProxySource.prototype.reconnect = function() {
-    var msWaitToConnect, _ref;
+    var msWaitToConnect, _ref, _ref1, _ref2, _ref3;
     if (!(this._in_disconnect && !this.connected)) {
       msWaitToConnect = 5000;
       debug("Reconnect to Icecast source from " + this.url + " in " + msWaitToConnect + "ms");
       this.connected = false;
       this.removeListener("_chunk", this.broadcastData);
-      if ((_ref = this.icecast) != null) {
-        _ref.removeAllListeners();
+      if ((_ref = this.ireq) != null) {
+        _ref.end();
+      }
+      if ((_ref1 = this.ireq) != null) {
+        if ((_ref2 = _ref1.res) != null) {
+          _ref2.client.destroy();
+        }
+      }
+      if ((_ref3 = this.icecast) != null) {
+        _ref3.removeAllListeners();
       }
       this.icecast = null;
       this.ireq = null;
