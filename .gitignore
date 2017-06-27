@@ -4,3 +4,8 @@ z/
 newrelic.js
 node_modules
 rewind_dump
+
+!js/
+*.js
+*.js.map
+*.map
