@@ -139,6 +139,7 @@ module.exports = class ProxySource extends require("./base")
     #----------
 
     broadcastData: (chunk) =>
+        debug "Received chunk from parser (#{chunk.ts})"
         @last_ts = chunk.ts
         @emit "data", chunk
 
@@ -153,7 +154,6 @@ module.exports = class ProxySource extends require("./base")
             return setTimeout @checkStatus, 5000
 
         if moment(@last_ts).isBefore(moment().subtract(1, "minutes"))
-            @ireq.end()
             return @reconnect()
 
         setTimeout @checkStatus, 30000
@@ -172,6 +172,8 @@ module.exports = class ProxySource extends require("./base")
             @removeListener "_chunk", @broadcastData
 
             # Clean icecast
+            @ireq?.end()
+            @ireq?.res?.client.destroy()
             @icecast?.removeAllListeners()
             @icecast = null
             @ireq = null
