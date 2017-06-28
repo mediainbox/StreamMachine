@@ -80,6 +80,8 @@ module.exports = class ProxySource extends require("./base")
     #----------
 
     connect: =>
+        @createParser()
+
         debug "Begin connection to Icecast from #{@url}"
 
         url_opts = url.parse @url
@@ -130,6 +132,7 @@ module.exports = class ProxySource extends require("./base")
             setTimeout @checkStatus, 30000
 
         @ireq.once "error", (err) =>
+            debug "Gor icecast stream error #{err}, reconnecting"
             @_niceError err
             @reconnect()
 
@@ -139,21 +142,24 @@ module.exports = class ProxySource extends require("./base")
     #----------
 
     broadcastData: (chunk) =>
+        debug "Received chunk from parser (#{chunk.ts})"
         @last_ts = chunk.ts
         @emit "data", chunk
 
     #----------
 
     checkStatus: =>
-        debug "Check status: last chunk timestamp is #{@last_ts}"
+        if not @connected
+            debug "Check status: not connected, skipping"
+            return
 
-        return unless @connected and not @_in_disconnect
+        debug "Check status: last chunk timestamp is #{@last_ts}"
 
         unless @last_ts
             return setTimeout @checkStatus, 5000
 
         if moment(@last_ts).isBefore(moment().subtract(1, "minutes"))
-            @ireq.end()
+            debug "Check status: last chunk timestamp is older than 1 minute ago, reconnecting"
             return @reconnect()
 
         setTimeout @checkStatus, 30000
@@ -161,38 +167,24 @@ module.exports = class ProxySource extends require("./base")
     #----------
 
     reconnect: =>
-        unless @_in_disconnect and not @connected
+        return unless @connected
 
-            msWaitToConnect = 5000
-            debug "Reconnect to Icecast source from #{@url} in #{msWaitToConnect}ms"
+        msWaitToConnect = 5000
+        debug "Reconnect to Icecast source from #{@url} in #{msWaitToConnect}ms"
 
-            @connected = false
+        @connected = false
 
-            # Clean proxy listeners
-            @removeListener "_chunk", @broadcastData
+        # Clean proxy listeners
+        @removeListener "_chunk", @broadcastData
 
-            # Clean icecast
-            @icecast?.removeAllListeners()
-            @icecast = null
-            @ireq = null
+        # Clean icecast
+        @ireq?.end()
+        @ireq?.res?.client.destroy()
+        @icecast?.removeAllListeners()
+        @icecast = null
+        @ireq = null
 
-            setTimeout @connect, msWaitToConnect
+        @parser = null
+        @chunker = null
 
-    #----------
-
-    disconnect: ->
-        @_in_disconnect = true
-
-        if @connected
-            @icecast?.removeAllListeners()
-            @parser.removeAllListeners()
-            @removeAllListeners()
-
-            @icecast.end()
-
-            @parser = null
-            @icecast = null
-
-            debug "ProxySource disconnected."
-
-            @removeAllListeners()
+        setTimeout @connect, msWaitToConnect
