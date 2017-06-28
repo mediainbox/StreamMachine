@@ -30,8 +30,6 @@ module.exports = class Source extends require("events").EventEmitter
 
         @log = @opts.logger?.child uuid:@uuid
 
-        @parser = new (require "../parsers/#{@opts.format}")
-
         if source_opts.useHeartbeat
             # -- Alert if data stops flowing -- #
 
@@ -46,38 +44,41 @@ module.exports = class Source extends require("events").EventEmitter
                     @disconnect()
 
         if !source_opts.skipParser
-            # -- Pull vitals from first header -- #
+            @parserConstructor = require "../parsers/#{@opts.format}"
 
-            @parser.once "header", (header) =>
-                # -- compute frames per second and stream key -- #
+    #----------
+    
+    createParser: ->
+        @log?.debug "Creating #{@opts.format} frames parser"
 
-                @framesPerSec   = header.frames_per_sec
-                @streamKey      = header.stream_key
+        # -- Turns data frames into chunks -- #
+        @chunker = new FrameChunker @emitDuration * 1000
+        
+        @parser = new @parserConstructor
 
-                @log?.debug "setting framesPerSec to ", frames:@framesPerSec
-                @log?.debug "first header is ", header
+        # -- Pull vitals from first header -- #
+        @parser.once "header", (header) =>
+            # -- compute frames per second and stream key -- #
+            @framesPerSec   = header.frames_per_sec
+            @streamKey      = header.stream_key
 
-                # -- send out our stream vitals -- #
+            @log?.debug "setting framesPerSec to ", frames:@framesPerSec
+            @log?.debug "first header is ", header
 
-                @_setVitals
-                    streamKey:          @streamKey
-                    framesPerSec:       @framesPerSec
-                    emitDuration:       @emitDuration
+            # -- send out our stream vitals -- #
 
-            # -- Turn data frames into chunks -- #
+            @_setVitals
+                streamKey:          @streamKey
+                framesPerSec:       @framesPerSec
+                emitDuration:       @emitDuration
 
-            @chunker = new FrameChunker @emitDuration * 1000
+        @parser.on "frame", (frame,header) =>
+            @_pingData?.ping() # heartbeat?
+            @chunker.write frame:frame, header:header
 
-            @parser.on "frame", (frame,header) =>
-                # heartbeat?
-                #console.log "_pingData at ",Number(new Date())
-                @_pingData?.ping()
-
-                @chunker.write frame:frame, header:header
-
-            @chunker.on "readable", =>
-                while c = @chunker.read()
-                    @emit "_chunk", c
+        @chunker.on "readable", =>
+            while chunk = @chunker.read()
+                @emit "_chunk", chunk
 
     #----------
 
@@ -109,8 +110,8 @@ module.exports = class Source extends require("events").EventEmitter
     disconnect: (cb) ->
         @log?.debug "Setting _isDisconnected"
         @_isDisconnected = true
-        @chunker.removeAllListeners()
-        @parser.removeAllListeners()
+        @chunker?.removeAllListeners()
+        @parser?.removeAllListeners()
         @_pingData?.kill()
 
     #----------
