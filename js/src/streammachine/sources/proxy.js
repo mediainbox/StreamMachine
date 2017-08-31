@@ -144,9 +144,9 @@ module.exports = ProxySource = (function(_super) {
     })(this));
     this.ireq.once("error", (function(_this) {
       return function(err) {
-        debug("Gor icecast stream error " + err + ", reconnecting");
+        debug("Got icecast stream error " + err + ", reconnecting");
         _this._niceError(err);
-        return _this.reconnect();
+        return _this.reconnect(true);
       };
     })(this));
     return this.on("_chunk", this.broadcastData);
@@ -174,9 +174,12 @@ module.exports = ProxySource = (function(_super) {
     return setTimeout(this.checkStatus, 30000);
   };
 
-  ProxySource.prototype.reconnect = function() {
+  ProxySource.prototype.reconnect = function(ignoreConnectionStatus) {
     var msWaitToConnect, _ref, _ref1, _ref2, _ref3;
-    if (!this.connected) {
+    if (ignoreConnectionStatus == null) {
+      ignoreConnectionStatus = false;
+    }
+    if (!this.connected && !ignoreConnectionStatus) {
       return;
     }
     msWaitToConnect = 5000;

@@ -132,9 +132,9 @@ module.exports = class ProxySource extends require("./base")
             setTimeout @checkStatus, 30000
 
         @ireq.once "error", (err) =>
-            debug "Gor icecast stream error #{err}, reconnecting"
+            debug "Got icecast stream error #{err}, reconnecting"
             @_niceError err
-            @reconnect()
+            @reconnect(true)
 
         # outgoing -> Stream
         @on "_chunk", @broadcastData
@@ -166,8 +166,10 @@ module.exports = class ProxySource extends require("./base")
 
     #----------
 
-    reconnect: =>
-        return unless @connected
+    reconnect: (ignoreConnectionStatus = false) =>
+        # Ignore reconnection if there is an active connection or the "ignore status" flag given is false
+        if !@connected && !ignoreConnectionStatus
+          return
 
         msWaitToConnect = 5000
         debug "Reconnect to Icecast source from #{@url} in #{msWaitToConnect}ms"
