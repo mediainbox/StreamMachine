@@ -20,6 +20,8 @@
   "main": "./js/streamer.js",
   "license": "MIT",
   "scripts": {
+    "build": "grunt",
+    "start:dev": "DEBUG=sm:* node ./js/streamer.js --config config/master-dev.json",
     "test": "./node_modules/.bin/mocha"
   },
   "engines": {
