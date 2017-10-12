@@ -1,5 +1,15 @@
 var Streamer, debug, heapdump, nconf, request, streamer, _;
 
+require('@google-cloud/trace-agent').start({
+  projectId: process.env.GCLOUD_PROJECT,
+  keyFilename: process.env.GCLOUD_KEY_FILENAME
+});
+
+require('@google-cloud/debug-agent').start({
+  projectId: process.env.GCLOUD_PROJECT,
+  keyFilename: process.env.GCLOUD_KEY_FILENAME
+});
+
 _ = require("underscore");
 
 nconf = require("nconf");
