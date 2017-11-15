@@ -23,7 +23,7 @@ module.exports = MasterMode = (function(_super) {
 
   function MasterMode(opts, cb) {
     this.opts = opts;
-    this.log = new Logger(this.opts.log);
+    this.log = new Logger(_.extend(this.opts.log, nconf.get('log')));
     debug("Master instance initialized.");
     process.title = "StreamM:master";
     MasterMode.__super__.constructor.apply(this, arguments);
