@@ -29,6 +29,7 @@ module.exports = FileSource = (function(_super) {
         return _this._chunks.push(chunk);
       };
     })(this));
+    this.createParser();
     this.parser.once("header", (function(_this) {
       return function(header) {
         _this.connected = true;

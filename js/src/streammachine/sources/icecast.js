@@ -40,6 +40,7 @@ module.exports = IcecastSource = (function(_super) {
         return _this._vtimeout = null;
       };
     })(this));
+    this.createParser();
     this.opts.sock.pipe(this.parser);
     this.last_ts = null;
     this.on("_chunk", function(chunk) {
