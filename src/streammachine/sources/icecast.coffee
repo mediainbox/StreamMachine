@@ -28,6 +28,8 @@ module.exports = class IcecastSource extends require("./base")
             clearTimeout @_vtimeout
             @_vtimeout = null
 
+        @createParser()
+
         # incoming -> Parser
         @opts.sock.pipe @parser
 
