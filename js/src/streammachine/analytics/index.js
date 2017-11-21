@@ -24,31 +24,25 @@ debug = require("debug")("sm:analytics");
 
 module.exports = Analytics = (function() {
   function Analytics(opts, cb) {
-    var es_uri, hosts, uri, uris, _i, _len;
+    var apiVersion, es_uri;
     this.opts = opts;
+    this._uri = URL.parse(this.opts.config.es_uri);
     this.log = this.opts.log;
     this._timeout_sec = Number(this.opts.config.finalize_secs);
     if (this.opts.redis) {
       this.redis = this.opts.redis.client;
     }
-    uris = this.opts.config.es_uri;
-    hosts = [];
-    if (typeof uris === "string") {
-      uris = [uris];
-    }
-    this._uri = URL.parse(uris[0]);
+    es_uri = "http://" + this._uri.hostname + ":" + (this._uri.port || 9200);
     this.idx_prefix = this._uri.pathname.substr(1);
-    debug("Connecting to Elasticsearch with prefix " + this.idx_prefix);
-    for (_i = 0, _len = uris.length; _i < _len; _i++) {
-      uri = uris[_i];
-      uri = URL.parse(uri);
-      es_uri = "http://" + uri.hostname + ":" + (uri.port || 9200);
-      this.log.debug("Connecting to Elasticsearch at " + es_uri);
-      hosts.push(es_uri);
+    this.log.debug("Connecting to Elasticsearch at " + es_uri + " with prefix of " + this.idx_prefix);
+    debug("Connecting to ES at " + es_uri + ", prefix " + this.idx_prefix);
+    apiVersion = '1.7';
+    if (typeof this.opts.config.es_api_version !== 'undefined') {
+      apiVersion = this.opts.config.es_api_version.toString();
     }
     this.es = new elasticsearch.Client({
-      hosts: hosts,
-      apiVersion: "2.3",
+      host: es_uri,
+      apiVersion: apiVersion,
       requestTimeout: this.opts.config.request_timeout || 30000
     });
     this.idx_batch = new BatchedQueue({

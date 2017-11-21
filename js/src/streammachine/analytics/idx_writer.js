@@ -13,12 +13,12 @@ module.exports = IdxWriter = (function(_super) {
     IdxWriter.__super__.constructor.call(this, {
       objectMode: true
     });
-    debug("IdxWriter init");
+    this.log.debug("IdxWriter init");
   }
 
   IdxWriter.prototype._write = function(batch, encoding, cb) {
     var bulk, obj, _i, _len;
-    debug("_write with batch of " + batch.length);
+    this.log.debug("_write with batch of " + batch.length);
     bulk = [];
     for (_i = 0, _len = batch.length; _i < _len; _i++) {
       obj = batch[_i];
@@ -36,12 +36,11 @@ module.exports = IdxWriter = (function(_super) {
       return function(err, resp) {
         var err_str;
         if (err) {
-          err_str = "Failed to bulk insert: " + err;
+          err_str = "Failed to bulk insert " + batch.length + " rows: " + err;
           _this.log.error(err_str);
-          debug(err_str);
-          return cb(new Error(err_str));
+          return cb();
         }
-        debug("Inserted " + batch.length + " rows.");
+        _this.log.debug("Inserted " + batch.length + " rows.");
         _this.emit("bulk");
         return cb();
       };

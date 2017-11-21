@@ -22,6 +22,8 @@ debug = require("debug")("sm:analytics")
 
 module.exports = class Analytics
     constructor: (@opts,cb) ->
+        @_uri = URL.parse @opts.config.es_uri
+
         @log = @opts.log
 
         @_timeout_sec = Number(@opts.config.finalize_secs)
@@ -30,29 +32,20 @@ module.exports = class Analytics
 
             @redis = @opts.redis.client
 
-        uris = @opts.config.es_uri
-        hosts = []
-
-        if typeof uris == "string"
-            uris = [uris]
-
-        @_uri = URL.parse uris[0]
+        es_uri = "http://#{@_uri.hostname}:#{@_uri.port||9200}"
         @idx_prefix = @_uri.pathname.substr(1)
 
-        debug "Connecting to Elasticsearch with prefix #{@idx_prefix}"
+        @log.debug "Connecting to Elasticsearch at #{es_uri} with prefix of #{@idx_prefix}"
+        debug "Connecting to ES at #{es_uri}, prefix #{@idx_prefix}"
 
-        for uri in uris
-            uri = URL.parse uri
-            es_uri = "http://#{uri.hostname}:#{uri.port||9200}"
-
-            @log.debug "Connecting to Elasticsearch at #{es_uri}"
-            hosts.push es_uri
+        apiVersion = '1.7'
+        if (typeof @opts.config.es_api_version != 'undefined')
+            apiVersion = @opts.config.es_api_version.toString()
 
         @es = new elasticsearch.Client
-            hosts:          hosts
-            apiVersion:     "2.3"
+            host:           es_uri
+            apiVersion:     apiVersion
             requestTimeout: @opts.config.request_timeout || 30000
-            #log: "trace"
 
         @idx_batch  = new BatchedQueue
             batch:      @opts.config.index_batch

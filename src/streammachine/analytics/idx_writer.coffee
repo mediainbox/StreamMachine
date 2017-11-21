@@ -3,10 +3,10 @@ debug = require("debug")("sm:analytics:idx_writer")
 module.exports = class IdxWriter extends require("stream").Writable
     constructor: (@es,@log) ->
         super objectMode:true
-        debug "IdxWriter init"
-
+        @log.debug "IdxWriter init"
     _write: (batch,encoding,cb) ->
-        debug "_write with batch of #{batch.length}"
+        @log.debug "_write with batch of #{batch.length}"
+
         bulk = []
 
         for obj in batch
@@ -15,11 +15,10 @@ module.exports = class IdxWriter extends require("stream").Writable
 
         @es.bulk body:bulk, (err,resp) =>
             if err
-                err_str = "Failed to bulk insert: #{err}"
+                err_str = "Failed to bulk insert #{batch.length} rows: #{err}"
                 @log.error err_str
-                debug err_str
-                return cb new Error(err_str)
+                return cb()
 
-            debug "Inserted #{batch.length} rows."
+            @log.debug "Inserted #{batch.length} rows."
             @emit "bulk"
             cb()
