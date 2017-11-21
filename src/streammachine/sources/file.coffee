@@ -24,6 +24,8 @@ module.exports = class FileSource extends require("./base")
         @on "_chunk", (chunk) =>
             @_chunks.push chunk
 
+        @createParser()
+
         @parser.once "header", (header) =>
             @connected = true
             @emit "connect"

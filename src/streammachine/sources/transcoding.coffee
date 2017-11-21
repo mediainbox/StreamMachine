@@ -14,6 +14,8 @@ module.exports = class TranscodingSource extends require("./base")
 
         @_disconnected = false
 
+        @createParser()
+
         @d = require("domain").create()
         @d.on "error", (err) =>
             @log?.error "TranscodingSource domain error:" + err

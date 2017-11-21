@@ -25,6 +25,7 @@ module.exports = TranscodingSource = (function(_super) {
       skipParser: true
     });
     this._disconnected = false;
+    this.createParser();
     this.d = require("domain").create();
     this.d.on("error", (function(_this) {
       return function(err) {
