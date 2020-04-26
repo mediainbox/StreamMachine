@@ -378,7 +378,7 @@ module.exports = Analytics = (function() {
       },
       size: 1
     };
-    return this._indicesForTimeRange("listens", new Date(), "-72 hours", (function(_this) {
+    return this._indicesForTimeRange("listens", new Date(), "-24 hours", (function(_this) {
       return function(err, indices) {
         return _this.es.search({
           body: body,

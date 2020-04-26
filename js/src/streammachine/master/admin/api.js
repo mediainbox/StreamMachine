@@ -1,6 +1,8 @@
-var API, BasicStrategy, Throttle, Users, api, express, passport, path;
+var API, BasicStrategy, Throttle, Users, api, bodyParser, express, passport, path;
 
 express = require("express");
+
+bodyParser = require("body-parser");
 
 api = require("express-api-helper");
 
