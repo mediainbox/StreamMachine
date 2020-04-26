@@ -1,4 +1,5 @@
 express         = require "express"
+bodyParser      = require "body-parser"
 api             = require "express-api-helper"
 path            = require "path"
 passport        = require "passport"
