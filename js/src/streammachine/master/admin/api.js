@@ -119,7 +119,7 @@ module.exports = API = (function() {
         return api.ok(req, res, _this.master.slavesInfo());
       };
     })(this));
-    this.app.post("/streams", express.bodyParser(), (function(_this) {
+    this.app.post("/streams", bodyParser.json(), (function(_this) {
       return function(req, res) {
         return _this.master.createStream(req.body, function(err, stream) {
           if (err) {
@@ -140,7 +140,7 @@ module.exports = API = (function() {
         return api.ok(req, res, req.stream.config());
       };
     })(this));
-    this.app.post("/streams/:stream/metadata", express.bodyParser(), (function(_this) {
+    this.app.post("/streams/:stream/metadata", bodyParser.json(), (function(_this) {
       return function(req, res) {
         return req.stream.setMetadata(req.body || req.query, function(err, meta) {
           if (err) {
@@ -151,7 +151,7 @@ module.exports = API = (function() {
         });
       };
     })(this));
-    this.app.put("/streams/:stream/config", express.bodyParser(), (function(_this) {
+    this.app.put("/streams/:stream/config", bodyParser.json(), (function(_this) {
       return function(req, res) {
         return _this.master.updateStream(req.stream, req.body, function(err, obj) {
           if (err) {
@@ -203,7 +203,7 @@ module.exports = API = (function() {
         });
       };
     })(this));
-    this.app.post("/sources", express.bodyParser(), (function(_this) {
+    this.app.post("/sources", bodyParser.json(), (function(_this) {
       return function(req, res) {
         return _this.master.createMount(req.body, function(err, mount) {
           if (err) {
@@ -246,7 +246,7 @@ module.exports = API = (function() {
         });
       };
     })(this));
-    this.app.put("/sources/:mount/config", express.bodyParser(), (function(_this) {
+    this.app.put("/sources/:mount/config", bodyParser.json(), (function(_this) {
       return function(req, res) {
         return _this.master.updateMount(req.mount, req.body, function(err, obj) {
           if (err) {
@@ -288,7 +288,7 @@ module.exports = API = (function() {
         });
       };
     })(this));
-    this.app.post("/users", express.bodyParser(), (function(_this) {
+    this.app.post("/users", bodyParser.json(), (function(_this) {
       return function(req, res) {
         return _this.users.store(req.body.user, req.body.password, function(err, status) {
           if (err) {

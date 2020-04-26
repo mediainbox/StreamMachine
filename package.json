@@ -40,6 +40,7 @@
     "express": "^4.17.1",
     "express-api-helper": "~0.0.1",
     "fluent-ffmpeg": "~1.7.1",
+    "greenlock-express": "^4.0.3",
     "haml-coffee": "1.4.1",
     "icy": "2.1.0",
     "ipc-rpc": "~0.1.3",

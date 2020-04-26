@@ -97,7 +97,7 @@ module.exports = class API
             api.ok req, res, @master.slavesInfo()
 
         # create a stream
-        @app.post "/streams", express.bodyParser(), (req,res) =>
+        @app.post "/streams", bodyParser.json(), (req,res) =>
             # add a new stream
             @master.createStream req.body, (err,stream) =>
                 if err
@@ -115,7 +115,7 @@ module.exports = class API
             api.ok req, res, req.stream.config()
 
         # update stream metadata
-        @app.post "/streams/:stream/metadata", express.bodyParser(), (req,res) =>
+        @app.post "/streams/:stream/metadata", bodyParser.json(), (req,res) =>
             req.stream.setMetadata req.body||req.query, (err,meta) =>
                 if err
                     api.invalid req, res, err
@@ -123,7 +123,7 @@ module.exports = class API
                     api.ok req, res, meta
 
         # Update a stream's configuration
-        @app.put "/streams/:stream/config", express.bodyParser(), (req,res) =>
+        @app.put "/streams/:stream/config", bodyParser.json(), (req,res) =>
             @master.updateStream req.stream, req.body, (err,obj) =>
                 if err
                     api.invalid req, res, err
@@ -165,7 +165,7 @@ module.exports = class API
 
         # -- Source Mount API -- #
 
-        @app.post "/sources", express.bodyParser(), (req,res) =>
+        @app.post "/sources", bodyParser.json(), (req,res) =>
             # add a new source mount
             @master.createMount req.body, (err,mount) =>
                 if err
@@ -198,7 +198,7 @@ module.exports = class API
                     api.ok req, res, msg
 
         # Update a source's configuration
-        @app.put "/sources/:mount/config", express.bodyParser(), (req,res) =>
+        @app.put "/sources/:mount/config", bodyParser.json(), (req,res) =>
             @master.updateMount req.mount, req.body, (err,obj) =>
                 if err
                     api.invalid req, res, err
@@ -228,7 +228,7 @@ module.exports = class API
                     api.ok req, res, obj
 
         # create / update a user
-        @app.post "/users", express.bodyParser(), (req,res) =>
+        @app.post "/users", bodyParser.json(), (req,res) =>
             @users.store req.body.user, req.body.password, (err,status) =>
                 if err
                     api.invalid req, res, err
