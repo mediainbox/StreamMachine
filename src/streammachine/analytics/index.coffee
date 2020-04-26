@@ -347,8 +347,8 @@ module.exports = class Analytics
                 time:{order:"desc"}
             size: 1
 
-        # session start is allowed to be anywhere in the last 72 hours
-        @_indicesForTimeRange "listens", new Date(), "-72 hours", (err,indices) =>
+        # session start is allowed to be anywhere in the last 24 hours
+        @_indicesForTimeRange "listens", new Date(), "-24 hours", (err,indices) =>
             @es.search body:body, index:indices, ignoreUnavailable:true, (err,res) =>
                 return cb new Error "Error querying session start for #{id}: #{err}" if err
 
