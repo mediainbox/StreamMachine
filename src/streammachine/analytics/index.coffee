@@ -3,7 +3,7 @@ URL     = require "url"
 winston = require "winston"
 tz      = require "timezone"
 nconf   = require "nconf"
-elasticsearch = require "elasticsearch"
+elasticsearch = require "@elastic/elasticsearch"
 
 BatchedQueue    = require "../util/batched_queue"
 IdxWriter       = require "./idx_writer"
@@ -32,8 +32,8 @@ module.exports = class Analytics
 
             @redis = @opts.redis.client
 
-        es_uri = "http://#{@_uri.hostname}:#{@_uri.port||9200}"
-        @idx_prefix = @_uri.pathname.substr(1)
+        es_uri = @opts.config.es_uri
+        @idx_prefix = @opts.config.es_prefix
 
         @log.debug "Connecting to Elasticsearch at #{es_uri} with prefix of #{@idx_prefix}"
         debug "Connecting to ES at #{es_uri}, prefix #{@idx_prefix}"
@@ -43,7 +43,7 @@ module.exports = class Analytics
             apiVersion = @opts.config.es_api_version.toString()
 
         @es = new elasticsearch.Client
-            host:           es_uri
+            node:           es_uri
             apiVersion:     apiVersion
             requestTimeout: @opts.config.request_timeout || 30000
 
@@ -110,6 +110,7 @@ module.exports = class Analytics
         _loaded = _.after Object.keys(ESTemplates).length, =>
             if errors.length > 0
                 debug "Failed to load one or more ES templates: #{errors.join(" | ")}"
+                @log.info errors
                 cb new Error "Failed to load index templates: #{ errors.join(" | ") }"
             else
                 debug "ES templates loaded successfully."
@@ -119,6 +120,7 @@ module.exports = class Analytics
             debug "Loading ES mapping for #{@idx_prefix}-#{t}"
             @log.info "Loading Elasticsearch mappings for #{@idx_prefix}-#{t}"
             tmplt = _.extend {}, obj, template:"#{@idx_prefix}-#{t}-*"
+            @log.info tmplt
             @es.indices.putTemplate name:"#{@idx_prefix}-#{t}-template", body:tmplt, (err) =>
                 errors.push err if err
                 _loaded()
@@ -146,11 +148,12 @@ module.exports = class Analytics
         @_indicesForTimeRange "listens", time, (err,idx) =>
             switch obj.type
                 when "session_start"
-                    @idx_batch.write index:idx[0], type:"start", body:
+                    @idx_batch.write index:idx[0], body:
                         time:       new Date(obj.time)
                         session_id: obj.client.session_id
                         stream:     obj.stream_group || obj.stream
                         client:     obj.client
+                        type:       "start"
 
                     cb? null
 
@@ -159,7 +162,7 @@ module.exports = class Analytics
                 when "listen"
                     # do we know of other duration for this session?
                     @_getStashedDurationFor obj.client.session_id, obj.duration, (err,dur) =>
-                        @idx_batch.write index:idx[0], type:"listen", body:
+                        @idx_batch.write index:idx[0], body:
                             session_id:         obj.client.session_id
                             time:               new Date(obj.time)
                             kbytes:             obj.kbytes
@@ -169,6 +172,7 @@ module.exports = class Analytics
                             client:             obj.client
                             offsetSeconds:      obj.offsetSeconds
                             contentTime:        obj.contentTime
+                            type:               "listen"
 
                         cb? null
 
@@ -318,8 +322,7 @@ module.exports = class Analytics
     _storeSession: (session,cb) ->
         # write one index per day of data
         index_date = tz(session.time,"%F")
-
-        @es.index index:"#{@idx_prefix}-sessions-#{index_date}", type:"session", body:session, (err) =>
+        @es.index index:"#{@idx_prefix}-sessions-#{index_date}", type: '_doc', body:session, (err) =>
             cb err
 
     #----------
@@ -329,25 +332,28 @@ module.exports = class Analytics
 
         body =
             query:
-                constant_score:
-                    filter:
-                        term:
-                            "session_id":id
+                bool:
+                    must: [
+                        {
+                            match:
+                                "session_id": id
+                        },
+                        {
+                            match:
+                                "type": "start"
+                        }
+                    ]
             sort:
                 time:{order:"desc"}
-            size:1
+            size: 1
 
         # session start is allowed to be anywhere in the last 72 hours
-        # FIXME: Is this reasonable? What do we want to do with long sessions?
         @_indicesForTimeRange "listens", new Date(), "-72 hours", (err,indices) =>
-            @es.search type:"start", body:body, index:indices, ignoreUnavailable:true, (err,res) =>
+            @es.search body:body, index:indices, ignoreUnavailable:true, (err,res) =>
                 return cb new Error "Error querying session start for #{id}: #{err}" if err
 
-                if res.hits.hits.length > 0
-                    cb null, _.extend {}, res.hits.hits[0]._source, time:new Date(res.hits.hits[0]._source.time)
-                else
-                    cb null, null
-
+                if res.body.hits && res.body.hits.total.value > 0
+                    cb null, _.extend {}, res.body.hits.hits[0]._source, time:new Date(res.body.hits.hits[0]._source.time)
     #----------
 
     _selectPreviousSession: (id,cb) ->
@@ -355,23 +361,30 @@ module.exports = class Analytics
 
         body =
             query:
-                constant_score:
-                    filter:
-                        term:
-                            "session_id":id
+                bool:
+                    must: [
+                        {
+                            match:
+                                "session_id": id
+                        },
+                        {
+                            match:
+                                "type": "session"
+                        }
+                    ]
             sort:
                 time:{order:"desc"}
             size:1
 
 
         @_indicesForTimeRange "sessions", new Date(), "-72 hours", (err,indices) =>
-            @es.search type:"session", body:body, index:indices, ignoreUnavailable:true, (err,res) =>
+            @es.search body:body, index:indices, ignoreUnavailable:true, (err,res) =>
                 return cb new Error "Error querying for old session #{id}: #{err}" if err
 
-                if res.hits.hits.length == 0
+                if !res.body.hits || res.body.hits.total.value == 0
                     cb null, null
                 else
-                    cb null, new Date(res.hits.hits[0]._source.time)
+                    cb null, new Date(res.body.hits.hits[0]._source.time)
 
     #----------
 
@@ -383,7 +396,8 @@ module.exports = class Analytics
                 "and":
                     filters:[
                         { range:{ time:{ gt:ts } } },
-                        { term:{session_id:id} }
+                        { term:{session_id:id} },
+                        { term:{type:"listen"}}
                     ]
             else
                term:{session_id:id}
@@ -401,15 +415,15 @@ module.exports = class Analytics
                     max:{ field:"time" }
 
         @_indicesForTimeRange "listens", new Date(), ts||"-72 hours", (err,indices) =>
-            @es.search type:"listen", index:indices, body:body, ignoreUnavailable:true, (err,res) =>
+            @es.search index:indices, body:body, ignoreUnavailable:true, (err,res) =>
                 return cb new Error "Error querying listens to finalize session #{id}: #{err}" if err
 
-                if res.hits.total > 0
+                if res.body.hits.total.value > 0
                     cb null,
-                        requests:       res.hits.total
-                        duration:       res.aggregations.duration.value
-                        kbytes:         res.aggregations.kbytes.value
-                        last_listen:    new Date(res.aggregations.last_listen.value)
+                        requests:       res.body.hits.total.value
+                        duration:       res.body.aggregations.duration.value
+                        kbytes:         res.body.aggregations.kbytes.value
+                        last_listen:    new Date(res.body.aggregations.last_listen.value)
                 else
                     cb null, null
 

@@ -12,7 +12,7 @@ tz = require("timezone");
 
 nconf = require("nconf");
 
-elasticsearch = require("elasticsearch");
+elasticsearch = require("@elastic/elasticsearch");
 
 BatchedQueue = require("../util/batched_queue");
 
@@ -32,8 +32,8 @@ module.exports = Analytics = (function() {
     if (this.opts.redis) {
       this.redis = this.opts.redis.client;
     }
-    es_uri = "http://" + this._uri.hostname + ":" + (this._uri.port || 9200);
-    this.idx_prefix = this._uri.pathname.substr(1);
+    es_uri = this.opts.config.es_uri;
+    this.idx_prefix = this.opts.config.es_prefix;
     this.log.debug("Connecting to Elasticsearch at " + es_uri + " with prefix of " + this.idx_prefix);
     debug("Connecting to ES at " + es_uri + ", prefix " + this.idx_prefix);
     apiVersion = '1.7';
@@ -41,7 +41,7 @@ module.exports = Analytics = (function() {
       apiVersion = this.opts.config.es_api_version.toString();
     }
     this.es = new elasticsearch.Client({
-      host: es_uri,
+      node: es_uri,
       apiVersion: apiVersion,
       requestTimeout: this.opts.config.request_timeout || 30000
     });
@@ -102,6 +102,7 @@ module.exports = Analytics = (function() {
       return function() {
         if (errors.length > 0) {
           debug("Failed to load one or more ES templates: " + (errors.join(" | ")));
+          _this.log.info(errors);
           return cb(new Error("Failed to load index templates: " + (errors.join(" | "))));
         } else {
           debug("ES templates loaded successfully.");
@@ -117,6 +118,7 @@ module.exports = Analytics = (function() {
       tmplt = _.extend({}, obj, {
         template: "" + this.idx_prefix + "-" + t + "-*"
       });
+      this.log.info(tmplt);
       _results.push(this.es.indices.putTemplate({
         name: "" + this.idx_prefix + "-" + t + "-template",
         body: tmplt
@@ -152,12 +154,12 @@ module.exports = Analytics = (function() {
           case "session_start":
             _this.idx_batch.write({
               index: idx[0],
-              type: "start",
               body: {
                 time: new Date(obj.time),
                 session_id: obj.client.session_id,
                 stream: obj.stream_group || obj.stream,
-                client: obj.client
+                client: obj.client,
+                type: "start"
               }
             });
             if (typeof cb === "function") {
@@ -168,7 +170,6 @@ module.exports = Analytics = (function() {
             _this._getStashedDurationFor(obj.client.session_id, obj.duration, function(err, dur) {
               _this.idx_batch.write({
                 index: idx[0],
-                type: "listen",
                 body: {
                   session_id: obj.client.session_id,
                   time: new Date(obj.time),
@@ -178,7 +179,8 @@ module.exports = Analytics = (function() {
                   stream: obj.stream,
                   client: obj.client,
                   offsetSeconds: obj.offsetSeconds,
-                  contentTime: obj.contentTime
+                  contentTime: obj.contentTime,
+                  type: "listen"
                 }
               });
               return typeof cb === "function" ? cb(null) : void 0;
@@ -342,7 +344,7 @@ module.exports = Analytics = (function() {
     index_date = tz(session.time, "%F");
     return this.es.index({
       index: "" + this.idx_prefix + "-sessions-" + index_date,
-      type: "session",
+      type: '_doc',
       body: session
     }, (function(_this) {
       return function(err) {
@@ -355,12 +357,18 @@ module.exports = Analytics = (function() {
     var body;
     body = {
       query: {
-        constant_score: {
-          filter: {
-            term: {
-              "session_id": id
+        bool: {
+          must: [
+            {
+              match: {
+                "session_id": id
+              }
+            }, {
+              match: {
+                "type": "start"
+              }
             }
-          }
+          ]
         }
       },
       sort: {
@@ -373,7 +381,6 @@ module.exports = Analytics = (function() {
     return this._indicesForTimeRange("listens", new Date(), "-72 hours", (function(_this) {
       return function(err, indices) {
         return _this.es.search({
-          type: "start",
           body: body,
           index: indices,
           ignoreUnavailable: true
@@ -381,12 +388,10 @@ module.exports = Analytics = (function() {
           if (err) {
             return cb(new Error("Error querying session start for " + id + ": " + err));
           }
-          if (res.hits.hits.length > 0) {
-            return cb(null, _.extend({}, res.hits.hits[0]._source, {
-              time: new Date(res.hits.hits[0]._source.time)
+          if (res.body.hits && res.body.hits.total.value > 0) {
+            return cb(null, _.extend({}, res.body.hits.hits[0]._source, {
+              time: new Date(res.body.hits.hits[0]._source.time)
             }));
-          } else {
-            return cb(null, null);
           }
         });
       };
@@ -397,12 +402,18 @@ module.exports = Analytics = (function() {
     var body;
     body = {
       query: {
-        constant_score: {
-          filter: {
-            term: {
-              "session_id": id
+        bool: {
+          must: [
+            {
+              match: {
+                "session_id": id
+              }
+            }, {
+              match: {
+                "type": "session"
+              }
             }
-          }
+          ]
         }
       },
       sort: {
@@ -415,7 +426,6 @@ module.exports = Analytics = (function() {
     return this._indicesForTimeRange("sessions", new Date(), "-72 hours", (function(_this) {
       return function(err, indices) {
         return _this.es.search({
-          type: "session",
           body: body,
           index: indices,
           ignoreUnavailable: true
@@ -423,10 +433,10 @@ module.exports = Analytics = (function() {
           if (err) {
             return cb(new Error("Error querying for old session " + id + ": " + err));
           }
-          if (res.hits.hits.length === 0) {
+          if (!res.body.hits || res.body.hits.total.value === 0) {
             return cb(null, null);
           } else {
-            return cb(null, new Date(res.hits.hits[0]._source.time));
+            return cb(null, new Date(res.body.hits.hits[0]._source.time));
           }
         });
       };
@@ -447,6 +457,10 @@ module.exports = Analytics = (function() {
           }, {
             term: {
               session_id: id
+            }
+          }, {
+            term: {
+              type: "listen"
             }
           }
         ]
@@ -483,7 +497,6 @@ module.exports = Analytics = (function() {
     return this._indicesForTimeRange("listens", new Date(), ts || "-72 hours", (function(_this) {
       return function(err, indices) {
         return _this.es.search({
-          type: "listen",
           index: indices,
           body: body,
           ignoreUnavailable: true
@@ -491,12 +504,12 @@ module.exports = Analytics = (function() {
           if (err) {
             return cb(new Error("Error querying listens to finalize session " + id + ": " + err));
           }
-          if (res.hits.total > 0) {
+          if (res.body.hits.total.value > 0) {
             return cb(null, {
-              requests: res.hits.total,
-              duration: res.aggregations.duration.value,
-              kbytes: res.aggregations.kbytes.value,
-              last_listen: new Date(res.aggregations.last_listen.value)
+              requests: res.body.hits.total.value,
+              duration: res.body.aggregations.duration.value,
+              kbytes: res.body.aggregations.kbytes.value,
+              last_listen: new Date(res.body.aggregations.last_listen.value)
             });
           } else {
             return cb(null, null);
