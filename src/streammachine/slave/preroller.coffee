@@ -128,7 +128,7 @@ module.exports = class Preroller
 
         # Request an ad from the ad server
         _requestAd: (cb) ->
-            @_adreq = request.get uri:@uri, agent:@config.agent, (err,res,body) =>
+            @_adreq = request.get @uri, (err,res,body) =>
                 return cb new Error "Ad request returned error: #{err}" if err
 
                 if res.statusCode == 200
@@ -261,6 +261,9 @@ module.exports = class Preroller
                             @creativeURL = mediafile
                         else if mediafile = xpath.select("string(./MediaFiles/MediaFile[@type='audio/mp4']/text())",creative)
                             debug "MP4 Media File is #{mediafile}"
+                            @creativeURL = mediafile
+                        else if mediafile = xpath.select("string(./MediaFiles/MediaFile[@type='audio/aac']/text())",creative)
+                            debug "AAC Media File is #{mediafile}"
                             @creativeURL = mediafile
 
                     # find the impression URL

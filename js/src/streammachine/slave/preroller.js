@@ -131,10 +131,7 @@ module.exports = Preroller = (function() {
     }
 
     AdRequest.prototype._requestAd = function(cb) {
-      return this._adreq = request.get({
-        uri: this.uri,
-        agent: this.config.agent
-      }, (function(_this) {
+      return this._adreq = request.get(this.uri, (function(_this) {
         return function(err, res, body) {
           if (err) {
             return cb(new Error("Ad request returned error: " + err));
@@ -282,6 +279,9 @@ module.exports = Preroller = (function() {
               this.creativeURL = mediafile;
             } else if (mediafile = xpath.select("string(./MediaFiles/MediaFile[@type='audio/mp4']/text())", creative)) {
               debug("MP4 Media File is " + mediafile);
+              this.creativeURL = mediafile;
+            } else if (mediafile = xpath.select("string(./MediaFiles/MediaFile[@type='audio/aac']/text())", creative)) {
+              debug("AAC Media File is " + mediafile);
               this.creativeURL = mediafile;
             }
           }
