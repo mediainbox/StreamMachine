@@ -45,12 +45,12 @@ module.exports = Server = (function(_super) {
         var plainAddr, plainPort, plainServer;
         plainServer = servers.httpServer();
         plainAddr = "0.0.0.0";
-        plainPort = 9080;
+        plainPort = 80;
         return plainServer.listen(plainPort, plainAddr, function() {
           var secureAddr, securePort, secureServer;
           secureServer = servers.httpsServer(null, _this.app);
           secureAddr = "0.0.0.0";
-          securePort = 9443;
+          securePort = 443;
           return secureServer.listen(securePort, secureAddr, function() {
             return _this._server = secureServer;
           });

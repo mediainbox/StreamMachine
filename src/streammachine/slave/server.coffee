@@ -32,11 +32,11 @@ module.exports = class Server extends require('events').EventEmitter
             .ready((servers) =>
                 plainServer = servers.httpServer()
                 plainAddr = "0.0.0.0"
-                plainPort = 9080
+                plainPort = 80
                 plainServer.listen(plainPort, plainAddr, () =>
                     secureServer = servers.httpsServer(null, @app)
                     secureAddr = "0.0.0.0"
-                    securePort = 9443
+                    securePort = 443
 
                     secureServer.listen(securePort, secureAddr, () =>
                         @_server = secureServer
