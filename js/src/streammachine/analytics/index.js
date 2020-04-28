@@ -600,7 +600,11 @@ module.exports = Analytics = (function() {
             return cb(new Error("Failed to query listeners: " + err));
           }
           times = [];
-          _ref = res.aggregations.listeners_by_minute.buckets;
+          if (!res.body.aggregations) {
+            cb(null, times);
+            return;
+          }
+          _ref = res.body.aggregations.listeners_by_minute.buckets;
           for (_i = 0, _len = _ref.length; _i < _len; _i++) {
             obj = _ref[_i];
             streams = {};
