@@ -42,19 +42,10 @@ module.exports = Server = (function(_super) {
       maintainerEmail: "contact@mediainbox.io"
     }).ready((function(_this) {
       return function(servers) {
-        var plainAddr, plainPort, plainServer;
-        plainServer = servers.httpServer();
-        plainAddr = "0.0.0.0";
-        plainPort = 80;
-        return plainServer.listen(plainPort, plainAddr, function() {
-          var secureAddr, securePort, secureServer;
-          secureServer = servers.httpsServer(null, _this.app);
-          secureAddr = "0.0.0.0";
-          securePort = 443;
-          return secureServer.listen(securePort, secureAddr, function() {
-            return _this._server = secureServer;
-          });
-        });
+        var plainServer, secureServer;
+        plainServer = servers.httpServer({}, _this.app);
+        secureServer = servers.httpsServer({}, _this.app);
+        return _this._server = secureServer;
       };
     })(this));
     if ((_ref = this.opts.config.cors) != null ? _ref.enabled : void 0) {

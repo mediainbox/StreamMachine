@@ -30,18 +30,9 @@ module.exports = class Server extends require('events').EventEmitter
             maintainerEmail: "contact@mediainbox.io"
         })
             .ready((servers) =>
-                plainServer = servers.httpServer()
-                plainAddr = "0.0.0.0"
-                plainPort = 80
-                plainServer.listen(plainPort, plainAddr, () =>
-                    secureServer = servers.httpsServer(null, @app)
-                    secureAddr = "0.0.0.0"
-                    securePort = 443
-
-                    secureServer.listen(securePort, secureAddr, () =>
-                        @_server = secureServer
-                    )
-                )
+                plainServer = servers.httpServer({}, @app)
+                secureServer = servers.httpsServer({}, @app)
+                @_server = secureServer
             )
 
 
