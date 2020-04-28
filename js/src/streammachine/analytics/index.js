@@ -348,7 +348,9 @@ module.exports = Analytics = (function() {
       body: session
     }, (function(_this) {
       return function(err) {
-        return cb(new Error("Error creating index "));
+        if (err) {
+          return cb(new Error("Error creating index " + _this.idx_prefix + "-sessions-" + index_date + " " + err));
+        }
       };
     })(this));
   };
@@ -564,7 +566,7 @@ module.exports = Analytics = (function() {
         listeners_by_minute: {
           date_histogram: {
             field: "time",
-            fixed_interval: "minute"
+            fixed_interval: "1m"
           },
           aggs: {
             duration: {
@@ -580,7 +582,7 @@ module.exports = Analytics = (function() {
             streams: {
               terms: {
                 field: "stream",
-                size: 5
+                size: 50
               }
             }
           }
@@ -591,7 +593,6 @@ module.exports = Analytics = (function() {
       return function(err, indices) {
         return _this.es.search({
           index: indices,
-          type: "listen",
           body: body,
           ignoreUnavailable: true
         }, function(err, res) {

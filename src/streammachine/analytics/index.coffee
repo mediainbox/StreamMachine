@@ -323,7 +323,7 @@ module.exports = class Analytics
         # write one index per day of data
         index_date = tz(session.time,"%F")
         @es.index index:"#{@idx_prefix}-sessions-#{index_date}", type: '_doc', body:session, (err) =>
-            return cb new Error "Error creating index "#{@idx_prefix}-sessions-#{index_date} #{err}" if err
+            return cb new Error "Error creating index #{@idx_prefix}-sessions-#{index_date} #{err}" if err
 
     #----------
 
@@ -469,17 +469,17 @@ module.exports = class Analytics
                 listeners_by_minute:
                     date_histogram:
                         field:      "time"
-                        fixed_interval:   "minute"
+                        fixed_interval:   "1m"
                     aggs:
                         duration:
                             sum:{ field:"duration" }
                         sessions:
                             cardinality:{ field:"session_id" }
                         streams:
-                            terms:{ field:"stream", size:5 }
+                            terms:{ field:"stream", size:50 }
 
         @_indicesForTimeRange "listens", new Date(), "-15 minutes", (err,indices) =>
-            @es.search index:indices, type:"listen", body:body, ignoreUnavailable:true, (err,res) =>
+            @es.search index:indices, body:body, ignoreUnavailable:true, (err,res) =>
                 return cb new Error "Failed to query listeners: #{err}" if err
 
                 times = []
