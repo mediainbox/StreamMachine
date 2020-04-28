@@ -484,7 +484,11 @@ module.exports = class Analytics
 
                 times = []
 
-                for obj in res.aggregations.listeners_by_minute.buckets
+                if !res.body.aggregations
+                    cb null, times
+                    return
+
+                for obj in res.body.aggregations.listeners_by_minute.buckets
                     streams = {}
                     for sobj in obj.streams.buckets
                         streams[ sobj.key ] = sobj.doc_count
