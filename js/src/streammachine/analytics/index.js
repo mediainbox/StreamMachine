@@ -116,7 +116,7 @@ module.exports = Analytics = (function() {
       debug("Loading ES mapping for " + this.idx_prefix + "-" + t);
       this.log.info("Loading Elasticsearch mappings for " + this.idx_prefix + "-" + t);
       tmplt = _.extend({}, obj, {
-        template: "" + this.idx_prefix + "-" + t + "-*"
+        index_patterns: "" + this.idx_prefix + "-" + t + "-*"
       });
       this.log.info(tmplt);
       _results.push(this.es.indices.putTemplate({
@@ -348,7 +348,7 @@ module.exports = Analytics = (function() {
       body: session
     }, (function(_this) {
       return function(err) {
-        return cb(err);
+        return cb(new Error("Error creating index "));
       };
     })(this));
   };
@@ -378,7 +378,7 @@ module.exports = Analytics = (function() {
       },
       size: 1
     };
-    return this._indicesForTimeRange("listens", new Date(), "-24 hours", (function(_this) {
+    return this._indicesForTimeRange("listens", new Date(), "-72 hours", (function(_this) {
       return function(err, indices) {
         return _this.es.search({
           body: body,
@@ -564,7 +564,7 @@ module.exports = Analytics = (function() {
         listeners_by_minute: {
           date_histogram: {
             field: "time",
-            interval: "minute"
+            fixed_interval: "minute"
           },
           aggs: {
             duration: {
