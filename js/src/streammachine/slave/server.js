@@ -43,7 +43,7 @@ module.exports = Server = (function(_super) {
     }).ready((function(_this) {
       return function(servers) {
         var plainServer, secureServer;
-        plainServer = servers.httpServer({}, _this.app);
+        plainServer = servers.httpServer(_this.app);
         secureServer = servers.httpsServer({}, _this.app);
         return _this._server = secureServer;
       };
