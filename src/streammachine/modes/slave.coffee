@@ -99,7 +99,7 @@ module.exports = class SlaveMode extends require("./base")
     #----------
 
     _openServer: (handle,cb) ->
-        @_createServer (server) =>
+        @_createServer (server, fallbackHttpServer) =>
             @_server = server
             @_server.listen handle || @opts.port, (err) =>
                 if err
@@ -113,6 +113,13 @@ module.exports = class SlaveMode extends require("./base")
                 @log.info "Slave server is up and listening."
 
                 cb? null, @
+
+                if (fallbackHttpServer)
+                    fallbackHttpServer.on "connection", (conn) =>
+                        conn.pause()
+                        @_distributeConnection conn
+
+                    @log.info "Slave fallback http server is up and listening."
 
     #----------
 
@@ -128,10 +135,13 @@ module.exports = class SlaveMode extends require("./base")
                 maintainerEmail: "contact@mediainbox.io"
             })
                 .ready((servers) =>
-                    plainServer = servers.httpServer()
+                    plainServer = servers.httpServer((req, res, next) =>
+                        console.log('Fallback http handling connection')
+                        next()
+                    )
                     secureServer = servers.httpsServer()
                     plainServer.listen(80, () =>
-                        cb secureServer
+                        cb secureServer, plainServer
                     )
                 )
 

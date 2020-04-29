@@ -107,7 +107,7 @@ module.exports = SlaveMode = (function(_super) {
 
   SlaveMode.prototype._openServer = function(handle, cb) {
     return this._createServer((function(_this) {
-      return function(server) {
+      return function(server, fallbackHttpServer) {
         _this._server = server;
         return _this._server.listen(handle || _this.opts.port, function(err) {
           if (err) {
@@ -119,7 +119,16 @@ module.exports = SlaveMode = (function(_super) {
             return _this._distributeConnection(conn);
           });
           _this.log.info("Slave server is up and listening.");
-          return typeof cb === "function" ? cb(null, _this) : void 0;
+          if (typeof cb === "function") {
+            cb(null, _this);
+          }
+          if (fallbackHttpServer) {
+            fallbackHttpServer.on("connection", function(conn) {
+              conn.pause();
+              return _this._distributeConnection(conn);
+            });
+            return _this.log.info("Slave fallback http server is up and listening.");
+          }
         });
       };
     })(this));
@@ -139,10 +148,13 @@ module.exports = SlaveMode = (function(_super) {
       }).ready((function(_this) {
         return function(servers) {
           var plainServer, secureServer;
-          plainServer = servers.httpServer();
+          plainServer = servers.httpServer(function(req, res, next) {
+            console.log('Fallback http handling connection');
+            return next();
+          });
           secureServer = servers.httpsServer();
           return plainServer.listen(80, function() {
-            return cb(secureServer);
+            return cb(secureServer, plainServer);
           });
         };
       })(this));
