@@ -8,7 +8,6 @@ http    = require "http"
 compression = require "compression"
 cors    = require "cors"
 maxmind = require "maxmind"
-greenlock = require "greenlock-express"
 
 module.exports = class Server extends require('events').EventEmitter
     constructor: (@opts) ->
@@ -20,21 +19,7 @@ module.exports = class Server extends require('events').EventEmitter
         # -- set up our express app -- #
 
         @app = express()
-        #@_server = http.createServer @app
-
-        packageRoot = path.resolve(__dirname, '../../../..')
-        greenlock.init({
-            packageRoot
-            configDir: "./greenlock.d"
-            cluster: false
-            maintainerEmail: "contact@mediainbox.io"
-        })
-            .ready((servers) =>
-                plainServer = servers.httpServer({}, @app)
-                secureServer = servers.httpsServer({}, @app)
-                @_server = secureServer
-            )
-
+        @_server = http.createServer @app
 
         if @opts.config.cors?.enabled
             origin = @opts.config.cors.origin || true

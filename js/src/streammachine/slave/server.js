@@ -1,4 +1,4 @@
-var Server, compression, cors, express, fs, greenlock, http, maxmind, path, util, uuid, _,
+var Server, compression, cors, express, fs, http, maxmind, path, util, uuid, _,
   __hasProp = {}.hasOwnProperty,
   __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
 
@@ -22,32 +22,17 @@ cors = require("cors");
 
 maxmind = require("maxmind");
 
-greenlock = require("greenlock-express");
-
 module.exports = Server = (function(_super) {
   __extends(Server, _super);
 
   function Server(opts) {
-    var banned, idx_match, origin, packageRoot, _ref, _ref1, _ref2, _ref3, _ref4, _ref5;
+    var banned, idx_match, origin, _ref, _ref1, _ref2, _ref3, _ref4, _ref5;
     this.opts = opts;
     this.core = this.opts.core;
     this.logger = this.opts.logger;
     this.config = this.opts.config;
     this.app = express();
-    packageRoot = path.resolve(__dirname, '../../../..');
-    greenlock.init({
-      packageRoot: packageRoot,
-      configDir: "./greenlock.d",
-      cluster: false,
-      maintainerEmail: "contact@mediainbox.io"
-    }).ready((function(_this) {
-      return function(servers) {
-        var plainServer, secureServer;
-        plainServer = servers.httpServer({}, _this.app);
-        secureServer = servers.httpsServer({}, _this.app);
-        return _this._server = secureServer;
-      };
-    })(this));
+    this._server = http.createServer(this.app);
     if ((_ref = this.opts.config.cors) != null ? _ref.enabled : void 0) {
       origin = this.opts.config.cors.origin || true;
       this.app.use(cors({

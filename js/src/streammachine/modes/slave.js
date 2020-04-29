@@ -1,4 +1,4 @@
-var CP, Logger, RPC, Slave, SlaveMode, debug, nconf, net, path, _,
+var CP, Logger, RPC, Slave, SlaveMode, debug, greenlock, http, nconf, net, path, _,
   __hasProp = {}.hasOwnProperty,
   __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
 
@@ -12,7 +12,11 @@ RPC = require("ipc-rpc");
 
 net = require("net");
 
+http = require("http");
+
 CP = require("child_process");
+
+greenlock = require("greenlock-express");
 
 Logger = require("../logger");
 
@@ -102,27 +106,45 @@ module.exports = SlaveMode = (function(_super) {
   };
 
   SlaveMode.prototype._openServer = function(handle, cb) {
-    this._server = net.createServer({
-      pauseOnConnect: true,
-      allowHalfOpen: true
-    });
-    return this._server.listen(handle || this.opts.port, (function(_this) {
-      return function(err) {
-        if (err) {
-          _this.log.error("Failed to start slave server: " + err);
-          throw err;
-        }
-        _this._server.on("connection", function(conn) {
-          if (/^v0.10/.test(process.version)) {
-            conn._handle.readStop();
+    return this._createServer((function(_this) {
+      return function(server) {
+        _this._server = server;
+        return _this._server.listen(handle || _this.opts.port, function(err) {
+          if (err) {
+            _this.log.error("Failed to start slave server: " + err);
+            throw err;
           }
-          conn.pause();
-          return _this._distributeConnection(conn);
+          _this._server.on("connection", function(conn) {
+            conn.pause();
+            return _this._distributeConnection(conn);
+          });
+          _this.log.info("Slave server is up and listening.");
+          return typeof cb === "function" ? cb(null, _this) : void 0;
         });
-        _this.log.info("Slave server is up and listening.");
-        return typeof cb === "function" ? cb(null, _this) : void 0;
       };
     })(this));
+  };
+
+  SlaveMode.prototype._createServer = function(cb) {
+    var packageRoot;
+    if (process.env.NO_GREENLOCK) {
+      return cb(http.createServer());
+    } else {
+      packageRoot = path.resolve(__dirname, '../../../..');
+      return greenlock.init({
+        packageRoot: packageRoot,
+        configDir: "./greenlock.d",
+        cluster: false,
+        maintainerEmail: "contact@mediainbox.io"
+      }).ready((function(_this) {
+        return function(servers) {
+          var plainServer, secureServer;
+          plainServer = servers.httpServer();
+          secureServer = servers.httpsServer();
+          return cb(secureServer);
+        };
+      })(this));
+    }
   };
 
   SlaveMode.prototype._distributeConnection = function(conn) {

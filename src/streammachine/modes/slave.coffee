@@ -3,7 +3,9 @@ nconf   = require "nconf"
 path    = require "path"
 RPC     = require "ipc-rpc"
 net     = require "net"
+http     = require "http"
 CP      = require "child_process"
+greenlock = require "greenlock-express"
 
 Logger  = require "../logger"
 Slave   = require "../slave"
@@ -97,24 +99,39 @@ module.exports = class SlaveMode extends require("./base")
     #----------
 
     _openServer: (handle,cb) ->
-        @_server = net.createServer pauseOnConnect:true, allowHalfOpen:true
-        @_server.listen handle || @opts.port, (err) =>
-            if err
-                @log.error "Failed to start slave server: #{err}"
-                throw err
+        @_createServer (server) =>
+            @_server = server
+            @_server.listen handle || @opts.port, (err) =>
+                if err
+                    @log.error "Failed to start slave server: #{err}"
+                    throw err
 
-            @_server.on "connection", (conn) =>
-                # FIXME: This is nasty...
-                # https://github.com/joyent/node/issues/7905
-                if /^v0.10/.test(process.version)
-                    conn._handle.readStop()
+                @_server.on "connection", (conn) =>
+                    conn.pause()
+                    @_distributeConnection conn
 
-                conn.pause()
-                @_distributeConnection conn
+                @log.info "Slave server is up and listening."
 
-            @log.info "Slave server is up and listening."
+                cb? null, @
 
-            cb? null, @
+    #----------
+
+    _createServer: (cb) ->
+        if process.env.NO_GREENLOCK
+            cb http.createServer()
+        else
+            packageRoot = path.resolve(__dirname, '../../../..')
+            greenlock.init({
+                packageRoot
+                configDir: "./greenlock.d"
+                cluster: false
+                maintainerEmail: "contact@mediainbox.io"
+            })
+                .ready((servers) =>
+                    plainServer = servers.httpServer()
+                    secureServer = servers.httpsServer()
+                    cb secureServer
+                )
 
     #----------
 
