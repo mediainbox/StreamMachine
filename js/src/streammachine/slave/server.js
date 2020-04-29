@@ -32,7 +32,6 @@ module.exports = Server = (function(_super) {
     this.logger = this.opts.logger;
     this.config = this.opts.config;
     this.app = express();
-    this._server = http.createServer(this.app);
     if ((_ref = this.opts.config.cors) != null ? _ref.enabled : void 0) {
       origin = this.opts.config.cors.origin || true;
       this.app.use(cors({
@@ -239,6 +238,7 @@ module.exports = Server = (function(_super) {
         }
       };
     })(this));
+    this._setupServer(this.app);
   }
 
   Server.prototype.isGeolocked = function(req, stream, opts) {
@@ -287,9 +287,22 @@ module.exports = Server = (function(_super) {
     })(this)) : void 0;
   };
 
-  Server.prototype.handle = function(conn) {
-    this._server.emit("connection", conn);
-    return conn.resume();
+  Server.prototype._setupServer = function(requestListener) {
+    var packageRoot, server;
+    if (process.env.NO_GREENLOCK) {
+      this.logger.info("Setup http server on port " + this.config.port);
+      server = http.createServer(requestListener);
+      return server.listen(this.config.port);
+    } else {
+      this.logger.info("Setup Greenlock http/https servers");
+      packageRoot = path.resolve(__dirname, '../../../..');
+      return greenlock.init({
+        packageRoot: packageRoot,
+        configDir: "./greenlock.d",
+        cluster: false,
+        maintainerEmail: "contact@mediainbox.io"
+      }).serve(requestListener);
+    }
   };
 
   return Server;

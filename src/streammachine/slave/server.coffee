@@ -19,7 +19,6 @@ module.exports = class Server extends require('events').EventEmitter
         # -- set up our express app -- #
 
         @app = express()
-        @_server = http.createServer @app
 
         if @opts.config.cors?.enabled
             origin = @opts.config.cors.origin || true
@@ -208,6 +207,8 @@ module.exports = class Server extends require('events').EventEmitter
                     # -- straight mp3 listener -- #
                     new @core.Outputs.raw req.stream, req:req, res:res
 
+        @_setupServer @app
+
     #----------
 
     isGeolocked: (req,stream,opts) ->
@@ -254,6 +255,19 @@ module.exports = class Server extends require('events').EventEmitter
 
     #----------
 
-    handle: (conn) ->
-        @_server.emit "connection", conn
-        conn.resume()
+    _setupServer: (requestListener) ->
+        if process.env.NO_GREENLOCK
+            @logger.info "Setup http server on port " + @config.port
+            server = http.createServer(requestListener)
+            server.listen @config.port
+        else
+            @logger.info "Setup Greenlock http/https servers"
+            packageRoot = path.resolve(__dirname, '../../../..')
+            greenlock.init({
+                packageRoot
+                configDir: "./greenlock.d"
+                cluster: false
+                maintainerEmail: "contact@mediainbox.io"
+            })
+                .serve(requestListener);
+
