@@ -130,7 +130,9 @@ module.exports = class SlaveMode extends require("./base")
                 .ready((servers) =>
                     plainServer = servers.httpServer()
                     secureServer = servers.httpsServer()
-                    cb secureServer
+                    plainServer.listen(80, () =>
+                        cb secureServer
+                    )
                 )
 
     #----------

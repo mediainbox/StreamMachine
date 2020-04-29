@@ -141,7 +141,9 @@ module.exports = SlaveMode = (function(_super) {
           var plainServer, secureServer;
           plainServer = servers.httpServer();
           secureServer = servers.httpsServer();
-          return cb(secureServer);
+          return plainServer.listen(80, function() {
+            return cb(secureServer);
+          });
         };
       })(this));
     }
