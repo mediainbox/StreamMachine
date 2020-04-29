@@ -1,4 +1,4 @@
-var Server, compression, cors, express, fs, http, maxmind, path, util, uuid, _,
+var Server, compression, cors, express, fs, greenlock, http, maxmind, path, util, uuid, _,
   __hasProp = {}.hasOwnProperty,
   __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
 
@@ -21,6 +21,8 @@ compression = require("compression");
 cors = require("cors");
 
 maxmind = require("maxmind");
+
+greenlock = require("greenlock-express");
 
 module.exports = Server = (function(_super) {
   __extends(Server, _super);
@@ -299,9 +301,19 @@ module.exports = Server = (function(_super) {
       return greenlock.init({
         packageRoot: packageRoot,
         configDir: "./greenlock.d",
-        cluster: false,
+        cluster: true,
+        workers: 4,
         maintainerEmail: "contact@mediainbox.io"
-      }).serve(requestListener);
+      }).ready((function(_this) {
+        return function(glx) {
+          console.log("Greenlock: fork serveApp on PID " + process.pid);
+          return glx.serveApp(requestListener);
+        };
+      })(this)).master((function(_this) {
+        return function() {
+          return console.log("Greenlock: master on PID " + process.pid);
+        };
+      })(this));
     }
   };
 

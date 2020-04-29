@@ -8,6 +8,7 @@ http    = require "http"
 compression = require "compression"
 cors    = require "cors"
 maxmind = require "maxmind"
+greenlock = require "greenlock-express"
 
 module.exports = class Server extends require('events').EventEmitter
     constructor: (@opts) ->
@@ -266,8 +267,15 @@ module.exports = class Server extends require('events').EventEmitter
             greenlock.init({
                 packageRoot
                 configDir: "./greenlock.d"
-                cluster: false
+                cluster: true,
+                workers: 4,
                 maintainerEmail: "contact@mediainbox.io"
             })
-                .serve(requestListener);
+                .ready((glx) =>
+                    console.log("Greenlock: fork serveApp on PID " + process.pid)
+                    glx.serveApp(requestListener)
+                )
+                .master(() =>
+                    console.log("Greenlock: master on PID " + process.pid);
+                )
 
