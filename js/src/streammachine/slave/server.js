@@ -289,11 +289,11 @@ module.exports = Server = (function(_super) {
     })(this)) : void 0;
   };
 
-  Server.prototype._setupServer = function(requestListener) {
+  Server.prototype._setupServer = function(app) {
     var packageRoot, server;
     if (process.env.NO_GREENLOCK) {
       this.logger.info("Setup http server on port " + this.config.port);
-      server = http.createServer(requestListener);
+      server = http.createServer(app);
       return server.listen(this.config.port);
     } else {
       this.logger.info("Setup Greenlock http/https servers");
@@ -306,8 +306,21 @@ module.exports = Server = (function(_super) {
         maintainerEmail: "contact@mediainbox.io"
       }).ready((function(_this) {
         return function(glx) {
-          console.log("Greenlock: fork serveApp on PID " + process.pid);
-          return glx.serveApp(requestListener);
+          var plainAddr, plainPort, plainServer;
+          plainServer = glx.httpServer(app);
+          plainAddr = '0.0.0.0';
+          plainPort = 80;
+          return plainServer.listen(plainPort, plainAddr, function() {
+            var secureAddr, securePort, secureServer;
+            secureServer = glx.httpsServer(null, app);
+            secureAddr = '0.0.0.0';
+            securePort = 443;
+            return secureServer.listen(securePort, secureAddr, function() {
+              plainServer.removeAllListeners('error');
+              secureServer.removeAllListeners('error');
+              return console.log("Greenlock: cluster child on PID " + process.pid);
+            });
+          });
         };
       })(this)).master((function(_this) {
         return function() {
