@@ -119,7 +119,7 @@ module.exports = class Analytics
         for t,obj of ESTemplates
             debug "Loading ES mapping for #{@idx_prefix}-#{t}"
             @log.info "Loading Elasticsearch mappings for #{@idx_prefix}-#{t}"
-            tmplt = _.extend {}, obj, template:"#{@idx_prefix}-#{t}-*"
+            tmplt = _.extend {}, obj, index_patterns:"#{@idx_prefix}-#{t}-*"
             @log.info tmplt
             @es.indices.putTemplate name:"#{@idx_prefix}-#{t}-template", body:tmplt, (err) =>
                 errors.push err if err
@@ -323,7 +323,7 @@ module.exports = class Analytics
         # write one index per day of data
         index_date = tz(session.time,"%F")
         @es.index index:"#{@idx_prefix}-sessions-#{index_date}", type: '_doc', body:session, (err) =>
-            cb err
+            return cb new Error "Error creating index #{@idx_prefix}-sessions-#{index_date} #{err}" if err
 
     #----------
 
@@ -348,7 +348,7 @@ module.exports = class Analytics
             size: 1
 
         # session start is allowed to be anywhere in the last 24 hours
-        @_indicesForTimeRange "listens", new Date(), "-24 hours", (err,indices) =>
+        @_indicesForTimeRange "listens", new Date(), "-72 hours", (err,indices) =>
             @es.search body:body, index:indices, ignoreUnavailable:true, (err,res) =>
                 return cb new Error "Error querying session start for #{id}: #{err}" if err
 
@@ -469,22 +469,26 @@ module.exports = class Analytics
                 listeners_by_minute:
                     date_histogram:
                         field:      "time"
-                        interval:   "minute"
+                        fixed_interval:   "1m"
                     aggs:
                         duration:
                             sum:{ field:"duration" }
                         sessions:
                             cardinality:{ field:"session_id" }
                         streams:
-                            terms:{ field:"stream", size:5 }
+                            terms:{ field:"stream", size:50 }
 
         @_indicesForTimeRange "listens", new Date(), "-15 minutes", (err,indices) =>
-            @es.search index:indices, type:"listen", body:body, ignoreUnavailable:true, (err,res) =>
+            @es.search index:indices, body:body, ignoreUnavailable:true, (err,res) =>
                 return cb new Error "Failed to query listeners: #{err}" if err
 
                 times = []
 
-                for obj in res.aggregations.listeners_by_minute.buckets
+                if !res.body.aggregations
+                    cb null, times
+                    return
+
+                for obj in res.body.aggregations.listeners_by_minute.buckets
                     streams = {}
                     for sobj in obj.streams.buckets
                         streams[ sobj.key ] = sobj.doc_count

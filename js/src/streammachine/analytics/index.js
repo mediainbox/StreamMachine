@@ -116,7 +116,7 @@ module.exports = Analytics = (function() {
       debug("Loading ES mapping for " + this.idx_prefix + "-" + t);
       this.log.info("Loading Elasticsearch mappings for " + this.idx_prefix + "-" + t);
       tmplt = _.extend({}, obj, {
-        template: "" + this.idx_prefix + "-" + t + "-*"
+        index_patterns: "" + this.idx_prefix + "-" + t + "-*"
       });
       this.log.info(tmplt);
       _results.push(this.es.indices.putTemplate({
@@ -348,7 +348,9 @@ module.exports = Analytics = (function() {
       body: session
     }, (function(_this) {
       return function(err) {
-        return cb(err);
+        if (err) {
+          return cb(new Error("Error creating index " + _this.idx_prefix + "-sessions-" + index_date + " " + err));
+        }
       };
     })(this));
   };
@@ -378,7 +380,7 @@ module.exports = Analytics = (function() {
       },
       size: 1
     };
-    return this._indicesForTimeRange("listens", new Date(), "-24 hours", (function(_this) {
+    return this._indicesForTimeRange("listens", new Date(), "-72 hours", (function(_this) {
       return function(err, indices) {
         return _this.es.search({
           body: body,
@@ -564,7 +566,7 @@ module.exports = Analytics = (function() {
         listeners_by_minute: {
           date_histogram: {
             field: "time",
-            interval: "minute"
+            fixed_interval: "1m"
           },
           aggs: {
             duration: {
@@ -580,7 +582,7 @@ module.exports = Analytics = (function() {
             streams: {
               terms: {
                 field: "stream",
-                size: 5
+                size: 50
               }
             }
           }
@@ -591,7 +593,6 @@ module.exports = Analytics = (function() {
       return function(err, indices) {
         return _this.es.search({
           index: indices,
-          type: "listen",
           body: body,
           ignoreUnavailable: true
         }, function(err, res) {
@@ -600,7 +601,11 @@ module.exports = Analytics = (function() {
             return cb(new Error("Failed to query listeners: " + err));
           }
           times = [];
-          _ref = res.aggregations.listeners_by_minute.buckets;
+          if (!res.body.aggregations) {
+            cb(null, times);
+            return;
+          }
+          _ref = res.body.aggregations.listeners_by_minute.buckets;
           for (_i = 0, _len = _ref.length; _i < _len; _i++) {
             obj = _ref[_i];
             streams = {};
