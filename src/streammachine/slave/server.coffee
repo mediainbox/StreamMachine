@@ -256,10 +256,10 @@ module.exports = class Server extends require('events').EventEmitter
 
     #----------
 
-    _setupServer: (requestListener) ->
+    _setupServer: (app) ->
         if process.env.NO_GREENLOCK
             @logger.info "Setup http server on port " + @config.port
-            server = http.createServer(requestListener)
+            server = http.createServer(app)
             server.listen @config.port
         else
             @logger.info "Setup Greenlock http/https servers"
@@ -272,8 +272,17 @@ module.exports = class Server extends require('events').EventEmitter
                 maintainerEmail: "contact@mediainbox.io"
             })
                 .ready((glx) =>
-                    console.log("Greenlock: fork serveApp on PID " + process.pid)
-                    glx.serveApp(requestListener)
+                    plainServer = glx.httpServer(app)
+                    plainAddr = '0.0.0.0'
+                    plainPort = 80
+                    plainServer.listen plainPort, plainAddr, ->
+                        secureServer = glx.httpsServer(null, app)
+                        secureAddr = '0.0.0.0'
+                        securePort = 443
+                        secureServer.listen securePort, secureAddr, ->
+                            plainServer.removeAllListeners 'error'
+                            secureServer.removeAllListeners 'error'
+                            console.log("Greenlock: cluster child on PID " + process.pid)
                 )
                 .master(() =>
                     console.log("Greenlock: master on PID " + process.pid);
