@@ -258,17 +258,18 @@ module.exports = class Server extends require('events').EventEmitter
 
     _setupServer: (app) ->
         if process.env.NO_GREENLOCK
-            @logger.info "Setup http server on port " + @config.port
+            port = @config.http_port || 80
+            @logger.info "Setup http server on port " + port
             server = http.createServer(app)
-            server.listen @config.http_port || 80
+            server.listen port
         else
-            @logger.info "Setup Greenlock http/https servers"
+            @logger.info "Setup Greenlock http/https servers with cluster size " + @config.cluster
             packageRoot = path.resolve(__dirname, '../../../..')
             greenlock.init({
                 packageRoot
                 configDir: "./greenlock.d"
                 cluster: true,
-                workers: 4,
+                workers: @config.cluster,
                 maintainerEmail: "contact@mediainbox.io"
             })
                 .ready((glx) =>

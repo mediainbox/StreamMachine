@@ -290,19 +290,20 @@ module.exports = Server = (function(_super) {
   };
 
   Server.prototype._setupServer = function(app) {
-    var packageRoot, server;
+    var packageRoot, port, server;
     if (process.env.NO_GREENLOCK) {
-      this.logger.info("Setup http server on port " + this.config.port);
+      port = this.config.http_port || 80;
+      this.logger.info("Setup http server on port " + port);
       server = http.createServer(app);
-      return server.listen(this.config.http_port || 80);
+      return server.listen(port);
     } else {
-      this.logger.info("Setup Greenlock http/https servers");
+      this.logger.info("Setup Greenlock http/https servers with cluster size " + this.config.cluster);
       packageRoot = path.resolve(__dirname, '../../../..');
       return greenlock.init({
         packageRoot: packageRoot,
         configDir: "./greenlock.d",
         cluster: true,
-        workers: 4,
+        workers: this.config.cluster,
         maintainerEmail: "contact@mediainbox.io"
       }).ready((function(_this) {
         return function(glx) {

@@ -415,7 +415,13 @@ module.exports = class Master extends require("events").EventEmitter
     slavesInfo: ->
         if @slaves
             slaveCount: Object.keys(@slaves.slaves).length
-            slaves:     ( { id:k, status:s.last_status||"WARMING UP" } for k,s of @slaves.slaves )
+            slaves:     ( {
+                id: k,
+                status: s.last_status || "WARMING UP",
+                connected_at: s.connected_at,
+                address: s.sock?.handshake?.address,
+                connectionUrl: s.sock.handshake?.url,
+            } for k,s of @slaves.slaves )
             master:     @_rewindStatus()
         else
             slaveCount: 0
