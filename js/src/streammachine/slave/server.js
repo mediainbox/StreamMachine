@@ -294,7 +294,7 @@ module.exports = Server = (function(_super) {
     if (process.env.NO_GREENLOCK) {
       this.logger.info("Setup http server on port " + this.config.port);
       server = http.createServer(app);
-      return server.listen(this.config.port);
+      return server.listen(this.config.http_port || 80);
     } else {
       this.logger.info("Setup Greenlock http/https servers");
       packageRoot = path.resolve(__dirname, '../../../..');
@@ -308,13 +308,13 @@ module.exports = Server = (function(_super) {
         return function(glx) {
           var plainAddr, plainPort, plainServer;
           plainServer = glx.httpServer(app);
-          plainAddr = '0.0.0.0';
-          plainPort = 80;
+          plainAddr = _this.config.http_ip || '0.0.0.0';
+          plainPort = _this.config.http_port || 80;
           return plainServer.listen(plainPort, plainAddr, function() {
             var secureAddr, securePort, secureServer;
             secureServer = glx.httpsServer(null, app);
-            secureAddr = '0.0.0.0';
-            securePort = 443;
+            secureAddr = this.config.https_ip || '0.0.0.0';
+            securePort = this.config.https_port || 443;
             return secureServer.listen(securePort, secureAddr, function() {
               plainServer.removeAllListeners('error');
               secureServer.removeAllListeners('error');

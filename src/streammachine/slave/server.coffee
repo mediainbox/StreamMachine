@@ -260,7 +260,7 @@ module.exports = class Server extends require('events').EventEmitter
         if process.env.NO_GREENLOCK
             @logger.info "Setup http server on port " + @config.port
             server = http.createServer(app)
-            server.listen @config.port
+            server.listen @config.http_port || 80
         else
             @logger.info "Setup Greenlock http/https servers"
             packageRoot = path.resolve(__dirname, '../../../..')
@@ -273,12 +273,12 @@ module.exports = class Server extends require('events').EventEmitter
             })
                 .ready((glx) =>
                     plainServer = glx.httpServer(app)
-                    plainAddr = '0.0.0.0'
-                    plainPort = 80
+                    plainAddr = @config.http_ip || '0.0.0.0'
+                    plainPort = @config.http_port || 80
                     plainServer.listen plainPort, plainAddr, ->
                         secureServer = glx.httpsServer(null, app)
-                        secureAddr = '0.0.0.0'
-                        securePort = 443
+                        secureAddr = @config.https_ip || '0.0.0.0'
+                        securePort = @config.https_port || 443
                         secureServer.listen securePort, secureAddr, ->
                             plainServer.removeAllListeners 'error'
                             secureServer.removeAllListeners 'error'
