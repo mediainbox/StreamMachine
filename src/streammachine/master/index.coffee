@@ -420,7 +420,6 @@ module.exports = class Master extends require("events").EventEmitter
                 status: s.last_status || "WARMING UP",
                 connected_at: s.connected_at,
                 address: s.sock?.handshake?.address,
-                connectionUrl: s.sock.handshake?.url,
             } for k,s of @slaves.slaves )
             master:     @_rewindStatus()
         else

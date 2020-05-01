@@ -473,7 +473,7 @@ module.exports = Master = (function(_super) {
       return {
         slaveCount: Object.keys(this.slaves.slaves).length,
         slaves: (function() {
-          var _ref, _ref1, _ref2, _ref3, _results;
+          var _ref, _ref1, _ref2, _results;
           _ref = this.slaves.slaves;
           _results = [];
           for (k in _ref) {
@@ -482,8 +482,7 @@ module.exports = Master = (function(_super) {
               id: k,
               status: s.last_status || "WARMING UP",
               connected_at: s.connected_at,
-              address: (_ref1 = s.sock) != null ? (_ref2 = _ref1.handshake) != null ? _ref2.address : void 0 : void 0,
-              connectionUrl: (_ref3 = s.sock.handshake) != null ? _ref3.url : void 0
+              address: (_ref1 = s.sock) != null ? (_ref2 = _ref1.handshake) != null ? _ref2.address : void 0 : void 0
             });
           }
           return _results;
