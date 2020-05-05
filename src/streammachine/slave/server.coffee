@@ -8,6 +8,7 @@ http    = require "http"
 compression = require "compression"
 cors    = require "cors"
 maxmind = require "maxmind"
+greenlock = require "greenlock-express"
 
 module.exports = class Server extends require('events').EventEmitter
     constructor: (@opts) ->
@@ -19,7 +20,6 @@ module.exports = class Server extends require('events').EventEmitter
         # -- set up our express app -- #
 
         @app = express()
-        @_server = http.createServer @app
 
         if @opts.config.cors?.enabled
             origin = @opts.config.cors.origin || true
@@ -208,6 +208,8 @@ module.exports = class Server extends require('events').EventEmitter
                     # -- straight mp3 listener -- #
                     new @core.Outputs.raw req.stream, req:req, res:res
 
+        @_setupServer @app
+
     #----------
 
     isGeolocked: (req,stream,opts) ->
@@ -254,6 +256,35 @@ module.exports = class Server extends require('events').EventEmitter
 
     #----------
 
-    handle: (conn) ->
-        @_server.emit "connection", conn
-        conn.resume()
+    _setupServer: (app) ->
+        if process.env.NO_GREENLOCK
+            @logger.info "Setup http server on port " + @config.port
+            server = http.createServer(app)
+            server.listen @config.http_port || 80
+        else
+            @logger.info "Setup Greenlock http/https servers"
+            packageRoot = path.resolve(__dirname, '../../../..')
+            greenlock.init({
+                packageRoot
+                configDir: "./greenlock.d"
+                cluster: true,
+                workers: 4,
+                maintainerEmail: "contact@mediainbox.io"
+            })
+                .ready((glx) =>
+                    plainServer = glx.httpServer(app)
+                    plainAddr = @config.http_ip || '0.0.0.0'
+                    plainPort = @config.http_port || 80
+                    plainServer.listen plainPort, plainAddr, ->
+                        secureServer = glx.httpsServer(null, app)
+                        secureAddr = @config.https_ip || '0.0.0.0'
+                        securePort = @config.https_port || 443
+                        secureServer.listen securePort, secureAddr, ->
+                            plainServer.removeAllListeners 'error'
+                            secureServer.removeAllListeners 'error'
+                            console.log("Greenlock: cluster child on PID " + process.pid)
+                )
+                .master(() =>
+                    console.log("Greenlock: master on PID " + process.pid);
+                )
+

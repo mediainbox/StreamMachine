@@ -1,4 +1,4 @@
-var Server, compression, cors, express, fs, http, maxmind, path, util, uuid, _,
+var Server, compression, cors, express, fs, greenlock, http, maxmind, path, util, uuid, _,
   __hasProp = {}.hasOwnProperty,
   __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
 
@@ -22,6 +22,8 @@ cors = require("cors");
 
 maxmind = require("maxmind");
 
+greenlock = require("greenlock-express");
+
 module.exports = Server = (function(_super) {
   __extends(Server, _super);
 
@@ -32,7 +34,6 @@ module.exports = Server = (function(_super) {
     this.logger = this.opts.logger;
     this.config = this.opts.config;
     this.app = express();
-    this._server = http.createServer(this.app);
     if ((_ref = this.opts.config.cors) != null ? _ref.enabled : void 0) {
       origin = this.opts.config.cors.origin || true;
       this.app.use(cors({
@@ -239,6 +240,7 @@ module.exports = Server = (function(_super) {
         }
       };
     })(this));
+    this._setupServer(this.app);
   }
 
   Server.prototype.isGeolocked = function(req, stream, opts) {
@@ -287,9 +289,45 @@ module.exports = Server = (function(_super) {
     })(this)) : void 0;
   };
 
-  Server.prototype.handle = function(conn) {
-    this._server.emit("connection", conn);
-    return conn.resume();
+  Server.prototype._setupServer = function(app) {
+    var packageRoot, server;
+    if (process.env.NO_GREENLOCK) {
+      this.logger.info("Setup http server on port " + this.config.port);
+      server = http.createServer(app);
+      return server.listen(this.config.http_port || 80);
+    } else {
+      this.logger.info("Setup Greenlock http/https servers");
+      packageRoot = path.resolve(__dirname, '../../../..');
+      return greenlock.init({
+        packageRoot: packageRoot,
+        configDir: "./greenlock.d",
+        cluster: true,
+        workers: 4,
+        maintainerEmail: "contact@mediainbox.io"
+      }).ready((function(_this) {
+        return function(glx) {
+          var plainAddr, plainPort, plainServer;
+          plainServer = glx.httpServer(app);
+          plainAddr = _this.config.http_ip || '0.0.0.0';
+          plainPort = _this.config.http_port || 80;
+          return plainServer.listen(plainPort, plainAddr, function() {
+            var secureAddr, securePort, secureServer;
+            secureServer = glx.httpsServer(null, app);
+            secureAddr = this.config.https_ip || '0.0.0.0';
+            securePort = this.config.https_port || 443;
+            return secureServer.listen(securePort, secureAddr, function() {
+              plainServer.removeAllListeners('error');
+              secureServer.removeAllListeners('error');
+              return console.log("Greenlock: cluster child on PID " + process.pid);
+            });
+          });
+        };
+      })(this)).master((function(_this) {
+        return function() {
+          return console.log("Greenlock: master on PID " + process.pid);
+        };
+      })(this));
+    }
   };
 
   return Server;
