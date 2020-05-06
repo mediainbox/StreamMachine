@@ -10,6 +10,8 @@ module.exports = class RedisManager extends require('events').EventEmitter
         key:    "StreamMachine"
 
     constructor: (opts) ->
+        super()
+
         @options = _.defaults opts, @DefaultOptions
 
         debug "init redis with #{@options.server}"

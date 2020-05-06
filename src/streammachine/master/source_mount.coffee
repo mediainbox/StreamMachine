@@ -8,6 +8,8 @@ module.exports = class SourceMount extends require("events").EventEmitter
         format:             "mp3"
 
     constructor: (@key,@log,opts) ->
+        super()
+
         @opts = _.defaults opts||{}, @DefaultOptions
 
         @sources = []

@@ -4,6 +4,8 @@ debug = require("debug")("sm:master:master_io")
 
 module.exports = class MasterIO extends require("events").EventEmitter
     constructor: (@master,@log,@opts) ->
+        super()
+
         @io         = null
         @slaves     = {}
 
@@ -116,6 +118,8 @@ module.exports = class MasterIO extends require("events").EventEmitter
 
     class Slave extends require("events").EventEmitter
         constructor: (@sio,@sock) ->
+            super()
+
             @id             = @sock.id
             @last_status    = null
             @last_err       = null

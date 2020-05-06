@@ -27,6 +27,8 @@ ALERT_TYPES =
 
 module.exports = class Alerts extends require("events").EventEmitter
     constructor: (@opts) ->
+        super()
+
         @logger = @opts.logger
 
         @email      = new Alerts.Email @, nconf.get("alerts:email") if nconf.get("alerts:email")

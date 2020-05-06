@@ -25,6 +25,8 @@ args = require("yargs")
 
 class StreamMachineRunner extends require("events").EventEmitter
     constructor: (@_streamer,@_args) ->
+        super()
+
         @process        = null
         @_terminating   = false
         @_inHandoff     = false

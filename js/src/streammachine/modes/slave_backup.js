@@ -1,6 +1,4 @@
-var CP, Logger, RPC, Slave, SlaveMode, debug, nconf, net, path, _,
-  __hasProp = {}.hasOwnProperty,
-  __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
+var CP, Logger, RPC, Slave, SlaveMode, _, debug, nconf, net, path;
 
 _ = require("underscore");
 
@@ -20,304 +18,322 @@ Slave = require("../slave");
 
 debug = require("debug")("sm:modes:slave");
 
-module.exports = SlaveMode = (function(_super) {
-  __extends(SlaveMode, _super);
-
-  SlaveMode.prototype.MODE = "Slave";
-
-  function SlaveMode(opts, cb) {
-    this.opts = opts;
-    this.log = (new Logger(this.opts.log)).child({
-      mode: 'slave',
-      pid: process.pid
-    });
-    this.log.debug("Slave Instance initialized");
-    debug("Slave Mode init");
-    process.title = "StreamM:slave";
-    SlaveMode.__super__.constructor.apply(this, arguments);
-    this._handle = null;
-    this._haveHandle = false;
-    this._shuttingDown = false;
-    this._inHandoff = false;
-    this._lastAddress = null;
-    this._initFull = false;
-    if (process.send != null) {
-      debug("Setting up RPC");
-      this._rpc = new RPC(process, {
-        timeout: 5000,
-        functions: {
-          OK: function(msg, handle, cb) {
-            return cb(null, "OK");
-          },
-          slave_port: (function(_this) {
-            return function(msg, handle, cb) {
-              return cb(null, _this.slavePort());
-            };
-          })(this),
-          workers: (function(_this) {
-            return function(msg, handle, cb) {};
-          })(this),
-          stream_listener: (function(_this) {
-            return function(msg, handle, cb) {
-              return _this._landListener(null, msg, handle, cb);
-            };
-          })(this),
-          ready: (function(_this) {
-            return function(msg, handle, cb) {
-              return _this.pool.once_loaded(cb);
-            };
-          })(this),
-          status: (function(_this) {
-            return function(msg, handle, cb) {
-              return _this.status(cb);
-            };
-          })(this)
-        }
+//----------
+module.exports = SlaveMode = (function() {
+  class SlaveMode extends require("./base") {
+    constructor(opts, cb) {
+      super();
+      this.opts = opts;
+      this.log = (new Logger(this.opts.log)).child({
+        mode: 'slave',
+        pid: process.pid
       });
-    }
-    this.pool = new SlaveMode.WorkerPool(this, this.opts.cluster, this.opts);
-    this.pool.on("full_strength", (function(_this) {
-      return function() {
-        return _this.emit("full_strength");
-      };
-    })(this));
-    process.on("SIGTERM", (function(_this) {
-      return function() {
-        return _this.pool.shutdown(function(err) {
-          _this.log.info("Pool destroyed.");
+      this.log.debug("Slave Instance initialized");
+      debug("Slave Mode init");
+      process.title = "StreamM:slave";
+      this._handle = null;
+      this._haveHandle = false;
+      this._shuttingDown = false;
+      this._inHandoff = false;
+      this._lastAddress = null;
+      this._initFull = false;
+      // -- Set up Internal RPC -- #
+      if (process.send != null) {
+        debug("Setting up RPC");
+        this._rpc = new RPC(process, {
+          timeout: 5000,
+          functions: {
+            OK: function(msg, handle, cb) {
+              return cb(null, "OK");
+            },
+            slave_port: (msg, handle, cb) => {
+              return cb(null, this.slavePort());
+            },
+            //---
+            workers: (msg, handle, cb) => {},
+            //---
+            stream_listener: (msg, handle, cb) => {
+              return this._landListener(null, msg, handle, cb);
+            },
+            //---
+            ready: (msg, handle, cb) => {
+              // We're "ready" once we have one loaded worker
+              return this.pool.once_loaded(cb);
+            },
+            //---
+            status: (msg, handle, cb) => {
+              return this.status(cb);
+            }
+          }
+        });
+      }
+      // -- Set up Clustered Worker Pool -- #
+      this.pool = new SlaveMode.WorkerPool(this, this.opts.cluster, this.opts);
+      this.pool.on("full_strength", () => {
+        return this.emit("full_strength");
+      });
+      process.on("SIGTERM", () => {
+        return this.pool.shutdown((err) => {
+          this.log.info("Pool destroyed.");
           return process.exit();
         });
-      };
-    })(this));
-    if (nconf.get("handoff")) {
-      this._acceptHandoff(cb);
-    } else {
-      this._openServer(null, cb);
+      });
+      // -- set up server -- #
+
+      // We handle incoming connections here in the slave process, and then
+      // distribute them to our ready workers.
+
+      // If we're doing a handoff, we wait to receive a server handle from
+      // the sending process. If not, we should go ahead and start a server
+      // ourself.
+      if (nconf.get("handoff")) {
+        this._acceptHandoff(cb);
+      } else {
+        // we'll listen via our configured port
+        this._openServer(null, cb);
+      }
     }
-  }
 
-  SlaveMode.prototype.slavePort = function() {
-    var _ref;
-    return (_ref = this._server) != null ? _ref.address().port : void 0;
-  };
+    //----------
+    slavePort() {
+      var ref;
+      return (ref = this._server) != null ? ref.address().port : void 0;
+    }
 
-  SlaveMode.prototype._openServer = function(handle, cb) {
-    this._server = net.createServer({
-      pauseOnConnect: true,
-      allowHalfOpen: true
-    });
-    return this._server.listen(handle || this.opts.port, (function(_this) {
-      return function(err) {
+    //----------
+    _openServer(handle, cb) {
+      this._server = net.createServer({
+        pauseOnConnect: true,
+        allowHalfOpen: true
+      });
+      return this._server.listen(handle || this.opts.port, (err) => {
         if (err) {
-          _this.log.error("Failed to start slave server: " + err);
+          this.log.error(`Failed to start slave server: ${err}`);
           throw err;
         }
-        _this._server.on("connection", function(conn) {
+        this._server.on("connection", (conn) => {
+          // FIXME: This is nasty...
+          // https://github.com/joyent/node/issues/7905
           if (/^v0.10/.test(process.version)) {
             conn._handle.readStop();
           }
           conn.pause();
-          return _this._distributeConnection(conn);
+          return this._distributeConnection(conn);
         });
-        _this.log.info("Slave server is up and listening.");
-        return typeof cb === "function" ? cb(null, _this) : void 0;
-      };
-    })(this));
-  };
-
-  SlaveMode.prototype._distributeConnection = function(conn) {
-    var w;
-    w = this.pool.getWorker();
-    if (!w) {
-      this.log.debug("Listener arrived before any ready workers. Waiting.");
-      this.pool.once("worker_loaded", (function(_this) {
-        return function() {
-          _this.log.debug("Distributing listener now that worker is ready.");
-          return _this._distributeConnection(conn);
-        };
-      })(this));
-      return;
+        this.log.info("Slave server is up and listening.");
+        return typeof cb === "function" ? cb(null, this) : void 0;
+      });
     }
-    this.log.silly("Distributing listener to worker " + w.id + " (" + w.pid + ")");
-    return w.rpc.request("connection", null, conn, (function(_this) {
-      return function(err) {
+
+    //----------
+    _distributeConnection(conn) {
+      var w;
+      w = this.pool.getWorker();
+      if (!w) {
+        this.log.debug("Listener arrived before any ready workers. Waiting.");
+        this.pool.once("worker_loaded", () => {
+          this.log.debug("Distributing listener now that worker is ready.");
+          return this._distributeConnection(conn);
+        });
+        return;
+      }
+      this.log.silly(`Distributing listener to worker ${w.id} (${w.pid})`);
+      return w.rpc.request("connection", null, conn, (err) => {
         if (err) {
-          _this.log.error("Failed to land incoming connection: " + err);
+          this.log.error(`Failed to land incoming connection: ${err}`);
           return conn.destroy();
         }
-      };
-    })(this));
-  };
-
-  SlaveMode.prototype.shutdownWorker = function(id, cb) {
-    return this.pool.shutdownWorker(id, cb);
-  };
-
-  SlaveMode.prototype.status = function(cb) {
-    return this.pool.status(cb);
-  };
-
-  SlaveMode.prototype._listenerFromWorker = function(id, msg, handle, cb) {
-    this.log.debug("Landing listener from worker.", {
-      inHandoff: this._inHandoff
-    });
-    if (this._inHandoff) {
-      return this._inHandoff.request("stream_listener", msg, handle, (function(_this) {
-        return function(err) {
-          return cb(err);
-        };
-      })(this));
-    } else {
-      return this._landListener(id, msg, handle, cb);
+      });
     }
-  };
 
-  SlaveMode.prototype._landListener = function(sender, obj, handle, cb) {
-    var w;
-    w = this.pool.getWorker(sender);
-    if (w) {
-      this.log.debug("Asking to land listener on worker " + w.id);
-      return w.rpc.request("land_listener", obj, handle, (function(_this) {
-        return function(err) {
-          return cb(err);
-        };
-      })(this));
-    } else {
-      this.log.debug("No worker ready to land listener!");
-      return cb("No workers ready to receive listeners.");
+    //----------
+    shutdownWorker(id, cb) {
+      return this.pool.shutdownWorker(id, cb);
     }
-  };
 
-  SlaveMode.prototype._sendHandoff = function(rpc) {
-    var _ref;
-    this.log.info("Starting slave handoff.");
-    this._shuttingDown = true;
-    this._inHandoff = rpc;
-    return rpc.request("server_socket", {}, (_ref = this._server) != null ? _ref._handle : void 0, (function(_this) {
-      return function(err) {
+    //----------
+    status(cb) {
+      // send back a status for each of our workers
+      return this.pool.status(cb);
+    }
+
+    //----------
+    _listenerFromWorker(id, msg, handle, cb) {
+      this.log.debug("Landing listener from worker.", {
+        inHandoff: this._inHandoff
+      });
+      if (this._inHandoff) {
+        // we're in a handoff. ship the listener out there
+        return this._inHandoff.request("stream_listener", msg, handle, (err) => {
+          return cb(err);
+        });
+      } else {
+        // we can hand the listener to any slave except the one
+        // it came from
+        return this._landListener(id, msg, handle, cb);
+      }
+    }
+
+    //----------
+
+      // Distribute a listener to one of our ready slave workers. This could be
+    // an external request via handoff, or it could be an internal request from
+    // a worker instance that is shutting down.
+    _landListener(sender, obj, handle, cb) {
+      var w;
+      w = this.pool.getWorker(sender);
+      if (w) {
+        this.log.debug(`Asking to land listener on worker ${w.id}`);
+        return w.rpc.request("land_listener", obj, handle, (err) => {
+          return cb(err);
+        });
+      } else {
+        this.log.debug("No worker ready to land listener!");
+        return cb("No workers ready to receive listeners.");
+      }
+    }
+
+    //----------
+    _sendHandoff(rpc) {
+      var ref;
+      this.log.info("Starting slave handoff.");
+      // don't try to spawn new workers
+      this._shuttingDown = true;
+      this._inHandoff = rpc;
+      // Coordinate handing off our server handle
+      return rpc.request("server_socket", {}, (ref = this._server) != null ? ref._handle : void 0, (err) => {
         if (err) {
-          _this.log.error("Error sending socket across handoff: " + err);
+          this.log.error(`Error sending socket across handoff: ${err}`);
         }
-        _this.log.info("Server socket transferred. Sending listener connections.");
-        return _this.pool.shutdown(function(err) {
-          _this.log.event("Sent slave data to new process. Exiting.");
+        // FIXME: Proceed? Cancel?
+        this.log.info("Server socket transferred. Sending listener connections.");
+        // Ask the pool to shut down its workers.
+        return this.pool.shutdown((err) => {
+          this.log.event("Sent slave data to new process. Exiting.");
+          // Exit
           return process.exit();
         });
-      };
-    })(this));
-  };
-
-  SlaveMode.prototype._acceptHandoff = function(cb) {
-    this.log.info("Initializing handoff receptor.");
-    if (!this._rpc) {
-      this.log.error("Handoff called, but no RPC interface set up. Aborting.");
-      return false;
+      });
     }
-    this._rpc.once("HANDOFF_GO", (function(_this) {
-      return function(msg, handle, hgcb) {
-        _this._rpc.once("server_socket", function(msg, handle, sscb) {
+
+    //----------
+    _acceptHandoff(cb) {
+      this.log.info("Initializing handoff receptor.");
+      if (!this._rpc) {
+        this.log.error("Handoff called, but no RPC interface set up. Aborting.");
+        return false;
+      }
+      this._rpc.once("HANDOFF_GO", (msg, handle, hgcb) => {
+        this._rpc.once("server_socket", (msg, handle, sscb) => {
           var _go;
-          _this.log.info("Incoming server handle.");
-          _this._openServer(handle, function(err) {
+          this.log.info("Incoming server handle.");
+          this._openServer(handle, (err) => {
             if (err) {
-              _this.log.error("Failed to start server using transferred handle.");
+              // FIXME: How should we recover from this?
+              this.log.error("Failed to start server using transferred handle.");
               return false;
             }
-            return _this.log.info("Server started with handle received during handoff.");
+            return this.log.info("Server started with handle received during handoff.");
           });
-          _go = function() {
+          _go = () => {
+            // let our sender know we're ready... we're already listening for
+            // the stream_listener requests on our rpc, so our job in here is
+            // done. The rest is on the sender.
             sscb(null);
             return typeof cb === "function" ? cb(null) : void 0;
           };
-          if (_this._initFull) {
+          // wait until we're at full strength to start transferring listeners
+          if (this._initFull) {
             return _go();
           } else {
-            return _this.once("full_strength", function() {
+            return this.once("full_strength", () => {
               return _go();
             });
           }
         });
         return hgcb(null, "GO");
-      };
-    })(this));
-    if (process.send == null) {
-      this.log.error("Handoff called, but process has no send function. Aborting.");
-      return false;
+      });
+      if (process.send == null) {
+        this.log.error("Handoff called, but process has no send function. Aborting.");
+        return false;
+      }
+      return process.send("HANDOFF_GO");
     }
-    return process.send("HANDOFF_GO");
+
   };
 
-  SlaveMode.WorkerPool = (function(_super1) {
-    __extends(WorkerPool, _super1);
+  SlaveMode.prototype.MODE = "Slave";
 
-    function WorkerPool(s, size, config) {
-      this.s = s;
+  //----------
+  SlaveMode.WorkerPool = class WorkerPool extends require("events").EventEmitter {
+    constructor(s1, size, config) {
+      super();
+      this.s = s1;
       this.size = size;
       this.config = config;
       this.workers = {};
       this._shutdown = false;
-      debug("Worker pool init with size of " + this.size + ".");
+      debug(`Worker pool init with size of ${this.size}.`);
       this.log = this.s.log.child({
         component: "worker_pool"
       });
       this._nextId = 1;
       this._spawn();
-      this._statusPoll = setInterval((function(_this) {
-        return function() {
-          var w, _i, _len, _ref, _results;
-          _ref = _this.workers;
-          _results = [];
-          for (_i = 0, _len = _ref.length; _i < _len; _i++) {
-            w = _ref[_i];
-            _results.push((function(w) {
-              if (!w.rpc) {
-                return;
+      // poll each worker for its status every second
+      this._statusPoll = setInterval(() => {
+        var i, len, ref, results, w;
+        ref = this.workers;
+        results = [];
+        for (i = 0, len = ref.length; i < len; i++) {
+          w = ref[i];
+          results.push(((w) => {
+            if (!w.rpc) {
+              return;
+            }
+            return w.rpc.request("status", (err, s) => {
+              if (err) {
+                this.log.error(`Worker status error: ${err}`);
               }
-              return w.rpc.request("status", function(err, s) {
-                if (err) {
-                  _this.log.error("Worker status error: " + err);
-                }
-                return w.status = {
-                  id: id,
-                  listening: w._listening,
-                  loaded: w._loaded,
-                  streams: s,
-                  pid: w.pid,
-                  ts: Number(new Date)
-                };
-              });
-            })(w));
-          }
-          return _results;
-        };
-      })(this), 1000);
-      process.on("exit", (function(_this) {
-        return function() {
-          var id, w, _ref, _results;
-          _ref = _this.workers;
-          _results = [];
-          for (id in _ref) {
-            w = _ref[id];
-            _results.push(w.w.kill());
-          }
-          return _results;
-        };
-      })(this));
+              return w.status = {
+                id: id,
+                listening: w._listening,
+                loaded: w._loaded,
+                streams: s,
+                pid: w.pid,
+                ts: Number(new Date())
+              };
+            });
+          })(w));
+        }
+        return results;
+      }, 1000);
+      process.on("exit", () => {
+        var id, ref, results, w;
+        ref = this.workers;
+        results = [];
+        for (id in ref) {
+          w = ref[id];
+          // try one last effort to make sure workers are closed
+          results.push(w.w.kill());
+        }
+        return results;
+      });
     }
 
-    WorkerPool.prototype._spawn = function() {
+    //----------
+    _spawn() {
       var id, p, w;
       if (this.count() >= this.size) {
-        debug("Pool is now at " + (this.count()) + ". Full strength.");
+        debug(`Pool is now at ${this.count()}. Full strength.`);
         this.log.debug("Pool is at full strength");
         this.emit("full_strength");
         return false;
       }
       id = this._nextId;
       this._nextId += 1;
-      debug("Spawning worker " + id + ".");
+      debug(`Spawning worker ${id}.`);
       p = CP.fork(path.resolve(__dirname, "./slave_worker.js"));
-      debug("Worker " + id + " forked with pid of " + p.pid);
+      debug(`Worker ${id} forked with pid of ${p.pid}`);
       this.log.debug("Spawning new worker.", {
         count: this.count(),
         target: this.size
@@ -333,154 +349,163 @@ module.exports = SlaveMode = (function(_super) {
       });
       w.rpc = new RPC(p, {
         functions: {
-          worker_configured: (function(_this) {
-            return function(msg, handle, cb) {
-              _this.log.debug("Worker " + w.id + " is configured.");
-              w._config = true;
-              return cb(null);
-            };
-          })(this),
-          rewinds_loaded: (function(_this) {
-            return function(msg, handle, cb) {
-              _this.log.debug("Worker " + w.id + " is loaded.");
-              w._loaded = true;
-              _this.emit("worker_loaded");
-              cb(null);
-              debug("Worker " + w.id + " rewind loaded. Attempting new spawn.");
-              return _this._spawn();
-            };
-          })(this),
-          send_listener: (function(_this) {
-            return function(msg, handle, cb) {
-              return _this.s._listenerFromWorker(w.id, msg, handle, cb);
-            };
-          })(this),
-          config: (function(_this) {
-            return function(msg, handle, cb) {
-              return cb(null, _this.config);
-            };
-          })(this)
+          // triggered by the worker once it has its streams configured
+          // (though they may not yet have data to give out)
+          worker_configured: (msg, handle, cb) => {
+            this.log.debug(`Worker ${w.id} is configured.`);
+            w._config = true;
+            return cb(null);
+          },
+          //---
+
+          // sent by the worker once its stream rewinds are loaded.
+          // tells us that it's safe to trigger a new worker launch
+          rewinds_loaded: (msg, handle, cb) => {
+            this.log.debug(`Worker ${w.id} is loaded.`);
+            w._loaded = true;
+            this.emit("worker_loaded");
+            // ACK
+            cb(null);
+            // now that we're done, see if any more workers need to start
+            debug(`Worker ${w.id} rewind loaded. Attempting new spawn.`);
+            return this._spawn();
+          },
+          //---
+
+          // a worker is allowed to shed listeners at any point by
+          // sending them here. This could be part of a handoff (where
+          // we've asked for the listeners), or part of the worker
+          // crashing / shutting down
+          send_listener: (msg, handle, cb) => {
+            return this.s._listenerFromWorker(w.id, msg, handle, cb);
+          },
+          //---
+
+          // triggered by the worker to request configuration
+          config: (msg, handle, cb) => {
+            return cb(null, this.config);
+          }
         }
-      }, (function(_this) {
-        return function(err) {
-          if (err) {
-            _this.log.error("Error setting up RPC for new worker: " + err);
-            worker.kill();
-            return false;
-          }
-          _this.log.debug("Worker " + w.id + " is set up.", {
-            id: w.id,
-            pid: w.pid
-          });
-          debug("Worker " + w.id + " RPC is set up.");
-          return _this.workers[w.id] = w;
-        };
-      })(this));
-      p.once("exit", (function(_this) {
-        return function() {
-          debug("Got exit from worker process " + w.id);
-          _this.log.info("SlaveWorker exit: " + w.id);
-          delete _this.workers[w.id];
-          w.emit("exit");
-          w.destroy();
-          if (!_this._shutdown) {
-            return _this._spawn();
-          }
-        };
-      })(this));
-      return p.on("error", (function(_this) {
-        return function(err) {
-          debug("Error from worker process " + w.id + ": " + err);
-          return _this.log.error("Error from SlaveWorker process: " + err);
-        };
-      })(this));
-    };
+      }, (err) => {
+        if (err) {
+          this.log.error(`Error setting up RPC for new worker: ${err}`);
+          worker.kill();
+          return false;
+        }
+        this.log.debug(`Worker ${w.id} is set up.`, {
+          id: w.id,
+          pid: w.pid
+        });
+        debug(`Worker ${w.id} RPC is set up.`);
+        return this.workers[w.id] = w;
+      });
+      // -- Handle disconnects and exits -- #
+      p.once("exit", () => {
+        debug(`Got exit from worker process ${w.id}`);
+        this.log.info(`SlaveWorker exit: ${w.id}`);
+        delete this.workers[w.id];
+        w.emit("exit");
+        w.destroy();
+        if (!this._shutdown) {
+          return this._spawn();
+        }
+      });
+      // error seems to be thrown for issues sending IPC
+      return p.on("error", (err) => {
+        debug(`Error from worker process ${w.id}: ${err}`);
+        return this.log.error(`Error from SlaveWorker process: ${err}`);
+      });
+    }
 
-    WorkerPool.prototype.count = function() {
+    // FIXME: What else should we do?
+
+      //----------
+    count() {
       return Object.keys(this.workers).length;
-    };
+    }
 
-    WorkerPool.prototype.loaded_count = function() {
+    //----------
+    loaded_count() {
       return _(this.workers).select(function(w) {
         return w._loaded;
       }).length;
-    };
+    }
 
-    WorkerPool.prototype.once_loaded = function(cb) {
+    //----------
+    once_loaded(cb) {
       if (this.loaded_count() === 0) {
-        return this.once("worker_loaded", (function(_this) {
-          return function() {
-            return cb(null);
-          };
-        })(this));
+        return this.once("worker_loaded", () => {
+          return cb(null);
+        });
       } else {
         return cb(null);
       }
-    };
+    }
 
-    WorkerPool.prototype.shutdown = function(cb) {
-      var af, id, w, _ref, _results;
+    //----------
+    shutdown(cb) {
+      var af, id, ref, results, w;
       this._shutdown = true;
+      // send kill signals to all workers
       this.log.info("Slave WorkerPool is exiting.");
       if (this.count() === 0) {
         clearInterval(this._statusPoll);
         cb(null);
       }
-      af = _.after(this.count(), (function(_this) {
-        return function() {
-          clearInterval(_this._statusPoll);
-          return cb(null);
-        };
-      })(this));
-      _ref = this.workers;
-      _results = [];
-      for (id in _ref) {
-        w = _ref[id];
-        _results.push(this.shutdownWorker(id, (function(_this) {
-          return function(err) {
-            return af();
-          };
-        })(this)));
+      af = _.after(this.count(), () => {
+        clearInterval(this._statusPoll);
+        return cb(null);
+      });
+      ref = this.workers;
+      results = [];
+      for (id in ref) {
+        w = ref[id];
+        results.push(this.shutdownWorker(id, (err) => {
+          return af();
+        }));
       }
-      return _results;
-    };
+      return results;
+    }
 
-    WorkerPool.prototype.shutdownWorker = function(id, cb) {
+    //----------
+    shutdownWorker(id, cb) {
       if (!this.workers[id]) {
         if (typeof cb === "function") {
           cb("Cannot call shutdown: Worker id unknown");
         }
         return false;
       }
-      this.log.info("Sending shutdown to worker " + id);
-      return this.workers[id].rpc.request("shutdown", {}, (function(_this) {
-        return function(err) {
-          var timer;
-          if (err) {
-            _this.log.error("Shutdown errored: " + err);
-            return false;
+      this.log.info(`Sending shutdown to worker ${id}`);
+      return this.workers[id].rpc.request("shutdown", {}, (err) => {
+        var timer;
+        if (err) {
+          this.log.error(`Shutdown errored: ${err}`);
+          return false;
+        }
+        cb = _.once(cb);
+        // set a shutdown timer
+        timer = setTimeout(() => {
+          this.log.error("Failed to get worker exit before timeout. Trying kill.");
+          w.w.kill();
+          return timer = setTimeout(() => {
+            return cb("Failed to shut down worker.");
+          }, 500);
+        }, 1000);
+        // now watch for the worker's exit event
+        return this.workers[id].once("exit", () => {
+          this.log.info(`Shutdown succeeded for worker ${id}.`);
+          if (timer) {
+            clearTimeout(timer);
           }
-          cb = _.once(cb);
-          timer = setTimeout(function() {
-            _this.log.error("Failed to get worker exit before timeout. Trying kill.");
-            w.w.kill();
-            return timer = setTimeout(function() {
-              return cb("Failed to shut down worker.");
-            }, 500);
-          }, 1000);
-          return _this.workers[id].once("exit", function() {
-            _this.log.info("Shutdown succeeded for worker " + id + ".");
-            if (timer) {
-              clearTimeout(timer);
-            }
-            return cb(null);
-          });
-        };
-      })(this));
-    };
+          return cb(null);
+        });
+      });
+    }
 
-    WorkerPool.prototype.getWorker = function(exclude_id) {
+    //----------
+    getWorker(exclude_id) {
       var workers;
+      // we want loaded workers, excluding the passed-in id if provided
       workers = exclude_id ? _(this.workers).select(function(w) {
         return w._loaded && w.id !== exclude_id;
       }) : _(this.workers).select(function(w) {
@@ -489,68 +514,66 @@ module.exports = SlaveMode = (function(_super) {
       if (workers.length === 0) {
         return null;
       } else {
+        // From this pool of eligible workers, choose the one that seems
+        // most appropriate to get new traffic.
+
+        // FIXME: How about the one that has sent the least bytes?
+        //return _.min workers, (w) -> w.status.bytes_sent
         return _.sample(workers);
       }
-    };
+    }
 
-    WorkerPool.prototype.status = function(cb) {
-      var af, id, status, w, _ref, _results;
+    //----------
+    status(cb) {
+      var af, id, ref, results, status, w;
       status = {};
-      af = _.after(Object.keys(this.workers).length, (function(_this) {
-        return function() {
-          return cb(null, status);
-        };
-      })(this));
-      _ref = this.workers;
-      _results = [];
-      for (id in _ref) {
-        w = _ref[id];
-        _results.push((function(_this) {
-          return function(id, w) {
-            return w.rpc.request("status", function(err, s) {
-              if (err) {
-                _this.log.error("Worker status error: " + err);
-              }
-              status[id] = {
-                id: id,
-                listening: w._listening,
-                loaded: w._loaded,
-                streams: s,
-                pid: w.pid
-              };
-              return af();
-            });
-          };
-        })(this)(id, w));
+      af = _.after(Object.keys(this.workers).length, () => {
+        return cb(null, status);
+      });
+      ref = this.workers;
+      results = [];
+      for (id in ref) {
+        w = ref[id];
+        results.push(((id, w) => {
+          return w.rpc.request("status", (err, s) => {
+            if (err) {
+              this.log.error(`Worker status error: ${err}`);
+            }
+            status[id] = {
+              id: id,
+              listening: w._listening,
+              loaded: w._loaded,
+              streams: s,
+              pid: w.pid
+            };
+            return af();
+          });
+        })(id, w));
       }
-      return _results;
-    };
+      return results;
+    }
 
-    return WorkerPool;
+  };
 
-  })(require("events").EventEmitter);
-
-  SlaveMode.Worker = (function(_super1) {
-    __extends(Worker, _super1);
-
-    function Worker(attributes) {
+  //----------
+  SlaveMode.Worker = class Worker extends require("events").EventEmitter {
+    constructor(attributes) {
       var k, v;
+      super();
       for (k in attributes) {
         v = attributes[k];
         this[k] = v;
       }
     }
 
-    Worker.prototype.destroy = function() {
+    destroy() {
       return this.removeAllListeners();
-    };
+    }
 
-    return Worker;
-
-  })(require("events").EventEmitter);
+  };
 
   return SlaveMode;
 
-})(require("./base"));
+}).call(this);
 
 //# sourceMappingURL=slave_backup.js.map

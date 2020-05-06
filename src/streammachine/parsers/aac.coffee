@@ -31,7 +31,7 @@ module.exports = class AAC extends require("stream").Writable
     FIRST_BYTE = new strtok.BufferType(1)
 
     constructor: ->
-        super
+        super()
 
         # create an internal stream to pass to strtok
         @istream = new (require("events").EventEmitter)

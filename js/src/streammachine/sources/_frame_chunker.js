@@ -1,57 +1,62 @@
-var FrameChunker, Transform,
-  __hasProp = {}.hasOwnProperty,
-  __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
+var FrameChunker, Transform;
 
 Transform = require("stream").Transform;
 
-module.exports = FrameChunker = (function(_super) {
-  __extends(FrameChunker, _super);
-
-  function FrameChunker(duration, initialTime) {
-    this.duration = duration;
-    this.initialTime = initialTime != null ? initialTime : new Date();
+module.exports = FrameChunker = class FrameChunker extends Transform {
+  constructor(duration1, initialTime = new Date()) {
+    super({
+      objectMode: true
+    });
+    this.duration = duration1;
+    this.initialTime = initialTime;
     this._chunk_queue = [];
     this._queue_duration = 0;
     this._remainders = 0;
     this._target = this.duration;
     this._last_ts = null;
-    FrameChunker.__super__.constructor.call(this, {
-      objectMode: true
-    });
   }
 
-  FrameChunker.prototype.resetTime = function(ts) {
+  //----------
+  resetTime(ts) {
     this._last_ts = null;
     this._remainders = 0;
     return this.initialTime = ts;
-  };
+  }
 
-  FrameChunker.prototype._transform = function(obj, encoding, cb) {
-    var buf, duration, frames, len, o, simple_dur, simple_rem, ts, _i, _len, _ref;
+  //----------
+  _transform(obj, encoding, cb) {
+    var buf, duration, frames, i, len, len1, o, ref, simple_dur, simple_rem, ts;
     this._chunk_queue.push(obj);
     this._queue_duration += obj.header.duration;
     if (this._queue_duration > this._target) {
+      // reset our target for the next chunk
       this._target = this._target + (this.duration - this._queue_duration);
+      // what's the total data length?
       len = 0;
-      _ref = this._chunk_queue;
-      for (_i = 0, _len = _ref.length; _i < _len; _i++) {
-        o = _ref[_i];
+      ref = this._chunk_queue;
+      for (i = 0, len1 = ref.length; i < len1; i++) {
+        o = ref[i];
         len += o.frame.length;
       }
+      // how many frames?
       frames = this._chunk_queue.length;
+      // make one buffer
       buf = Buffer.concat((function() {
-        var _j, _len1, _ref1, _results;
-        _ref1 = this._chunk_queue;
-        _results = [];
-        for (_j = 0, _len1 = _ref1.length; _j < _len1; _j++) {
-          o = _ref1[_j];
-          _results.push(o.frame);
+        var j, len2, ref1, results;
+        ref1 = this._chunk_queue;
+        results = [];
+        for (j = 0, len2 = ref1.length; j < len2; j++) {
+          o = ref1[j];
+          results.push(o.frame);
         }
-        return _results;
+        return results;
       }).call(this));
       duration = this._queue_duration;
+      // reset queue
       this._chunk_queue.length = 0;
       this._queue_duration = 0;
+      // what's the timestamp for this chunk? If it seems reasonable
+      // to attach it to the last chunk, let's do so.
       simple_dur = Math.floor(duration);
       this._remainders += duration - simple_dur;
       if (this._remainders > 1) {
@@ -70,10 +75,8 @@ module.exports = FrameChunker = (function(_super) {
       });
     }
     return cb();
-  };
+  }
 
-  return FrameChunker;
-
-})(Transform);
+};
 
 //# sourceMappingURL=_frame_chunker.js.map

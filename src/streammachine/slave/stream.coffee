@@ -15,11 +15,12 @@ debug = require("debug")("sm:slave:stream")
 # Rewind buffer info available on the master.
 
 module.exports = class Stream extends require('../rewind_buffer')
-    constructor: (@core,@key,@log,@opts) ->
-        @STATUS = "Initializing"
-
+    constructor: (@core,@key,@log,opts) ->
         # initialize RewindBuffer
-        super seconds:@opts.seconds, burst:@opts.burst
+        super seconds: opts.seconds, burst:opts.burst
+        @opts = opts
+
+        @STATUS = "Initializing"
 
         @StreamTitle  = @opts.metaTitle
         @StreamUrl    = ""
@@ -297,6 +298,7 @@ module.exports = class Stream extends require('../rewind_buffer')
 
     class @StreamGroup extends require("events").EventEmitter
         constructor: (@key,@log) ->
+            super()
             @streams    = {}
             @hls_min_id = null
 

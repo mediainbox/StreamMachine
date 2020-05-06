@@ -1,6 +1,4 @@
-var ConsoleTransport, DebugTransport, LoggingWinston, SocketLogger, Transport, W3CLogger, WinstonCommon, fs, path, strftime, winston,
-  __hasProp = {}.hasOwnProperty,
-  __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
+var ConsoleTransport, DebugTransport, LoggingWinston, SocketLogger, Transport, W3CLogger, WinstonCommon, fs, path, strftime, winston;
 
 winston = require("winston");
 
@@ -16,45 +14,42 @@ strftime = require("prettydate").strftime;
 
 Transport = require('winston-transport');
 
-DebugTransport = (function(_super) {
-  __extends(DebugTransport, _super);
+DebugTransport = (function() {
+  class DebugTransport extends winston.Transport {
+    log(level, msg, meta, callback) {
+      debug(`${level}: ${msg}`, meta);
+      return callback(null, true);
+    }
 
-  function DebugTransport() {
-    return DebugTransport.__super__.constructor.apply(this, arguments);
-  }
+  };
 
   DebugTransport.prototype.name = "debug";
 
-  DebugTransport.prototype.log = function(level, msg, meta, callback) {
-    debug("" + level + ": " + msg, meta);
-    return callback(null, true);
-  };
-
   return DebugTransport;
 
-})(winston.Transport);
+}).call(this);
 
-ConsoleTransport = (function(_super) {
-  __extends(ConsoleTransport, _super);
-
-  function ConsoleTransport(opts) {
+//----------
+ConsoleTransport = class ConsoleTransport extends winston.transports.Console {
+  constructor(opts) {
+    super(opts);
     this.opts = opts;
-    ConsoleTransport.__super__.constructor.call(this, this.opts);
     this.ignore_levels = (this.opts.ignore || "").split(",");
   }
 
-  ConsoleTransport.prototype.log = function(level, msg, meta, callback) {
-    var k, output, prefixes, _i, _len, _ref;
+  log(level, msg, meta, callback) {
+    var i, k, len, output, prefixes, ref;
     if (this.silent) {
       return callback(null, true);
     }
     if (this.ignore_levels.indexOf(level) !== -1) {
       return callback(null, true);
     }
+    // extract prefix elements from meta
     prefixes = [];
-    _ref = ['pid', 'mode', 'component'];
-    for (_i = 0, _len = _ref.length; _i < _len; _i++) {
-      k = _ref[_i];
+    ref = ['pid', 'mode', 'component'];
+    for (i = 0, len = ref.length; i < len; i++) {
+      k = ref[i];
       if (meta[k]) {
         prefixes.push(meta[k]);
         delete meta[k];
@@ -82,153 +77,159 @@ ConsoleTransport = (function(_super) {
     }
     this.emit("logged");
     return callback(null, true);
-  };
-
-  return ConsoleTransport;
-
-})(winston.transports.Console);
-
-W3CLogger = (function(_super) {
-  __extends(W3CLogger, _super);
-
-  W3CLogger.prototype.name = "w3c";
-
-  function W3CLogger(options) {
-    W3CLogger.__super__.constructor.call(this, options);
-    this.options = options;
-    this._opening = false;
-    this._file = null;
-    this._queue = [];
-    process.addListener("SIGHUP", (function(_this) {
-      return function() {
-        console.log("w3c reloading log file");
-        return _this.close(function() {
-          return _this.open();
-        });
-      };
-    })(this));
   }
 
-  W3CLogger.prototype.log = function(level, msg, meta, cb) {
-    var logline;
-    if (level === this.options.level) {
-      logline = "" + meta.ip + " " + (strftime(new Date(meta.time), "%F %T")) + " " + meta.path + " 200 " + (escape(meta.ua)) + " " + meta.bytes + " " + meta.seconds;
-      this._queue.push(logline);
-      return this._runQueue();
-    }
-  };
+};
 
-  W3CLogger.prototype._runQueue = function() {
-    var line;
-    if (this._file) {
-      if (this._queue.length > 0) {
-        line = this._queue.shift();
-        return this._file.write(line + "\n", "utf8", (function(_this) {
-          return function() {
-            if (_this._queue.length > 0) {
-              return _this._runQueue;
+W3CLogger = (function() {
+  //----------
+  class W3CLogger extends winston.Transport {
+    constructor(options) {
+      super(options);
+      this.options = options;
+      this._opening = false;
+      this._file = null;
+      this._queue = [];
+      process.addListener("SIGHUP", () => {
+        console.log("w3c reloading log file");
+        return this.close(() => {
+          return this.open();
+        });
+      });
+    }
+
+    //----------
+    log(level, msg, meta, cb) {
+      var logline;
+      // unlike a normal logging endpoint, we only care about our request entries
+      if (level === this.options.level) {
+        // for a valid w3c log, level should == "request", meta.
+        logline = `${meta.ip} ${strftime(new Date(meta.time), "%F %T")} ${meta.path} 200 ${escape(meta.ua)} ${meta.bytes} ${meta.seconds}`;
+        this._queue.push(logline);
+        return this._runQueue();
+      }
+    }
+
+    //----------
+    _runQueue() {
+      var line;
+      if (this._file) {
+        // we're open, so do a write...
+        if (this._queue.length > 0) {
+          line = this._queue.shift();
+          return this._file.write(line + "\n", "utf8", () => {
+            if (this._queue.length > 0) {
+              return this._runQueue;
             }
-          };
-        })(this));
+          });
+        }
+      } else {
+        return this.open((err) => {
+          return this._runQueue();
+        });
       }
-    } else {
-      return this.open((function(_this) {
-        return function(err) {
-          return _this._runQueue();
-        };
-      })(this));
     }
-  };
 
-  W3CLogger.prototype.open = function(cb) {
-    var initFile, stats;
-    if (this._opening) {
-      console.log("W3C already opening... wait.");
-      return false;
-    }
-    console.log("W3C opening log file.");
-    this._opening = setTimeout((function(_this) {
-      return function() {
-        console.log("Failed to open w3c log within one second.");
-        _this._opening = false;
-        return _this.open(cb);
-      };
-    })(this), 1000);
-    initFile = true;
-    if (fs.existsSync(this.options.filename)) {
-      stats = fs.statSync(this.options.filename);
-      if (stats.size > 0) {
-        initFile = false;
+    //----------
+    open(cb) {
+      var initFile, stats;
+      if (this._opening) {
+        console.log("W3C already opening... wait.");
+        // we're already trying to open.  return an error so we queue the message
+        return false;
       }
-    }
-    this._file = fs.createWriteStream(this.options.filename, {
-      flags: (initFile ? "w" : "r+")
-    });
-    return this._file.once("open", (function(_this) {
-      return function(err) {
+      console.log("W3C opening log file.");
+      // note that we're opening, and also set a timeout to make sure
+      // we don't get stuck
+      this._opening = setTimeout(() => {
+        console.log("Failed to open w3c log within one second.");
+        this._opening = false;
+        return this.open(cb);
+      }, 1000);
+      // is this a new file or one that we're just re-opening?
+      initFile = true;
+      if (fs.existsSync(this.options.filename)) {
+        // file exists...  see if there's anything in it
+        stats = fs.statSync(this.options.filename);
+        if (stats.size > 0) {
+          // existing file...  don't write headers, just open so we can
+          // start appending
+          initFile = false;
+        }
+      }
+      this._file = fs.createWriteStream(this.options.filename, {
+        flags: (initFile ? "w" : "r+")
+      });
+      return this._file.once("open", (err) => {
         var _clear;
         console.log("w3c log open with ", err);
-        _clear = function() {
+        _clear = () => {
           console.log("w3c open complete");
-          if (_this._opening) {
-            clearTimeout(_this._opening);
+          if (this._opening) {
+            clearTimeout(this._opening);
           }
-          _this._opening = null;
+          this._opening = null;
           return typeof cb === "function" ? cb() : void 0;
         };
         if (initFile) {
-          return _this._file.write("#Software: StreamMachine\n#Version: 0.2.9\n#Fields: c-ip date time cs-uri-stem c-status cs(User-Agent) sc-bytes x-duration\n", "utf8", function() {
+          // write our initial w3c lines before we return
+          return this._file.write("#Software: StreamMachine\n#Version: 0.2.9\n#Fields: c-ip date time cs-uri-stem c-status cs(User-Agent) sc-bytes x-duration\n", "utf8", () => {
             return _clear();
           });
         } else {
           return _clear();
         }
-      };
-    })(this));
-  };
-
-  W3CLogger.prototype.close = function(cb) {
-    var _ref;
-    if ((_ref = this._file) != null) {
-      _ref.end(null, null, (function(_this) {
-        return function() {
-          return console.log("W3C log file closed.");
-        };
-      })(this));
+      });
     }
-    return this._file = null;
+
+    //----------
+    close(cb) {
+      var ref;
+      if ((ref = this._file) != null) {
+        ref.end(null, null, () => {
+          return console.log("W3C log file closed.");
+        });
+      }
+      return this._file = null;
+    }
+
+    //----------
+    flush() {
+      return this._runQueue();
+    }
+
   };
 
-  W3CLogger.prototype.flush = function() {
-    return this._runQueue();
-  };
+  W3CLogger.prototype.name = "w3c";
 
   return W3CLogger;
 
-})(winston.Transport);
+}).call(this);
 
-SocketLogger = (function(_super) {
-  __extends(SocketLogger, _super);
+SocketLogger = (function() {
+  //----------
+  class SocketLogger extends winston.Transport {
+    constructor(io, opts) {
+      super(opts);
+      this.io = io;
+    }
+
+    log(level, msg, meta, cb) {
+      this.io.log({
+        level: level,
+        msg: msg,
+        meta: meta
+      });
+      return typeof cb === "function" ? cb() : void 0;
+    }
+
+  };
 
   SocketLogger.prototype.name = "socket";
 
-  function SocketLogger(io, opts) {
-    this.io = io;
-    SocketLogger.__super__.constructor.call(this, opts);
-  }
-
-  SocketLogger.prototype.log = function(level, msg, meta, cb) {
-    this.io.log({
-      level: level,
-      msg: msg,
-      meta: meta
-    });
-    return typeof cb === "function" ? cb() : void 0;
-  };
-
   return SocketLogger;
 
-})(winston.Transport);
+}).call(this);
 
 module.exports = {
   DebugTransport: DebugTransport,

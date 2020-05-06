@@ -2,6 +2,8 @@ _ = require "underscore"
 
 module.exports = class Monitoring extends require("events").EventEmitter
     constructor: (@master,@log,@opts) ->
+        super()
+
         # -- check monitored source mounts for sources -- #
 
         @_streamInt = setInterval =>

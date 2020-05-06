@@ -1,46 +1,53 @@
-var MemoryStore, bs, debug,
-  __hasProp = {}.hasOwnProperty,
-  __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
+var MemoryStore, bs, debug;
 
 bs = require('binary-search');
 
 debug = require("debug")("sm:rewind:memory_store");
 
-module.exports = MemoryStore = (function(_super) {
-  __extends(MemoryStore, _super);
-
-  function MemoryStore(max_length) {
-    this.max_length = max_length != null ? max_length : null;
+module.exports = MemoryStore = class MemoryStore extends require("./base_store") {
+  constructor(max_length = null) {
+    super();
+    this.max_length = max_length;
     this.buffer = [];
   }
 
-  MemoryStore.prototype.reset = function(cb) {
+  //----------
+  reset(cb) {
     this.buffer = [];
     return typeof cb === "function" ? cb(null) : void 0;
-  };
+  }
 
-  MemoryStore.prototype.length = function() {
+  //----------
+  length() {
     return this.buffer.length;
-  };
+  }
 
-  MemoryStore.prototype._findTimestampOffset = function(ts) {
-    var a, b, da, db, foffset, _ref;
+  //----------
+  _findTimestampOffset(ts) {
+    var a, b, da, db, foffset, ref;
     foffset = bs(this.buffer, {
       ts: ts
     }, function(a, b) {
       return Number(a.ts) - Number(b.ts);
     });
     if (foffset >= 0) {
+      // if exact, return right away
       return this.buffer.length - 1 - foffset;
     } else if (foffset === -1) {
+      // our timestamp would be the first one in the buffer. Return
+      // whatever is there, regardless of how close
       return this.buffer.length - 1;
     } else {
       foffset = Math.abs(foffset) - 1;
+      // Look at this index, and the buffer before it, to see which is
+      // more appropriate
       a = this.buffer[foffset - 1];
       b = this.buffer[foffset];
-      if ((Number(a.ts) <= (_ref = Number(ts)) && _ref < Number(a.ts) + a.duration)) {
+      if ((Number(a.ts) <= (ref = Number(ts)) && ref < Number(a.ts) + a.duration)) {
+        // it's within a
         return this.buffer.length - foffset;
       } else {
+        // is it closer to the end of a, or the beginning of b?
         da = Math.abs(Number(a.ts) + a.duration - ts);
         db = Math.abs(b.ts - ts);
         if (da > db) {
@@ -50,9 +57,10 @@ module.exports = MemoryStore = (function(_super) {
         }
       }
     }
-  };
+  }
 
-  MemoryStore.prototype.at = function(offset, cb) {
+  //----------
+  at(offset, cb) {
     if (offset instanceof Date) {
       offset = this._findTimestampOffset(offset);
       if (offset === -1) {
@@ -67,9 +75,10 @@ module.exports = MemoryStore = (function(_super) {
       }
     }
     return cb(null, this.buffer[this.buffer.length - 1 - offset]);
-  };
+  }
 
-  MemoryStore.prototype.range = function(offset, length, cb) {
+  //----------
+  range(offset, length, cb) {
     var end, start;
     if (offset instanceof Date) {
       offset = this._findTimestampOffset(offset);
@@ -90,23 +99,26 @@ module.exports = MemoryStore = (function(_super) {
     start = this.buffer.length - 1 - offset;
     end = start + length;
     return cb(null, this.buffer.slice(start, end));
-  };
+  }
 
-  MemoryStore.prototype.first = function() {
+  //----------
+  first() {
     return this.buffer[0];
-  };
+  }
 
-  MemoryStore.prototype.last = function() {
+  last() {
     return this.buffer[this.buffer.length - 1];
-  };
+  }
 
-  MemoryStore.prototype.clone = function(cb) {
+  //----------
+  clone(cb) {
     var buf_copy;
     buf_copy = this.buffer.slice(0);
     return cb(null, buf_copy);
-  };
+  }
 
-  MemoryStore.prototype.insert = function(chunk) {
+  //----------
+  insert(chunk) {
     var cts, fb, lb;
     fb = this.buffer[0];
     lb = this.buffer[this.buffer.length - 1];
@@ -118,34 +130,45 @@ module.exports = MemoryStore = (function(_super) {
     }
     cts = Number(chunk.ts);
     if (!lb || cts > lb) {
+      // append
       this.buffer.push(chunk);
       this.emit("push", chunk);
+    // If the current chunk's timestamp is lower than the first one's, i
+    // insert it at the beginning of the array
     } else if (cts < fb) {
+      // prepend
       this.buffer.unshift(chunk);
       this.emit("unshift", chunk);
+    // If the current chunk's timestamp matches the last chunk's,
+    // it's probable that insert() was called again using the same chunk
+    // Often related to dangling event handlers that were not properly removed
     } else if (cts === fb) {
-      debug("Chunk timestamp already found in the buffer! [cts: " + cts + ", fb: " + fb + ", lb: " + lb + "]");
+      debug(`Chunk timestamp already found in the buffer! [cts: ${cts}, fb: ${fb}, lb: ${lb}]`);
     } else {
-      debug("Push in the middle not implemented! [cts: " + cts + ", fb: " + fb + ", lb: " + lb + "]");
+      // need to insert in the middle.
+      debug(`Push in the middle not implemented! [cts: ${cts}, fb: ${fb}, lb: ${lb}]`);
     }
     this._truncate();
     return true;
-  };
+  }
 
-  MemoryStore.prototype._truncate = function() {
-    var b, _results;
-    _results = [];
+  //----------
+  _truncate() {
+    var b, results;
+    results = [];
+    // -- should we remove? -- #
     while (this.max_length && this.buffer.length > this.max_length) {
       b = this.buffer.shift();
-      _results.push(this.emit("shift", b));
+      results.push(this.emit("shift", b));
     }
-    return _results;
-  };
+    return results;
+  }
 
-  MemoryStore.prototype.info = function() {};
+  //----------
+  info() {}
 
-  return MemoryStore;
+};
 
-})(require("./base_store"));
+//----------
 
 //# sourceMappingURL=memory_store.js.map

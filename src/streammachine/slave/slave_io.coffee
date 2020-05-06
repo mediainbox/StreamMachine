@@ -2,6 +2,8 @@ Socket = require "socket.io-client"
 
 module.exports = class SlaveIO extends require("events").EventEmitter
     constructor: (@slave,@_log,@opts) ->
+        super()
+
         @connected       = false
         @io              = null
         @id              = null

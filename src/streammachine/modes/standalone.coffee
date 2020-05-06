@@ -11,14 +11,14 @@ debug = require("debug")("sm:modes:standalone")
 module.exports = class StandaloneMode extends require("./base")
     MODE: "StandAlone"
     constructor: (@opts,cb) ->
+        super()
+
         # -- Set up logging -- #
 
         @log = (new Logger @opts.log).child pid:process.pid
         @log.debug("StreamMachine standalone initialized.")
 
         process.title = "StreamMachine"
-
-        super
 
         @streams = {}
 

@@ -24,7 +24,7 @@ module.exports = class Users
 
     class @Local extends Users
         constructor: (@admin) ->
-            super
+            super()
 
             if @admin.master.redis?
                 # we're using redis for users

@@ -11,6 +11,8 @@ _       = require "underscore"
 
 module.exports = class RewindDumpRestore extends require('events').EventEmitter
     constructor: (@master,@settings) ->
+        super()
+
         @_streams       = {}
         @_queue         = []
         @_working       = false
@@ -109,6 +111,8 @@ module.exports = class RewindDumpRestore extends require('events').EventEmitter
 
     class Dumper extends require('events').EventEmitter
         constructor: (@key,@rewind,@_path) ->
+            super()
+
             @_i             = null
             @_active        = false
             @_loaded        = null

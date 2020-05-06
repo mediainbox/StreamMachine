@@ -27,6 +27,8 @@ MemoryStore     = require "./rewind/memory_store"
 
 module.exports = class RewindBuffer extends require("events").EventEmitter
     constructor: (rewind_opts={}) ->
+        super()
+
         @_rsecs         = rewind_opts.seconds || 0
         @_rburstsecs    = rewind_opts.burst || 0
         @_rsecsPerChunk = Infinity
@@ -412,6 +414,8 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
 
     class @RewindWriter extends require("stream").Readable
         constructor: (@buf,@secs,@streamKey,@hls) ->
+            super()
+
             @c          = Concentrate()
             @slices     = 0
             @i          = @buf.length - 1

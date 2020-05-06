@@ -1,27 +1,21 @@
-var BaseStore,
-  __hasProp = {}.hasOwnProperty,
-  __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
+var BaseStore;
 
-module.exports = BaseStore = (function(_super) {
-  __extends(BaseStore, _super);
+module.exports = BaseStore = class BaseStore extends require("events").EventEmitter {
+  constructor() {}
 
-  function BaseStore() {}
-
-  BaseStore.prototype.setMax = function(l) {
+  setMax(l) {
     this.max_length = l;
     return this._truncate();
-  };
+  }
 
-  BaseStore.prototype.length = function() {};
+  length() {}
 
-  BaseStore.prototype.at = function(i) {};
+  at(i) {}
 
-  BaseStore.prototype.insert = function(chunk) {};
+  insert(chunk) {}
 
-  BaseStore.prototype.info = function() {};
+  info() {}
 
-  return BaseStore;
-
-})(require("events").EventEmitter);
+};
 
 //# sourceMappingURL=base_store.js.map

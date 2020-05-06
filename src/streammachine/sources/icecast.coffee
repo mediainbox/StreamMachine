@@ -66,7 +66,7 @@ module.exports = class IcecastSource extends require("./base")
 
     disconnect: ->
         if @connected
-            super
+            super()
 
             clearTimeout @_vtimeout if @_vtimeout
 

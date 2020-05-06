@@ -39,6 +39,8 @@ module.exports = class Stream extends require('events').EventEmitter
         geolock:            null
 
     constructor: (@key,@log,@mount,opts)->
+        super()
+
         @opts = _.defaults opts||{}, @DefaultOptions
 
         # We have three options for what source we're going to use:
@@ -288,6 +290,8 @@ module.exports = class Stream extends require('events').EventEmitter
 
     class @StreamGroup extends require("events").EventEmitter
         constructor: (@key,@log) ->
+            super()
+
             @streams        = {}
             @transcoders    = {}
             @hls_min_id     = null

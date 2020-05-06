@@ -4,6 +4,8 @@ fs = require "fs"
 
 module.exports = class FakeAdServer extends require("events").EventEmitter
     constructor: (@port,@template,cb) ->
+        super()
+
         # -- read our template -- #
 
         xmldoc = ""

@@ -45,7 +45,7 @@ module.exports = class MP3 extends require("stream").Writable
     ]
 
     constructor: ->
-        super
+        super()
 
         # create an internal stream to pass to strtok
         @istream = new (require("events").EventEmitter)

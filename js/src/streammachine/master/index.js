@@ -1,6 +1,4 @@
-var API, Alerts, Analytics, Master, Monitoring, Redis, RedisConfig, RewindDumpRestore, SlaveIO, SourceIn, SourceMount, Stream, Throttle, debug, express, fs, net, temp, _,
-  __hasProp = {}.hasOwnProperty,
-  __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
+var API, Alerts, Analytics, Master, Monitoring, Redis, RedisConfig, RewindDumpRestore, SlaveIO, SourceIn, SourceMount, Stream, Throttle, _, debug, express, fs, net, temp;
 
 _ = require("underscore");
 
@@ -38,282 +36,316 @@ SourceMount = require("./source_mount");
 
 RewindDumpRestore = require("../rewind/dump_restore");
 
-module.exports = Master = (function(_super) {
-  __extends(Master, _super);
+// A Master handles configuration, slaves, incoming sources, logging and the admin interface
+module.exports = Master = (function() {
+  class Master extends require("events").EventEmitter {
+    constructor(options1) {
+      var ref, ref1;
+      super();
+      this.options = options1;
+      this._configured = false;
+      this.source_mounts = {};
+      this.streams = {};
+      this.stream_groups = {};
+      this.proxies = {};
+      // -- set up logging -- #
+      this.log = this.options.logger;
+      if (this.options.redis != null) {
+        // -- load our streams configuration from redis -- #
 
-  function Master(options) {
-    var _ref, _ref1;
-    this.options = options;
-    this._configured = false;
-    this.source_mounts = {};
-    this.streams = {};
-    this.stream_groups = {};
-    this.proxies = {};
-    this.log = this.options.logger;
-    if (this.options.redis != null) {
-      this.log.debug("Initializing Redis connection");
-      this.redis = new Redis(this.options.redis);
-      this.redis_config = new RedisConfig(this.redis);
-      this.redis_config.on("config", (function(_this) {
-        return function(config) {
+        // we store streams and sources into Redis, but not our full
+        // config object. Other stuff still loads from the config file
+        this.log.debug("Initializing Redis connection");
+        this.redis = new Redis(this.options.redis);
+        this.redis_config = new RedisConfig(this.redis);
+        this.redis_config.on("config", (config) => {
           if (config) {
-            _this.options = _.defaults(config, _this.options);
-            return _this.configure(_this.options);
+            // stash the configuration
+            this.options = _.defaults(config, this.options);
+            // (re-)configure our master stream objects
+            return this.configure(this.options);
           }
-        };
-      })(this));
-      this.log.debug("Registering config_update listener");
-      this.on("config_update", (function(_this) {
-        return function() {
-          return _this.redis_config._update(_this.config(), function(err) {
-            return _this.log.info("Redis config update saved: " + err);
+        });
+        // Persist changed configuration to Redis
+        this.log.debug("Registering config_update listener");
+        this.on("config_update", () => {
+          return this.redis_config._update(this.config(), (err) => {
+            return this.log.info(`Redis config update saved: ${err}`);
           });
-        };
-      })(this));
-    } else {
-      process.nextTick((function(_this) {
-        return function() {
-          return _this.configure(_this.options);
-        };
-      })(this));
-    }
-    this.once("streams", (function(_this) {
-      return function() {
-        return _this._configured = true;
-      };
-    })(this));
-    this.api = new API(this, (_ref = this.options.admin) != null ? _ref.require_auth : void 0);
-    this.transport = new Master.StreamTransport(this);
-    this.sourcein = new SourceIn({
-      core: this,
-      port: this.options.source_port,
-      behind_proxy: this.options.behind_proxy
-    });
-    this.alerts = new Alerts({
-      logger: this.log.child({
-        module: "alerts"
-      })
-    });
-    if (this.options.master) {
-      this.slaves = new SlaveIO(this, this.log.child({
-        module: "master_io"
-      }), this.options.master);
-      this.on("streams", (function(_this) {
-        return function() {
-          return _this.slaves.updateConfig(_this.config());
-        };
-      })(this));
-    }
-    if ((_ref1 = this.options.analytics) != null ? _ref1.es_uri : void 0) {
-      this.analytics = new Analytics({
-        config: this.options.analytics,
-        log: this.log.child({
-          module: "analytics"
-        }),
-        redis: this.redis
+        });
+      } else {
+        // -- look for hard-coded configuration -- #
+        process.nextTick(() => {
+          return this.configure(this.options);
+        });
+      }
+      this.once("streams", () => {
+        return this._configured = true;
       });
-      this.log.logger.add(new Analytics.LogTransport(this.analytics), {}, true);
+      // -- create a server to provide the API -- #
+      this.api = new API(this, (ref = this.options.admin) != null ? ref.require_auth : void 0);
+      // -- create a backend server for stream requests -- #
+      this.transport = new Master.StreamTransport(this);
+      // -- start the source listener -- #
+      this.sourcein = new SourceIn({
+        core: this,
+        port: this.options.source_port,
+        behind_proxy: this.options.behind_proxy
+      });
+      // -- create an alerts object -- #
+      this.alerts = new Alerts({
+        logger: this.log.child({
+          module: "alerts"
+        })
+      });
+      // -- create a listener for slaves -- #
+      if (this.options.master) {
+        this.slaves = new SlaveIO(this, this.log.child({
+          module: "master_io"
+        }), this.options.master);
+        this.on("streams", () => {
+          return this.slaves.updateConfig(this.config());
+        });
+      }
+      // -- Analytics -- #
+      if ((ref1 = this.options.analytics) != null ? ref1.es_uri : void 0) {
+        this.analytics = new Analytics({
+          config: this.options.analytics,
+          log: this.log.child({
+            module: "analytics"
+          }),
+          redis: this.redis
+        });
+        // add a log transport
+        this.log.logger.add(new Analytics.LogTransport(this.analytics), {}, true);
+      }
+      if (this.options.rewind_dump) {
+        // -- Rewind Dump and Restore -- #
+        this.rewind_dr = new RewindDumpRestore(this, this.options.rewind_dump);
+      }
+      // -- Set up our monitoring module -- #
+      this.monitoring = new Monitoring(this, this.log.child({
+        module: "monitoring"
+      }));
     }
-    if (this.options.rewind_dump) {
-      this.rewind_dr = new RewindDumpRestore(this, this.options.rewind_dump);
-    }
-    this.monitoring = new Monitoring(this, this.log.child({
-      module: "monitoring"
-    }));
-  }
 
-  Master.prototype.once_configured = function(cb) {
-    if (this._configured) {
-      return cb();
-    } else {
-      return this.once("streams", (function(_this) {
-        return function() {
+    //----------
+    once_configured(cb) {
+      if (this._configured) {
+        return cb();
+      } else {
+        return this.once("streams", () => {
           return cb();
-        };
-      })(this));
+        });
+      }
     }
-  };
 
-  Master.prototype.loadRewinds = function(cb) {
-    return this.once("streams", (function(_this) {
-      return function() {
-        var _ref;
-        return (_ref = _this.rewind_dr) != null ? _ref.load(cb) : void 0;
+    //----------
+    loadRewinds(cb) {
+      return this.once("streams", () => {
+        var ref;
+        return (ref = this.rewind_dr) != null ? ref.load(cb) : void 0;
+      });
+    }
+
+    //----------
+    config() {
+      var config, k, ref, ref1, s;
+      config = {
+        streams: {},
+        sources: {}
       };
-    })(this));
-  };
+      ref = this.streams;
+      for (k in ref) {
+        s = ref[k];
+        config.streams[k] = s.config();
+      }
+      ref1 = this.source_mounts;
+      for (k in ref1) {
+        s = ref1[k];
+        config.sources[k] = s.config();
+      }
+      return config;
+    }
 
-  Master.prototype.config = function() {
-    var config, k, s, _ref, _ref1;
-    config = {
-      streams: {},
-      sources: {}
-    };
-    _ref = this.streams;
-    for (k in _ref) {
-      s = _ref[k];
-      config.streams[k] = s.config();
-    }
-    _ref1 = this.source_mounts;
-    for (k in _ref1) {
-      s = _ref1[k];
-      config.sources[k] = s.config();
-    }
-    return config;
-  };
+    //----------
 
-  Master.prototype.configure = function(options, cb) {
-    var all_keys, g, k, key, mount, mount_key, new_sources, new_streams, obj, opts, sg, _base, _ref, _ref1;
-    all_keys = {};
-    new_sources = (options != null ? options.sources : void 0) || {};
-    for (k in new_sources) {
-      opts = new_sources[k];
-      all_keys[k] = 1;
-      this.log.debug("Configuring Source Mapping " + k);
-      if (this.source_mounts[k]) {
-        this.source_mounts[k].configure(opts);
-      } else {
-        this._startSourceMount(k, opts);
+      // configre can be called on a new core, or it can be called to
+    // reconfigure an existing core.  we need to support either one.
+    configure(options, cb) {
+      var all_keys, base, g, k, key, mount, mount_key, new_sources, new_streams, obj, opts, ref, ref1, sg;
+      all_keys = {};
+      // -- Sources -- #
+      new_sources = (options != null ? options.sources : void 0) || {};
+      for (k in new_sources) {
+        opts = new_sources[k];
+        all_keys[k] = 1;
+        this.log.debug(`Configuring Source Mapping ${k}`);
+        if (this.source_mounts[k]) {
+          // existing...
+          this.source_mounts[k].configure(opts);
+        } else {
+          this._startSourceMount(k, opts);
+        }
       }
-    }
-    new_streams = (options != null ? options.streams : void 0) || {};
-    _ref = this.streams;
-    for (k in _ref) {
-      obj = _ref[k];
-      if (!(new_streams != null ? new_streams[k] : void 0)) {
-        this.log.debug("calling destroy on ", k);
-        obj.destroy();
-        delete this.streams[k];
-      }
-    }
-    for (key in new_streams) {
-      opts = new_streams[key];
-      this.log.debug("Parsing stream for " + key);
-      mount_key = opts.source || key;
-      all_keys[mount_key] = 1;
-      if (!this.source_mounts[mount_key]) {
-        this.log.debug("Creating an unspecified source mount for " + mount_key + " (via " + key + ").");
-        this._startSourceMount(mount_key, _(opts).pick('source_password', 'format', 'monitored'));
-      }
-      mount = this.source_mounts[mount_key];
-      if (this.streams[key]) {
-        this.log.debug("Passing updated config to master stream: " + key, {
-          opts: opts
-        });
-        this.streams[key].configure(opts);
-      } else {
-        this.log.debug("Starting up master stream: " + key, {
-          opts: opts
-        });
-        this._startStream(key, mount, opts);
-      }
-      if (g = this.streams[key].opts.group) {
-        sg = ((_base = this.stream_groups)[g] || (_base[g] = new Stream.StreamGroup(g, this.log.child({
-          stream_group: g
-        }))));
-        sg.addStream(this.streams[key]);
-      }
-    }
-    this.emit("streams", this.streams);
-    _ref1 = this.source_mounts;
-    for (k in _ref1) {
-      obj = _ref1[k];
-      if (!all_keys[k]) {
-        this.log.debug("Destroying source mount " + k);
-      }
-    }
-    return typeof cb === "function" ? cb(null, {
-      streams: this.streams,
-      sources: this.source_mounts
-    }) : void 0;
-  };
+      // -- Streams -- #
 
-  Master.prototype._startSourceMount = function(key, opts) {
-    var mount;
-    mount = new SourceMount(key, this.log.child({
-      source_mount: key
-    }), opts);
-    if (mount) {
-      this.source_mounts[key] = mount;
-      this.emit("new_source_mount", mount);
-      return mount;
-    } else {
-      return false;
-    }
-  };
-
-  Master.prototype._startStream = function(key, mount, opts) {
-    var stream;
-    stream = new Stream(key, this.log.child({
-      stream: key
-    }), mount, _.extend(opts, {
-      hls: this.options.hls,
-      preroll: opts.preroll != null ? opts.preroll : this.options.preroll,
-      transcoder: opts.transcoder != null ? opts.transcoder : this.options.transcoder,
-      log_interval: opts.log_interval != null ? opts.log_interval : this.options.log_interval
-    }));
-    if (stream) {
-      stream.on("config", (function(_this) {
-        return function() {
-          _this.emit("config_update");
-          return _this.emit("streams", _this.streams);
-        };
-      })(this));
-      this.streams[key] = stream;
-      this._attachIOProxy(stream);
-      this.emit("new_stream", stream);
-      return stream;
-    } else {
-      return false;
-    }
-  };
-
-  Master.prototype.createStream = function(opts, cb) {
-    var mount_key, stream;
-    this.log.debug("createStream called with ", opts);
-    if (!opts.key) {
-      if (typeof cb === "function") {
-        cb("Cannot create stream without key.");
+      // are any of our current streams missing from the new options? if so,
+      // disconnect them
+      new_streams = (options != null ? options.streams : void 0) || {};
+      ref = this.streams;
+      for (k in ref) {
+        obj = ref[k];
+        if (!(new_streams != null ? new_streams[k] : void 0)) {
+          this.log.debug("calling destroy on ", k);
+          obj.destroy();
+          delete this.streams[k];
+        }
       }
-      return false;
-    }
-    if (this.streams[opts.key]) {
-      if (typeof cb === "function") {
-        cb("Stream key must be unique.");
+// run through the streams we've been passed, initializing sources and
+// creating rewind buffers
+      for (key in new_streams) {
+        opts = new_streams[key];
+        this.log.debug(`Parsing stream for ${key}`);
+        // does this stream have a mount?
+        mount_key = opts.source || key;
+        all_keys[mount_key] = 1;
+        if (!this.source_mounts[mount_key]) {
+          // create a mount
+          this.log.debug(`Creating an unspecified source mount for ${mount_key} (via ${key}).`);
+          this._startSourceMount(mount_key, _(opts).pick('source_password', 'format', 'monitored'));
+        }
+        mount = this.source_mounts[mount_key];
+        // do we need to create the stream?
+        if (this.streams[key]) {
+          // existing stream...  pass it updated configuration
+          this.log.debug(`Passing updated config to master stream: ${key}`, {
+            opts: opts
+          });
+          this.streams[key].configure(opts);
+        } else {
+          this.log.debug(`Starting up master stream: ${key}`, {
+            opts: opts
+          });
+          this._startStream(key, mount, opts);
+        }
+        // part of a stream group?
+        if (g = this.streams[key].opts.group) {
+          // do we have a matching group?
+          sg = ((base = this.stream_groups)[g] || (base[g] = new Stream.StreamGroup(g, this.log.child({
+            stream_group: g
+          }))));
+          sg.addStream(this.streams[key]);
+        }
       }
-      return false;
-    }
-    mount_key = opts.source || opts.key;
-    if (!this.source_mounts[mount_key]) {
-      this.log.debug("Creating an unspecified source mount for " + mount_key + " (via " + opts.key + ").");
-      this._startSourceMount(mount_key, _(opts).pick('source_password', 'format'));
-    }
-    if (stream = this._startStream(opts.key, this.source_mounts[mount_key], opts)) {
-      this.emit("config_update");
       this.emit("streams", this.streams);
-      return typeof cb === "function" ? cb(null, stream.status()) : void 0;
-    } else {
-      return typeof cb === "function" ? cb("Stream failed to start.") : void 0;
+      ref1 = this.source_mounts;
+      // -- Remove Old Source Mounts -- #
+      for (k in ref1) {
+        obj = ref1[k];
+        if (!all_keys[k]) {
+          this.log.debug(`Destroying source mount ${k}`);
+        }
+      }
+      return typeof cb === "function" ? cb(null, {
+        streams: this.streams,
+        sources: this.source_mounts
+      }) : void 0;
     }
-  };
 
-  Master.prototype.updateStream = function(stream, opts, cb) {
-    this.log.info("updateStream called for ", {
-      key: stream.key,
-      opts: opts
-    });
-    if (opts.key && stream.key !== opts.key) {
+    //----------
+    _startSourceMount(key, opts) {
+      var mount;
+      mount = new SourceMount(key, this.log.child({
+        source_mount: key
+      }), opts);
+      if (mount) {
+        this.source_mounts[key] = mount;
+        this.emit("new_source_mount", mount);
+        return mount;
+      } else {
+        return false;
+      }
+    }
+
+    //----------
+    _startStream(key, mount, opts) {
+      var stream;
+      stream = new Stream(key, this.log.child({
+        stream: key
+      }), mount, _.extend(opts, {
+        hls: this.options.hls,
+        preroll: opts.preroll != null ? opts.preroll : this.options.preroll,
+        transcoder: opts.transcoder != null ? opts.transcoder : this.options.transcoder,
+        log_interval: opts.log_interval != null ? opts.log_interval : this.options.log_interval
+      }));
+      if (stream) {
+        // attach a listener for configs
+        stream.on("config", () => {
+          this.emit("config_update");
+          return this.emit("streams", this.streams);
+        });
+        this.streams[key] = stream;
+        this._attachIOProxy(stream);
+        this.emit("new_stream", stream);
+        return stream;
+      } else {
+        return false;
+      }
+    }
+
+    //----------
+    createStream(opts, cb) {
+      var mount_key, stream;
+      this.log.debug("createStream called with ", opts);
+      if (!opts.key) {
+        if (typeof cb === "function") {
+          cb("Cannot create stream without key.");
+        }
+        return false;
+      }
       if (this.streams[opts.key]) {
         if (typeof cb === "function") {
           cb("Stream key must be unique.");
         }
         return false;
       }
-      this.streams[opts.key] = stream;
-      delete this.streams[stream.key];
+      // -- Is there a Source Mount? -- #
+      mount_key = opts.source || opts.key;
+      if (!this.source_mounts[mount_key]) {
+        // create a mount
+        this.log.debug(`Creating an unspecified source mount for ${mount_key} (via ${opts.key}).`);
+        this._startSourceMount(mount_key, _(opts).pick('source_password', 'format'));
+      }
+      // -- create the stream -- #
+      if (stream = this._startStream(opts.key, this.source_mounts[mount_key], opts)) {
+        this.emit("config_update");
+        this.emit("streams", this.streams);
+        return typeof cb === "function" ? cb(null, stream.status()) : void 0;
+      } else {
+        return typeof cb === "function" ? cb("Stream failed to start.") : void 0;
+      }
     }
-    return stream.configure(opts, (function(_this) {
-      return function(err, config) {
+
+    //----------
+    updateStream(stream, opts, cb) {
+      this.log.info("updateStream called for ", {
+        key: stream.key,
+        opts: opts
+      });
+      // -- if they want to rename, the key must be unique -- #
+      if (opts.key && stream.key !== opts.key) {
+        if (this.streams[opts.key]) {
+          if (typeof cb === "function") {
+            cb("Stream key must be unique.");
+          }
+          return false;
+        }
+        this.streams[opts.key] = stream;
+        delete this.streams[stream.key];
+      }
+      // -- if we're good, ask the stream to configure -- #
+      return stream.configure(opts, (err, config) => {
         if (err) {
           if (typeof cb === "function") {
             cb(err);
@@ -321,209 +353,221 @@ module.exports = Master = (function(_super) {
           return false;
         }
         return typeof cb === "function" ? cb(null, config) : void 0;
-      };
-    })(this));
-  };
-
-  Master.prototype.removeStream = function(stream, cb) {
-    this.log.info("removeStream called for ", {
-      key: stream.key
-    });
-    delete this.streams[stream.key];
-    stream.destroy();
-    this.emit("config_update");
-    this.emit("streams", this.streams);
-    return typeof cb === "function" ? cb(null, "OK") : void 0;
-  };
-
-  Master.prototype.createMount = function(opts, cb) {
-    var mount;
-    this.log.info("createMount called for " + opts.key, {
-      opts: opts
-    });
-    if (!opts.key) {
-      if (typeof cb === "function") {
-        cb("Cannot create mount without key.");
-      }
-      return false;
+      });
     }
-    if (this.source_mounts[opts.key]) {
-      if (typeof cb === "function") {
-        cb("Mount key must be unique.");
-      }
-      return false;
-    }
-    if (mount = this._startSourceMount(opts.key, opts)) {
+
+    //----------
+    removeStream(stream, cb) {
+      this.log.info("removeStream called for ", {
+        key: stream.key
+      });
+      delete this.streams[stream.key];
+      stream.destroy();
       this.emit("config_update");
-      return typeof cb === "function" ? cb(null, mount.status()) : void 0;
-    } else {
-      return typeof cb === "function" ? cb("Mount failed to start.") : void 0;
+      this.emit("streams", this.streams);
+      return typeof cb === "function" ? cb(null, "OK") : void 0;
     }
-  };
 
-  Master.prototype.updateMount = function(mount, opts, cb) {
-    this.log.info("updateMount called for " + mount.key, {
-      opts: opts
-    });
-    if (opts.key && mount.key !== opts.key) {
+    //----------
+    createMount(opts, cb) {
+      var mount;
+      this.log.info(`createMount called for ${opts.key}`, {
+        opts: opts
+      });
+      if (!opts.key) {
+        if (typeof cb === "function") {
+          cb("Cannot create mount without key.");
+        }
+        return false;
+      }
       if (this.source_mounts[opts.key]) {
         if (typeof cb === "function") {
           cb("Mount key must be unique.");
         }
         return false;
       }
-      this.source_mounts[opts.key] = mount;
-      delete this.source_mounts[mount.key];
+      if (mount = this._startSourceMount(opts.key, opts)) {
+        this.emit("config_update");
+        return typeof cb === "function" ? cb(null, mount.status()) : void 0;
+      } else {
+        return typeof cb === "function" ? cb("Mount failed to start.") : void 0;
+      }
     }
-    return mount.configure(opts, (function(_this) {
-      return function(err, config) {
+
+    //----------
+    updateMount(mount, opts, cb) {
+      this.log.info(`updateMount called for ${mount.key}`, {
+        opts: opts
+      });
+      // -- if they want to rename, the key must be unique -- #
+      if (opts.key && mount.key !== opts.key) {
+        if (this.source_mounts[opts.key]) {
+          if (typeof cb === "function") {
+            cb("Mount key must be unique.");
+          }
+          return false;
+        }
+        this.source_mounts[opts.key] = mount;
+        delete this.source_mounts[mount.key];
+      }
+      // -- if we're good, ask the mount to configure -- #
+      return mount.configure(opts, (err, config) => {
         if (err) {
           return typeof cb === "function" ? cb(err) : void 0;
         }
         return typeof cb === "function" ? cb(null, config) : void 0;
-      };
-    })(this));
-  };
-
-  Master.prototype.removeMount = function(mount, cb) {
-    this.log.info("removeMount called for " + mount.key);
-    if (mount.listeners("data").length > 0) {
-      cb(new Error("Cannot remove source mount until all streams are removed"));
-      return false;
+      });
     }
-    delete this.source_mounts[mount.key];
-    mount.destroy();
-    this.emit("config_update");
-    return cb(null, "OK");
-  };
 
-  Master.prototype.streamsInfo = function() {
-    var k, obj, _ref, _results;
-    _ref = this.streams;
-    _results = [];
-    for (k in _ref) {
-      obj = _ref[k];
-      _results.push(obj.status());
+    //----------
+    removeMount(mount, cb) {
+      this.log.info(`removeMount called for ${mount.key}`);
+      // it's illegal to remove a mount that still has streams hooked up to it
+      if (mount.listeners("data").length > 0) {
+        cb(new Error("Cannot remove source mount until all streams are removed"));
+        return false;
+      }
+      delete this.source_mounts[mount.key];
+      mount.destroy();
+      this.emit("config_update");
+      return cb(null, "OK");
     }
-    return _results;
-  };
 
-  Master.prototype.groupsInfo = function() {
-    var k, obj, _ref, _results;
-    _ref = this.stream_groups;
-    _results = [];
-    for (k in _ref) {
-      obj = _ref[k];
-      _results.push(obj.status());
+    //----------
+    streamsInfo() {
+      var k, obj, ref, results;
+      ref = this.streams;
+      results = [];
+      for (k in ref) {
+        obj = ref[k];
+        results.push(obj.status());
+      }
+      return results;
     }
-    return _results;
-  };
 
-  Master.prototype.sourcesInfo = function() {
-    var k, obj, _ref, _results;
-    _ref = this.source_mounts;
-    _results = [];
-    for (k in _ref) {
-      obj = _ref[k];
-      _results.push(obj.status());
+    groupsInfo() {
+      var k, obj, ref, results;
+      ref = this.stream_groups;
+      results = [];
+      for (k in ref) {
+        obj = ref[k];
+        results.push(obj.status());
+      }
+      return results;
     }
-    return _results;
-  };
 
-  Master.prototype.vitals = function(stream, cb) {
-    var s;
-    if (s = this.streams[stream]) {
-      return s.vitals(cb);
-    } else {
-      return cb("Invalid Stream");
+    sourcesInfo() {
+      var k, obj, ref, results;
+      ref = this.source_mounts;
+      results = [];
+      for (k in ref) {
+        obj = ref[k];
+        results.push(obj.status());
+      }
+      return results;
     }
-  };
 
-  Master.prototype.getHLSSnapshot = function(stream, cb) {
-    var s;
-    if (s = this.streams[stream]) {
-      return s.getHLSSnapshot(cb);
-    } else {
-      return cb("Invalid Stream");
+    //----------
+    vitals(stream, cb) {
+      var s;
+      if (s = this.streams[stream]) {
+        return s.vitals(cb);
+      } else {
+        return cb("Invalid Stream");
+      }
     }
-  };
 
-  Master.prototype.status = function() {
-    return {
-      streams: this.streamsInfo(),
-      groups: this.groupsInfo(),
-      sources: this.sourcesInfo()
-    };
-  };
-
-  Master.prototype._rewindStatus = function() {
-    var key, s, status, _ref;
-    status = {};
-    _ref = this.streams;
-    for (key in _ref) {
-      s = _ref[key];
-      status[key] = s.rewind._rStatus();
+    //----------
+    getHLSSnapshot(stream, cb) {
+      var s;
+      if (s = this.streams[stream]) {
+        return s.getHLSSnapshot(cb);
+      } else {
+        return cb("Invalid Stream");
+      }
     }
-    return status;
-  };
 
-  Master.prototype.slavesInfo = function() {
-    var k, s;
-    if (this.slaves) {
+    //----------
+    status() {
       return {
-        slaveCount: Object.keys(this.slaves.slaves).length,
-        slaves: (function() {
-          var _ref, _results;
-          _ref = this.slaves.slaves;
-          _results = [];
-          for (k in _ref) {
-            s = _ref[k];
-            _results.push({
-              id: k,
-              status: s.last_status || "WARMING UP"
-            });
-          }
-          return _results;
-        }).call(this),
-        master: this._rewindStatus()
-      };
-    } else {
-      return {
-        slaveCount: 0,
-        slaves: [],
-        master: this._rewindStatus()
+        streams: this.streamsInfo(),
+        groups: this.groupsInfo(),
+        sources: this.sourcesInfo()
       };
     }
-  };
 
-  Master.prototype.sendHandoffData = function(rpc, cb) {
-    var fFunc;
-    fFunc = _.after(2, (function(_this) {
-      return function() {
-        _this.log.info("Rewind buffers and sources sent.");
+    //----------
+
+      // Get a status snapshot by looping through each stream to get buffer stats
+    _rewindStatus() {
+      var key, ref, s, status;
+      status = {};
+      ref = this.streams;
+      for (key in ref) {
+        s = ref[key];
+        status[key] = s.rewind._rStatus();
+      }
+      return status;
+    }
+
+    //----------
+    slavesInfo() {
+      var k, s;
+      if (this.slaves) {
+        return {
+          slaveCount: Object.keys(this.slaves.slaves).length,
+          slaves: (function() {
+            var ref, results;
+            ref = this.slaves.slaves;
+            results = [];
+            for (k in ref) {
+              s = ref[k];
+              results.push({
+                id: k,
+                status: s.last_status || "WARMING UP"
+              });
+            }
+            return results;
+          }).call(this),
+          master: this._rewindStatus()
+        };
+      } else {
+        return {
+          slaveCount: 0,
+          slaves: [],
+          master: this._rewindStatus()
+        };
+      }
+    }
+
+    //----------
+    sendHandoffData(rpc, cb) {
+      var fFunc;
+      fFunc = _.after(2, () => {
+        this.log.info("Rewind buffers and sources sent.");
         return cb(null);
-      };
-    })(this));
-    rpc.once("sources", (function(_this) {
-      return function(msg, handle, cb) {
-        var mounts, _sendMount;
-        _this.log.info("Received request for sources.");
-        mounts = _.values(_this.source_mounts);
-        _sendMount = function() {
-          var mount, sources, _sendSource;
+      });
+      // -- Source Mounts -- #
+      rpc.once("sources", (msg, handle, cb) => {
+        var _sendMount, mounts;
+        this.log.info("Received request for sources.");
+        // iterate through each source mount, sending each of its sources
+        mounts = _.values(this.source_mounts);
+        _sendMount = () => {
+          var _sendSource, mount, sources;
           mount = mounts.shift();
           if (!mount) {
             cb(null);
             return fFunc();
           }
           sources = mount.sources.slice();
-          _sendSource = function() {
+          _sendSource = () => {
             var source;
             source = sources.shift();
             if (!source) {
               return _sendMount();
             }
-            _this.log.info("Sending source " + mount.key + "/" + source.uuid);
+            this.log.info(`Sending source ${mount.key}/${source.uuid}`);
             return rpc.request("source", {
               mount: mount.key,
               type: source.HANDOFF_TYPE,
@@ -533,9 +577,9 @@ module.exports = Master = (function(_super) {
                 source_ip: source.opts.source_ip,
                 connectedAt: source.connectedAt
               }
-            }, source.opts.sock, function(err, reply) {
+            }, source.opts.sock, (err, reply) => {
               if (err) {
-                _this.log.error("Error sending source " + mount.key + "/" + source.uuid + ": " + err);
+                this.log.error(`Error sending source ${mount.key}/${source.uuid}: ${err}`);
               }
               return _sendSource();
             });
@@ -543,39 +587,39 @@ module.exports = Master = (function(_super) {
           return _sendSource();
         };
         return _sendMount();
-      };
-    })(this));
-    return rpc.once("stream_rewinds", (function(_this) {
-      return function(msg, handle, cb) {
-        var streams, _sendStream;
-        _this.log.info("Received request for rewind buffers.");
-        streams = _(_this.streams).values();
-        _sendStream = function() {
-          var sock, spath, stream, _next;
+      });
+      // -- Stream Rewind Buffers -- #
+      return rpc.once("stream_rewinds", (msg, handle, cb) => {
+        var _sendStream, streams;
+        this.log.info("Received request for rewind buffers.");
+        streams = _(this.streams).values();
+        _sendStream = () => {
+          var _next, sock, spath, stream;
           stream = streams.shift();
           if (!stream) {
             cb(null);
             return fFunc();
           }
-          _next = _.once(function() {
+          _next = _.once(() => {
             return _sendStream();
           });
           if (stream.rewind.bufferedSecs() > 0) {
+            // set up a socket to accept the buffer on
             spath = temp.path({
               suffix: ".sock"
             });
-            _this.log.info("Asking to send rewind buffer for " + stream.key + " over " + spath + ".");
+            this.log.info(`Asking to send rewind buffer for ${stream.key} over ${spath}.`);
             sock = net.createServer();
-            return sock.listen(spath, function() {
-              sock.once("connection", function(c) {
-                return stream.getRewind(function(err, writer) {
+            return sock.listen(spath, () => {
+              sock.once("connection", (c) => {
+                return stream.getRewind((err, writer) => {
                   if (err) {
-                    _this.log.error("Failed to get rewind buffer for " + stream.key);
+                    this.log.error(`Failed to get rewind buffer for ${stream.key}`);
                     _next();
                   }
                   writer.pipe(c);
-                  return writer.once("end", function() {
-                    return _this.log.info("RewindBuffer for " + stream.key + " written to socket.");
+                  return writer.once("end", () => {
+                    return this.log.info(`RewindBuffer for ${stream.key} written to socket.`);
                   });
                 });
               });
@@ -584,15 +628,16 @@ module.exports = Master = (function(_super) {
                 path: spath
               }, null, {
                 timeout: 10000
-              }, function(err) {
+              }, (err) => {
                 if (err) {
-                  _this.log.error("Error sending rewind buffer for " + stream.key + ": " + err);
+                  this.log.error(`Error sending rewind buffer for ${stream.key}: ${err}`);
                 } else {
-                  _this.log.info("Rewind buffer sent and ACKed for " + stream.key);
+                  this.log.info(`Rewind buffer sent and ACKed for ${stream.key}`);
                 }
-                return sock.close(function() {
-                  return fs.unlink(spath, function(err) {
-                    _this.log.info("RewindBuffer socket unlinked.", {
+                // cleanup...
+                return sock.close(() => {
+                  return fs.unlink(spath, (err) => {
+                    this.log.info("RewindBuffer socket unlinked.", {
                       error: err
                     });
                     return _next();
@@ -601,192 +646,183 @@ module.exports = Master = (function(_super) {
               });
             });
           } else {
+            // no need to send a buffer for an empty stream
             return _next();
           }
         };
         return _sendStream();
-      };
-    })(this));
-  };
+      });
+    }
 
-  Master.prototype.loadHandoffData = function(rpc, cb) {
-    var af;
-    rpc.on("source", (function(_this) {
-      return function(msg, handle, cb) {
+    //----------
+    loadHandoffData(rpc, cb) {
+      var af;
+      // -- set up a listener for stream rewinds and sources -- #
+      rpc.on("source", (msg, handle, cb) => {
         var mount, source;
-        mount = _this.source_mounts[msg.mount];
-        source = new (require("../sources/" + msg.type))(_.extend({}, msg.opts, {
+        mount = this.source_mounts[msg.mount];
+        source = new (require(`../sources/${msg.type}`))(_.extend({}, msg.opts, {
           sock: handle,
           logger: mount.log
         }));
         mount.addSource(source);
-        _this.log.info("Added mount source: " + mount.key + "/" + source.uuid);
+        this.log.info(`Added mount source: ${mount.key}/${source.uuid}`);
         return cb(null);
-      };
-    })(this));
-    rpc.on("stream_rewind", (function(_this) {
-      return function(msg, handle, cb) {
+      });
+      rpc.on("stream_rewind", (msg, handle, cb) => {
         var sock, stream;
-        stream = _this.streams[msg.key];
-        _this.log.info("Stream Rewind will load over " + msg.path + ".");
-        return sock = net.connect(msg.path, function(err) {
-          _this.log.info("Reader socket connected for rewind buffer " + msg.key, {
+        stream = this.streams[msg.key];
+        this.log.info(`Stream Rewind will load over ${msg.path}.`);
+        return sock = net.connect(msg.path, (err) => {
+          this.log.info(`Reader socket connected for rewind buffer ${msg.key}`, {
             error: err
           });
           if (err) {
             return cb(err);
           }
-          return stream.rewind.loadBuffer(sock, function(err, stats) {
+          return stream.rewind.loadBuffer(sock, (err, stats) => {
             if (err) {
-              _this.log.error("Error loading rewind buffer: " + err);
+              this.log.error(`Error loading rewind buffer: ${err}`);
               cb(err);
             }
             return cb(null);
           });
         });
-      };
-    })(this));
-    af = _.after(2, (function(_this) {
-      return function() {
+      });
+      af = _.after(2, () => {
         return cb(null);
-      };
-    })(this));
-    rpc.request("sources", {}, null, {
-      timeout: 10000
-    }, (function(_this) {
-      return function(err) {
+      });
+      // -- Request Sources -- #
+      rpc.request("sources", {}, null, {
+        timeout: 10000
+      }, (err) => {
         if (err) {
-          _this.log.error("Failed to get sources from handoff initiator: " + err);
+          this.log.error(`Failed to get sources from handoff initiator: ${err}`);
         } else {
-          _this.log.info("Received sources from handoff initiator.");
+          this.log.info("Received sources from handoff initiator.");
         }
         return af();
-      };
-    })(this));
-    return rpc.request("stream_rewinds", {}, null, {
-      timeout: 10000
-    }, (function(_this) {
-      return function(err) {
+      });
+      // -- Request Stream Rewind Buffers -- #
+      return rpc.request("stream_rewinds", {}, null, {
+        timeout: 10000
+      }, (err) => {
         if (err) {
-          _this.log.error("Failed to get stream rewinds from handoff initiator: " + err);
+          this.log.error(`Failed to get stream rewinds from handoff initiator: ${err}`);
         } else {
-          _this.log.info("Received stream rewinds from handoff initiator.");
+          this.log.info("Received stream rewinds from handoff initiator.");
         }
         return af();
-      };
-    })(this));
-  };
+      });
+    }
 
-  Master.prototype._attachIOProxy = function(stream) {
-    this.log.debug("attachIOProxy call for " + stream.key + ".", {
-      slaves: this.slaves != null,
-      proxy: this.proxies[stream.key] != null
-    });
-    if (!this.slaves) {
-      return false;
-    }
-    if (this.proxies[stream.key]) {
-      return false;
-    }
-    this.log.debug("Creating StreamProxy for " + stream.key);
-    this.proxies[stream.key] = new Master.StreamProxy({
-      key: stream.key,
-      stream: stream,
-      master: this
-    });
-    return stream.once("destroy", (function(_this) {
-      return function() {
-        var _ref;
-        if ((_ref = _this.proxies[stream.key]) != null) {
-          _ref.destroy();
+    //----------
+    _attachIOProxy(stream) {
+      this.log.debug(`attachIOProxy call for ${stream.key}.`, {
+        slaves: this.slaves != null,
+        proxy: this.proxies[stream.key] != null
+      });
+      if (!this.slaves) {
+        return false;
+      }
+      if (this.proxies[stream.key]) {
+        return false;
+      }
+      // create a new proxy
+      this.log.debug(`Creating StreamProxy for ${stream.key}`);
+      this.proxies[stream.key] = new Master.StreamProxy({
+        key: stream.key,
+        stream: stream,
+        master: this
+      });
+      // and attach a listener to destroy it if the stream is removed
+      return stream.once("destroy", () => {
+        var ref;
+        if ((ref = this.proxies[stream.key]) != null) {
+          ref.destroy();
         }
-        return delete _this.proxies[stream.key];
-      };
-    })(this));
+        return delete this.proxies[stream.key];
+      });
+    }
+
   };
 
-  Master.StreamTransport = (function() {
-    function StreamTransport(master) {
+  //----------
+  Master.StreamTransport = class StreamTransport {
+    constructor(master) {
       this.master = master;
       this.app = express();
-      this.app.param("stream", (function(_this) {
-        return function(req, res, next, key) {
-          var s;
-          if ((key != null) && (s = _this.master.streams[key])) {
-            req.stream = s;
-            return next();
-          } else {
-            return res.status(404).end("Invalid stream.\n");
-          }
-        };
-      })(this));
-      this.app.use((function(_this) {
-        return function(req, res, next) {
-          var sock_id;
-          sock_id = req.get('stream-slave-id');
-          if (sock_id && _this.master.slaves.slaves[sock_id]) {
-            return next();
-          } else {
-            _this.master.log.debug("Rejecting StreamTransport request with missing or invalid socket ID.", {
-              sock_id: sock_id
-            });
-            return res.status(401).end("Missing or invalid socket ID.\n");
-          }
-        };
-      })(this));
-      this.app.get("/:stream/rewind", (function(_this) {
-        return function(req, res) {
-          _this.master.log.debug("Rewind Buffer request from slave on " + req.stream.key + ".");
-          res.status(200).write('');
-          return req.stream.getRewind(function(err, writer) {
-            writer.pipe(new Throttle(100 * 1024 * 1024)).pipe(res);
-            return res.on("end", function() {
-              return _this.master.log.debug("Rewind dumpBuffer finished.");
-            });
+      // -- Param Handlers -- #
+      this.app.param("stream", (req, res, next, key) => {
+        var s;
+        // make sure it's a valid stream key
+        if ((key != null) && (s = this.master.streams[key])) {
+          req.stream = s;
+          return next();
+        } else {
+          return res.status(404).end("Invalid stream.\n");
+        }
+      });
+      // -- Validate slave id -- #
+      this.app.use((req, res, next) => {
+        var sock_id;
+        sock_id = req.get('stream-slave-id');
+        if (sock_id && this.master.slaves.slaves[sock_id]) {
+          //req.slave_socket = @master.slaves[ sock_id ]
+          return next();
+        } else {
+          this.master.log.debug("Rejecting StreamTransport request with missing or invalid socket ID.", {
+            sock_id: sock_id
           });
-        };
-      })(this));
+          return res.status(401).end("Missing or invalid socket ID.\n");
+        }
+      });
+      // -- Routes -- #
+      this.app.get("/:stream/rewind", (req, res) => {
+        this.master.log.debug(`Rewind Buffer request from slave on ${req.stream.key}.`);
+        res.status(200).write('');
+        return req.stream.getRewind((err, writer) => {
+          writer.pipe(new Throttle(100 * 1024 * 1024)).pipe(res);
+          return res.on("end", () => {
+            return this.master.log.debug("Rewind dumpBuffer finished.");
+          });
+        });
+      });
     }
 
-    return StreamTransport;
+  };
 
-  })();
-
-  Master.StreamProxy = (function(_super1) {
-    __extends(StreamProxy, _super1);
-
-    function StreamProxy(opts) {
+  //----------
+  Master.StreamProxy = class StreamProxy extends require("events").EventEmitter {
+    constructor(opts) {
+      super();
       this.key = opts.key;
       this.stream = opts.stream;
       this.master = opts.master;
-      this.dataFunc = (function(_this) {
-        return function(chunk) {
-          return _this.master.slaves.broadcastAudio(_this.key, chunk);
-        };
-      })(this);
-      this.hlsSnapFunc = (function(_this) {
-        return function(snapshot) {
-          return _this.master.slaves.broadcastHLSSnapshot(_this.key, snapshot);
-        };
-      })(this);
+      this.dataFunc = (chunk) => {
+        return this.master.slaves.broadcastAudio(this.key, chunk);
+      };
+      this.hlsSnapFunc = (snapshot) => {
+        return this.master.slaves.broadcastHLSSnapshot(this.key, snapshot);
+      };
       this.stream.on("data", this.dataFunc);
       this.stream.on("hls_snapshot", this.hlsSnapFunc);
     }
 
-    StreamProxy.prototype.destroy = function() {
+    destroy() {
       this.stream.removeListener("data", this.dataFunc);
       this.stream.removeListener("hls_snapshot", this.hlsSnapFunc);
       this.stream = null;
       this.emit("destroy");
       return this.removeAllListeners();
-    };
+    }
 
-    return StreamProxy;
-
-  })(require("events").EventEmitter);
+  };
 
   return Master;
 
-})(require("events").EventEmitter);
+}).call(this);
+
+//----------
 
 //# sourceMappingURL=index.js.map

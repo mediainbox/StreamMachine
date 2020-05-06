@@ -3,6 +3,8 @@ Transform = require("stream").Transform
 module.exports = class FrameChunker extends Transform
 
     constructor: (@duration, @initialTime = new Date()) ->
+        super objectMode: true
+
         @_chunk_queue = []
         @_queue_duration = 0
         @_remainders = 0
@@ -11,7 +13,6 @@ module.exports = class FrameChunker extends Transform
 
         @_last_ts = null
 
-        super objectMode: true
 
 #----------
 

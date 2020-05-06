@@ -12,6 +12,7 @@ greenlock = require "greenlock-express"
 
 module.exports = class Server extends require('events').EventEmitter
     constructor: (@opts) ->
+        super()
 
         @core   = @opts.core
         @logger = @opts.logger

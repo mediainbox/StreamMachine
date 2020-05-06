@@ -16,308 +16,284 @@ Throttle = require("throttle");
 
 Users = require("./users");
 
-module.exports = API = (function() {
-  function API(master, require_auth) {
+module.exports = API = class API {
+  constructor(master, require_auth = false) {
     var corsFunc;
     this.master = master;
-    if (require_auth == null) {
-      require_auth = false;
-    }
     this.log = this.master.log.child({
       component: "admin"
     });
     this.app = express();
+    // -- set up authentication -- #
     this.users = new Users.Local(this);
     if (require_auth) {
-      passport.use(new BasicStrategy((function(_this) {
-        return function(user, passwd, done) {
-          return _this.users.validate(user, passwd, done);
-        };
-      })(this)));
+      passport.use(new BasicStrategy((user, passwd, done) => {
+        return this.users.validate(user, passwd, done);
+      }));
       this.app.use(passport.initialize());
       this.app.use(passport.authenticate('basic', {
         session: false
       }));
     }
-    this.app.param("stream", (function(_this) {
-      return function(req, res, next, key) {
-        var s, sg;
-        if ((key != null) && (s = _this.master.streams[key])) {
-          req.stream = s;
-          return next();
-        } else if ((key != null) && (sg = _this.master.stream_groups[key])) {
-          req.stream = sg._stream;
-          return next();
-        } else {
-          return res.status(404).end("Invalid stream.\n");
-        }
-      };
-    })(this));
-    this.app.param("mount", (function(_this) {
-      return function(req, res, next, key) {
-        var s;
-        if ((key != null) && (s = _this.master.source_mounts[key])) {
-          req.mount = s;
-          return next();
-        } else {
-          return res.status(404).end("Invalid source mount.\n");
-        }
-      };
-    })(this));
-    corsFunc = (function(_this) {
-      return function(req, res, next) {
-        res.header('Access-Control-Allow-Origin', '*');
-        res.header('Access-Control-Allow-Credentials', true);
-        res.header('Access-Control-Allow-Methods', 'POST, GET, PUT, DELETE, OPTIONS');
-        res.header('Access-Control-Allow-Headers', 'Content-Type');
+    // -- Param Handlers -- #
+    this.app.param("stream", (req, res, next, key) => {
+      var s, sg;
+      // make sure it's a valid stream key
+      if ((key != null) && (s = this.master.streams[key])) {
+        req.stream = s;
         return next();
-      };
-    })(this);
+      } else if ((key != null) && (sg = this.master.stream_groups[key])) {
+        req.stream = sg._stream;
+        return next();
+      } else {
+        return res.status(404).end("Invalid stream.\n");
+      }
+    });
+    this.app.param("mount", (req, res, next, key) => {
+      var s;
+      // make sure it's a valid source mount key
+      if ((key != null) && (s = this.master.source_mounts[key])) {
+        req.mount = s;
+        return next();
+      } else {
+        return res.status(404).end("Invalid source mount.\n");
+      }
+    });
+    // -- options support for CORS -- #
+    corsFunc = (req, res, next) => {
+      res.header('Access-Control-Allow-Origin', '*');
+      res.header('Access-Control-Allow-Credentials', true);
+      res.header('Access-Control-Allow-Methods', 'POST, GET, PUT, DELETE, OPTIONS');
+      res.header('Access-Control-Allow-Headers', 'Content-Type');
+      return next();
+    };
     this.app.use(corsFunc);
-    this.app.options("*", (function(_this) {
-      return function(req, res) {
-        return res.status(200).end("");
-      };
-    })(this));
-    this.app.get("/listeners", (function(_this) {
-      return function(req, res) {
-        if (_this.master.analytics) {
-          return _this.master.analytics.countListeners(function(err, listeners) {
-            if (err) {
-              return api.invalid(req, res, err);
-            } else {
-              return api.ok(req, res, listeners);
-            }
-          });
+    this.app.options("*", (req, res) => {
+      return res.status(200).end("");
+    });
+    // -- Routing -- #
+    this.app.get("/listeners", (req, res) => {
+      if (this.master.analytics) {
+        return this.master.analytics.countListeners((err, listeners) => {
+          if (err) {
+            return api.invalid(req, res, err);
+          } else {
+            return api.ok(req, res, listeners);
+          }
+        });
+      } else {
+        return api.invalid(req, res, "Analytics function is required by listeners endpoint.");
+      }
+    });
+    // list streams
+    this.app.get("/streams", (req, res) => {
+      // return JSON version of the status for all streams
+      return api.ok(req, res, this.master.streamsInfo());
+    });
+    // list stream groups
+    this.app.get("/stream_groups", (req, res) => {
+      // return JSON version of the status for all streams
+      return api.ok(req, res, this.master.groupsInfo());
+    });
+    // list source mounts
+    this.app.get("/sources", (req, res) => {
+      return api.ok(req, res, this.master.sourcesInfo());
+    });
+    // list streams
+    this.app.get("/config", (req, res) => {
+      // return JSON version of the status for all streams
+      return api.ok(req, res, this.master.config());
+    });
+    // list slaves
+    this.app.get("/slaves", (req, res) => {
+      return api.ok(req, res, this.master.slavesInfo());
+    });
+    // create a stream
+    this.app.post("/streams", bodyParser.json(), (req, res) => {
+      // add a new stream
+      return this.master.createStream(req.body, (err, stream) => {
+        if (err) {
+          return api.invalid(req, res, err);
         } else {
-          return api.invalid(req, res, "Analytics function is required by listeners endpoint.");
+          return api.ok(req, res, stream);
         }
-      };
-    })(this));
-    this.app.get("/streams", (function(_this) {
-      return function(req, res) {
-        return api.ok(req, res, _this.master.streamsInfo());
-      };
-    })(this));
-    this.app.get("/stream_groups", (function(_this) {
-      return function(req, res) {
-        return api.ok(req, res, _this.master.groupsInfo());
-      };
-    })(this));
-    this.app.get("/sources", (function(_this) {
-      return function(req, res) {
-        return api.ok(req, res, _this.master.sourcesInfo());
-      };
-    })(this));
-    this.app.get("/config", (function(_this) {
-      return function(req, res) {
-        return api.ok(req, res, _this.master.config());
-      };
-    })(this));
-    this.app.get("/slaves", (function(_this) {
-      return function(req, res) {
-        return api.ok(req, res, _this.master.slavesInfo());
-      };
-    })(this));
-    this.app.post("/streams", bodyParser.json(), (function(_this) {
-      return function(req, res) {
-        return _this.master.createStream(req.body, function(err, stream) {
-          if (err) {
-            return api.invalid(req, res, err);
-          } else {
-            return api.ok(req, res, stream);
-          }
-        });
-      };
-    })(this));
-    this.app.get("/streams/:stream", (function(_this) {
-      return function(req, res) {
-        return api.ok(req, res, req.stream.status());
-      };
-    })(this));
-    this.app.get("/streams/:stream/config", (function(_this) {
-      return function(req, res) {
-        return api.ok(req, res, req.stream.config());
-      };
-    })(this));
-    this.app.post("/streams/:stream/metadata", bodyParser.json(), (function(_this) {
-      return function(req, res) {
-        return req.stream.setMetadata(req.body || req.query, function(err, meta) {
-          if (err) {
-            return api.invalid(req, res, err);
-          } else {
-            return api.ok(req, res, meta);
-          }
-        });
-      };
-    })(this));
-    this.app.put("/streams/:stream/config", bodyParser.json(), (function(_this) {
-      return function(req, res) {
-        return _this.master.updateStream(req.stream, req.body, function(err, obj) {
-          if (err) {
-            return api.invalid(req, res, err);
-          } else {
-            return api.ok(req, res, obj);
-          }
-        });
-      };
-    })(this));
-    this.app["delete"]("/streams/:stream", (function(_this) {
-      return function(req, res) {
-        return _this.master.removeStream(req.stream, function(err, obj) {
-          if (err) {
-            return api.invalid(req, res, err);
-          } else {
-            return api.ok(req, res, obj);
-          }
-        });
-      };
-    })(this));
-    this.app.get("/streams/:stream/rewind", (function(_this) {
-      return function(req, res) {
-        res.status(200).write('');
-        return req.stream.getRewind(function(err, io) {
-          return io.pipe(new Throttle(100 * 1024 * 1024)).pipe(res);
-        });
-      };
-    })(this));
-    this.app["delete"]("/streams/:stream/rewind", (function(_this) {
-      return function(req, res) {
-        return req.stream.rewind.resetRewind(function(err) {
-          if (err) {
-            return api.invalid(req, res, err);
-          } else {
-            return api.ok(req, res, req.stream.status());
-          }
-        });
-      };
-    })(this));
-    this.app.put("/streams/:stream/rewind", (function(_this) {
-      return function(req, res) {
-        return req.stream.rewind.loadBuffer(req, function(err, info) {
-          if (err) {
-            return api.invalid(req, res, err);
-          } else {
-            return api.ok(req, res, info);
-          }
-        });
-      };
-    })(this));
-    this.app.post("/sources", bodyParser.json(), (function(_this) {
-      return function(req, res) {
-        return _this.master.createMount(req.body, function(err, mount) {
-          if (err) {
-            return api.invalid(req, res, err);
-          } else {
-            return api.ok(req, res, mount);
-          }
-        });
-      };
-    })(this));
-    this.app.get("/sources/:mount", (function(_this) {
-      return function(req, res) {
-        return api.ok(req, res, req.mount.status());
-      };
-    })(this));
-    this.app.get("/sources/:mount/config", (function(_this) {
-      return function(req, res) {
-        return api.ok(req, res, req.mount.config());
-      };
-    })(this));
-    this.app.post("/sources/:mount/promote", (function(_this) {
-      return function(req, res) {
-        return req.mount.promoteSource(req.query.uuid, function(err, msg) {
-          if (err) {
-            return api.invalid(req, res, err);
-          } else {
-            return api.ok(req, res, msg);
-          }
-        });
-      };
-    })(this));
-    this.app.post("/sources/:mount/drop", (function(_this) {
-      return function(req, res) {
-        return req.mount.dropSource(req.query.uuid, function(err, msg) {
-          if (err) {
-            return api.invalid(req, res, err);
-          } else {
-            return api.ok(req, res, msg);
-          }
-        });
-      };
-    })(this));
-    this.app.put("/sources/:mount/config", bodyParser.json(), (function(_this) {
-      return function(req, res) {
-        return _this.master.updateMount(req.mount, req.body, function(err, obj) {
-          if (err) {
-            return api.invalid(req, res, err);
-          } else {
-            return api.ok(req, res, obj);
-          }
-        });
-      };
-    })(this));
-    this.app["delete"]("/sources/:mount", (function(_this) {
-      return function(req, res) {
-        return _this.master.removeMount(req.mount, function(err, obj) {
-          if (err) {
-            return api.invalid(req, res, err.message);
-          } else {
-            return api.ok(req, res, obj);
-          }
-        });
-      };
-    })(this));
-    this.app.get("/users", (function(_this) {
-      return function(req, res) {
-        return _this.users.list(function(err, users) {
-          var obj, u, _i, _len;
-          if (err) {
-            return api.serverError(req, res, err);
-          } else {
-            obj = [];
-            for (_i = 0, _len = users.length; _i < _len; _i++) {
-              u = users[_i];
-              obj.push({
-                user: u,
-                id: u
-              });
-            }
-            return api.ok(req, res, obj);
-          }
-        });
-      };
-    })(this));
-    this.app.post("/users", bodyParser.json(), (function(_this) {
-      return function(req, res) {
-        return _this.users.store(req.body.user, req.body.password, function(err, status) {
-          if (err) {
-            return api.invalid(req, res, err);
-          } else {
-            return api.ok(req, res, {
-              ok: true
+      });
+    });
+    // get stream details
+    this.app.get("/streams/:stream", (req, res) => {
+      // get detailed stream information
+      return api.ok(req, res, req.stream.status());
+    });
+    // get stream configuration
+    this.app.get("/streams/:stream/config", (req, res) => {
+      return api.ok(req, res, req.stream.config());
+    });
+    // update stream metadata
+    this.app.post("/streams/:stream/metadata", bodyParser.json(), (req, res) => {
+      return req.stream.setMetadata(req.body || req.query, (err, meta) => {
+        if (err) {
+          return api.invalid(req, res, err);
+        } else {
+          return api.ok(req, res, meta);
+        }
+      });
+    });
+    // Update a stream's configuration
+    this.app.put("/streams/:stream/config", bodyParser.json(), (req, res) => {
+      return this.master.updateStream(req.stream, req.body, (err, obj) => {
+        if (err) {
+          return api.invalid(req, res, err);
+        } else {
+          return api.ok(req, res, obj);
+        }
+      });
+    });
+    // Delete a stream
+    this.app.delete("/streams/:stream", (req, res) => {
+      return this.master.removeStream(req.stream, (err, obj) => {
+        if (err) {
+          return api.invalid(req, res, err);
+        } else {
+          return api.ok(req, res, obj);
+        }
+      });
+    });
+    // Dump a RewindBuffer
+    this.app.get("/streams/:stream/rewind", (req, res) => {
+      res.status(200).write('');
+      return req.stream.getRewind((err, io) => {
+        // long story... may be related to https://github.com/joyent/node/issues/6065
+        // in any case, piping to /dev/null went too fast and crashed the server.
+        // Throttling fixes it
+        return io.pipe(new Throttle(100 * 1024 * 1024)).pipe(res);
+      });
+    });
+    // Clear a Rewind Buffer
+    this.app.delete("/streams/:stream/rewind", (req, res) => {
+      return req.stream.rewind.resetRewind((err) => {
+        if (err) {
+          return api.invalid(req, res, err);
+        } else {
+          return api.ok(req, res, req.stream.status());
+        }
+      });
+    });
+    // Inject a Rewind Buffer
+    this.app.put("/streams/:stream/rewind", (req, res) => {
+      return req.stream.rewind.loadBuffer(req, (err, info) => {
+        if (err) {
+          return api.invalid(req, res, err);
+        } else {
+          return api.ok(req, res, info);
+        }
+      });
+    });
+    // -- Source Mount API -- #
+    this.app.post("/sources", bodyParser.json(), (req, res) => {
+      // add a new source mount
+      return this.master.createMount(req.body, (err, mount) => {
+        if (err) {
+          return api.invalid(req, res, err);
+        } else {
+          return api.ok(req, res, mount);
+        }
+      });
+    });
+    this.app.get("/sources/:mount", (req, res) => {
+      return api.ok(req, res, req.mount.status());
+    });
+    this.app.get("/sources/:mount/config", (req, res) => {
+      return api.ok(req, res, req.mount.config());
+    });
+    // Promote a source to live
+    this.app.post("/sources/:mount/promote", (req, res) => {
+      // promote a stream source to active
+      // We'll just pass on the UUID and leave any logic to the stream
+      return req.mount.promoteSource(req.query.uuid, (err, msg) => {
+        if (err) {
+          return api.invalid(req, res, err);
+        } else {
+          return api.ok(req, res, msg);
+        }
+      });
+    });
+    // Drop a source
+    this.app.post("/sources/:mount/drop", (req, res) => {
+      return req.mount.dropSource(req.query.uuid, (err, msg) => {
+        if (err) {
+          return api.invalid(req, res, err);
+        } else {
+          return api.ok(req, res, msg);
+        }
+      });
+    });
+    // Update a source's configuration
+    this.app.put("/sources/:mount/config", bodyParser.json(), (req, res) => {
+      return this.master.updateMount(req.mount, req.body, (err, obj) => {
+        if (err) {
+          return api.invalid(req, res, err);
+        } else {
+          return api.ok(req, res, obj);
+        }
+      });
+    });
+    // Delete a stream
+    this.app.delete("/sources/:mount", (req, res) => {
+      return this.master.removeMount(req.mount, (err, obj) => {
+        if (err) {
+          return api.invalid(req, res, err.message);
+        } else {
+          return api.ok(req, res, obj);
+        }
+      });
+    });
+    // -- User Management -- #
+
+    // get a list of users
+    this.app.get("/users", (req, res) => {
+      return this.users.list((err, users) => {
+        var i, len, obj, u;
+        if (err) {
+          return api.serverError(req, res, err);
+        } else {
+          obj = [];
+          for (i = 0, len = users.length; i < len; i++) {
+            u = users[i];
+            obj.push({
+              user: u,
+              id: u
             });
           }
-        });
-      };
-    })(this));
-    this.app["delete"]("/users/:user", (function(_this) {
-      return function(req, res) {
-        return _this.users.store(req.params.user, null, function(err, status) {
-          if (err) {
-            return api.invalid(req, res, err);
-          } else {
-            return api.ok(req, res, {
-              ok: true
-            });
-          }
-        });
-      };
-    })(this));
+          return api.ok(req, res, obj);
+        }
+      });
+    });
+    // create / update a user
+    this.app.post("/users", bodyParser.json(), (req, res) => {
+      return this.users.store(req.body.user, req.body.password, (err, status) => {
+        if (err) {
+          return api.invalid(req, res, err);
+        } else {
+          return api.ok(req, res, {
+            ok: true
+          });
+        }
+      });
+    });
+    // delete a user
+    this.app.delete("/users/:user", (req, res) => {
+      return this.users.store(req.params.user, null, (err, status) => {
+        if (err) {
+          return api.invalid(req, res, err);
+        } else {
+          return api.ok(req, res, {
+            ok: true
+          });
+        }
+      });
+    });
   }
 
-  return API;
-
-})();
+};
 
 //# sourceMappingURL=api.js.map

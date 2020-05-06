@@ -20,6 +20,8 @@ module.exports = class Slave extends require("events").EventEmitter
         live_streaming: require "../outputs/live_streaming"
 
     constructor: (@options,@_worker) ->
+        super()
+
         @_configured = false
 
         debug "Init for Slave"

@@ -16,14 +16,14 @@ module.exports = class SlaveMode extends require("./base")
 
     MODE: "Slave"
     constructor: (@opts,cb) ->
+        super()
+
         @log = (new Logger @opts.log).child({mode:'slave',pid:process.pid})
         @log.debug "Slave Instance initialized"
 
         debug "Slave Mode init"
 
         process.title = "StreamM:slave"
-
-        super
 
         @_handle        = null
         @_haveHandle    = false

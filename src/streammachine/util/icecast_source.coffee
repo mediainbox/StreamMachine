@@ -5,6 +5,8 @@ debug = require("debug")("sm:sources:icecast")
 
 module.exports = class IcecastSource extends require("events").EventEmitter
     constructor: (@opts) ->
+        super()
+
         @_connected = false
         @sock = null
 

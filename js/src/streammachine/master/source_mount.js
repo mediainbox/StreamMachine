@@ -1,211 +1,231 @@
-var SourceMount, _,
-  __hasProp = {}.hasOwnProperty,
-  __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
+var SourceMount, _;
 
 _ = require("underscore");
 
-module.exports = SourceMount = (function(_super) {
-  __extends(SourceMount, _super);
-
-  SourceMount.prototype.DefaultOptions = {
-    monitored: false,
-    password: false,
-    source_password: false,
-    format: "mp3"
-  };
-
-  function SourceMount(key, log, opts) {
-    this.key = key;
-    this.log = log;
-    this.opts = _.defaults(opts || {}, this.DefaultOptions);
-    this.sources = [];
-    this.source = null;
-    this.password = this.opts.password || this.opts.source_password;
-    this._vitals = null;
-    this.log.event("Source Mount is initializing.");
-    this.dataFunc = (function(_this) {
-      return function(data) {
-        return _this.emit("data", data);
+module.exports = SourceMount = (function() {
+  class SourceMount extends require("events").EventEmitter {
+    constructor(key, log, opts) {
+      super();
+      this.key = key;
+      this.log = log;
+      this.opts = _.defaults(opts || {}, this.DefaultOptions);
+      this.sources = [];
+      this.source = null;
+      // Support the old streams-style password key
+      this.password = this.opts.password || this.opts.source_password;
+      this._vitals = null;
+      this.log.event("Source Mount is initializing.");
+      this.dataFunc = (data) => {
+        return this.emit("data", data);
       };
-    })(this);
-    this.vitalsFunc = (function(_this) {
-      return function(vitals) {
-        _this._vitals = vitals;
-        return _this.emit("vitals", vitals);
+      this.vitalsFunc = (vitals) => {
+        this._vitals = vitals;
+        return this.emit("vitals", vitals);
       };
-    })(this);
-  }
+    }
 
-  SourceMount.prototype.status = function() {
-    var s;
-    return {
-      key: this.key,
-      sources: (function() {
-        var _i, _len, _ref, _results;
-        _ref = this.sources;
-        _results = [];
-        for (_i = 0, _len = _ref.length; _i < _len; _i++) {
-          s = _ref[_i];
-          _results.push(s.status());
+    //----------
+    status() {
+      var s;
+      return {
+        key: this.key,
+        sources: (function() {
+          var i, len, ref, results;
+          ref = this.sources;
+          results = [];
+          for (i = 0, len = ref.length; i < len; i++) {
+            s = ref[i];
+            results.push(s.status());
+          }
+          return results;
+        }).call(this)
+      };
+    }
+
+    //----------
+    config() {
+      return this.opts;
+    }
+
+    //----------
+    configure(new_opts, cb) {
+      var k, ref, v;
+      ref = this.DefaultOptions;
+      // allow updates, but only to keys that are present in @DefaultOptions.
+      for (k in ref) {
+        v = ref[k];
+        if (new_opts[k] != null) {
+          this.opts[k] = new_opts[k];
         }
-        return _results;
-      }).call(this)
-    };
-  };
-
-  SourceMount.prototype.config = function() {
-    return this.opts;
-  };
-
-  SourceMount.prototype.configure = function(new_opts, cb) {
-    var k, v, _ref;
-    _ref = this.DefaultOptions;
-    for (k in _ref) {
-      v = _ref[k];
-      if (new_opts[k] != null) {
-        this.opts[k] = new_opts[k];
+        if (_.isNumber(this.DefaultOptions[k])) {
+          // convert to a number if necessary
+          this.opts[k] = Number(this.opts[k]);
+        }
       }
-      if (_.isNumber(this.DefaultOptions[k])) {
-        this.opts[k] = Number(this.opts[k]);
+      // support changing our key
+      if (this.key !== this.opts.key) {
+        this.key = this.opts.key;
       }
+      // Support the old streams-style password key
+      this.password = this.opts.password || this.opts.source_password;
+      this.emit("config");
+      return typeof cb === "function" ? cb(null, this.config()) : void 0;
     }
-    if (this.key !== this.opts.key) {
-      this.key = this.opts.key;
-    }
-    this.password = this.opts.password || this.opts.source_password;
-    this.emit("config");
-    return typeof cb === "function" ? cb(null, this.config()) : void 0;
-  };
 
-  SourceMount.prototype.vitals = function(cb) {
-    var _vFunc;
-    _vFunc = (function(_this) {
-      return function(v) {
+    //----------
+    vitals(cb) {
+      var _vFunc;
+      _vFunc = (v) => {
         return typeof cb === "function" ? cb(null, v) : void 0;
       };
-    })(this);
-    if (this._vitals) {
-      return _vFunc(this._vitals);
-    } else {
-      return this.once("vitals", _vFunc);
+      if (this._vitals) {
+        return _vFunc(this._vitals);
+      } else {
+        return this.once("vitals", _vFunc);
+      }
     }
-  };
 
-  SourceMount.prototype.addSource = function(source, cb) {
-    var _ref, _ref1, _ref2;
-    source.once("disconnect", (function(_this) {
-      return function() {
-        _this.sources = _(_this.sources).without(source);
-        if (_this.source === source) {
-          if (_this.sources.length > 0) {
-            _this.useSource(_this.sources[0]);
-            return _this.emit("disconnect", {
+    //----------
+    addSource(source, cb) {
+      var ref, ref1, ref2;
+      // add a disconnect monitor
+      source.once("disconnect", () => {
+        // remove it from the list
+        this.sources = _(this.sources).without(source);
+        // was this our current source?
+        if (this.source === source) {
+          // yes...  need to promote the next one (if there is one)
+          if (this.sources.length > 0) {
+            this.useSource(this.sources[0]);
+            return this.emit("disconnect", {
               active: true,
-              count: _this.sources.length,
-              source: _this.source
+              count: this.sources.length,
+              source: this.source
             });
           } else {
-            _this.log.alert("Source disconnected. No sources remaining.");
-            _this._disconnectSource(_this.source);
-            _this.source = null;
-            return _this.emit("disconnect", {
+            this.log.alert("Source disconnected. No sources remaining.");
+            this._disconnectSource(this.source);
+            this.source = null;
+            return this.emit("disconnect", {
               active: true,
               count: 0,
               source: null
             });
           }
         } else {
-          _this.log.event("Inactive source disconnected.");
-          return _this.emit("disconnect", {
+          // no... just remove it from the list
+          this.log.event("Inactive source disconnected.");
+          return this.emit("disconnect", {
             active: false,
-            count: _this.sources.length,
-            source: _this.source
+            count: this.sources.length,
+            source: this.source
           });
         }
-      };
-    })(this));
-    this.sources.push(source);
-    if (this.sources[0] === source || ((_ref = this.sources[0]) != null ? _ref.isFallback : void 0)) {
-      this.log.event("Promoting new source to active.", {
-        source: (_ref1 = typeof source.TYPE === "function" ? source.TYPE() : void 0) != null ? _ref1 : source.TYPE
       });
-      return this.useSource(source, cb);
-    } else {
-      this.log.event("Source connected.", {
-        source: (_ref2 = typeof source.TYPE === "function" ? source.TYPE() : void 0) != null ? _ref2 : source.TYPE
-      });
-      this.emit("add_source", source);
-      return typeof cb === "function" ? cb(null) : void 0;
+      // -- Add the source to our list -- #
+      this.sources.push(source);
+      // -- Should this source be made active? -- #
+
+      // check whether this source should be made active. It should be if
+      // the active source is defined as a fallback
+      if (this.sources[0] === source || ((ref = this.sources[0]) != null ? ref.isFallback : void 0)) {
+        // our new source should be promoted
+        this.log.event("Promoting new source to active.", {
+          source: (ref1 = typeof source.TYPE === "function" ? source.TYPE() : void 0) != null ? ref1 : source.TYPE
+        });
+        return this.useSource(source, cb);
+      } else {
+        // add the source to the end of our list
+        this.log.event("Source connected.", {
+          source: (ref2 = typeof source.TYPE === "function" ? source.TYPE() : void 0) != null ? ref2 : source.TYPE
+        });
+        // and emit our source event
+        this.emit("add_source", source);
+        return typeof cb === "function" ? cb(null) : void 0;
+      }
     }
-  };
 
-  SourceMount.prototype._disconnectSource = function(source) {
-    source.removeListener("data", this.dataFunc);
-    return source.removeListener("vitals", this.vitalsFunc);
-  };
+    //----------
+    _disconnectSource(source) {
+      //source.removeListener "metadata",   @sourceMetaFunc
+      source.removeListener("data", this.dataFunc);
+      return source.removeListener("vitals", this.vitalsFunc);
+    }
 
-  SourceMount.prototype.useSource = function(newsource, cb) {
-    var alarm, old_source;
-    old_source = this.source || null;
-    alarm = setTimeout((function(_this) {
-      return function() {
-        var _ref, _ref1;
-        _this.log.error("useSource failed to get switchover within five seconds.", {
-          new_source: (_ref = typeof newsource.TYPE === "function" ? newsource.TYPE() : void 0) != null ? _ref : newsource.TYPE,
-          old_source: (_ref1 = old_source != null ? typeof old_source.TYPE === "function" ? old_source.TYPE() : void 0 : void 0) != null ? _ref1 : old_source != null ? old_source.TYPE : void 0
+    //----------
+    useSource(newsource, cb) {
+      var alarm, old_source;
+      // stash our existing source if we have one
+      old_source = this.source || null;
+      // set a five second timeout for the switchover
+      alarm = setTimeout(() => {
+        var ref, ref1;
+        this.log.error("useSource failed to get switchover within five seconds.", {
+          new_source: (ref = typeof newsource.TYPE === "function" ? newsource.TYPE() : void 0) != null ? ref : newsource.TYPE,
+          old_source: (ref1 = old_source != null ? typeof old_source.TYPE === "function" ? old_source.TYPE() : void 0 : void 0) != null ? ref1 : old_source != null ? old_source.TYPE : void 0
         });
         return typeof cb === "function" ? cb(new Error("Failed to switch.")) : void 0;
-      };
-    })(this), 5000);
-    return newsource.vitals((function(_this) {
-      return function(err, vitals) {
-        var _base, _ref, _ref1, _ref2;
-        if (_this.source && old_source !== _this.source) {
-          _this.log.event("Source changed while waiting for vitals.", {
-            new_source: (_ref = typeof newsource.TYPE === "function" ? newsource.TYPE() : void 0) != null ? _ref : newsource.TYPE,
-            old_source: (_ref1 = old_source != null ? typeof old_source.TYPE === "function" ? old_source.TYPE() : void 0 : void 0) != null ? _ref1 : old_source != null ? old_source.TYPE : void 0,
-            current_source: (_ref2 = typeof (_base = _this.source).TYPE === "function" ? _base.TYPE() : void 0) != null ? _ref2 : _this.source.TYPE
+      }, 5000);
+      // Look for a header before switching
+      return newsource.vitals((err, vitals) => {
+        var base, ref, ref1, ref2;
+        if (this.source && old_source !== this.source) {
+          // source changed while we were waiting for vitals. we'll
+          // abort our change attempt
+          this.log.event("Source changed while waiting for vitals.", {
+            new_source: (ref = typeof newsource.TYPE === "function" ? newsource.TYPE() : void 0) != null ? ref : newsource.TYPE,
+            old_source: (ref1 = old_source != null ? typeof old_source.TYPE === "function" ? old_source.TYPE() : void 0 : void 0) != null ? ref1 : old_source != null ? old_source.TYPE : void 0,
+            current_source: (ref2 = typeof (base = this.source).TYPE === "function" ? base.TYPE() : void 0) != null ? ref2 : this.source.TYPE
           });
           return typeof cb === "function" ? cb(new Error("Source changed while waiting for vitals.")) : void 0;
         }
         if (old_source) {
-          _this._disconnectSource(old_source);
+          // unhook from the old source's events
+          this._disconnectSource(old_source);
         }
-        _this.source = newsource;
-        newsource.on("data", _this.dataFunc);
-        newsource.on("vitals", _this.vitalsFunc);
-        _this.emitDuration = vitals.emitDuration;
-        process.nextTick(function() {
-          var _ref3, _ref4;
-          _this.log.event("New source is active.", {
-            new_source: (_ref3 = typeof newsource.TYPE === "function" ? newsource.TYPE() : void 0) != null ? _ref3 : newsource.TYPE,
-            old_source: (_ref4 = old_source != null ? typeof old_source.TYPE === "function" ? old_source.TYPE() : void 0 : void 0) != null ? _ref4 : old_source != null ? old_source.TYPE : void 0
+        this.source = newsource;
+        // connect to the new source's events
+        //newsource.on "metadata",   @sourceMetaFunc
+        newsource.on("data", this.dataFunc);
+        newsource.on("vitals", this.vitalsFunc);
+        // how often will we be emitting?
+        this.emitDuration = vitals.emitDuration;
+        // note that we've got a new source
+        process.nextTick(() => {
+          var ref3, ref4;
+          this.log.event("New source is active.", {
+            new_source: (ref3 = typeof newsource.TYPE === "function" ? newsource.TYPE() : void 0) != null ? ref3 : newsource.TYPE,
+            old_source: (ref4 = old_source != null ? typeof old_source.TYPE === "function" ? old_source.TYPE() : void 0 : void 0) != null ? ref4 : old_source != null ? old_source.TYPE : void 0
           });
-          _this.emit("source", newsource);
-          return _this.vitalsFunc(vitals);
+          this.emit("source", newsource);
+          return this.vitalsFunc(vitals);
         });
-        _this.sources = _.flatten([newsource, _(_this.sources).without(newsource)]);
+        // jump our new source to the front of the list (and remove it from
+        // anywhere else in the list)
+        this.sources = _.flatten([newsource, _(this.sources).without(newsource)]);
+        // cancel our timeout
         clearTimeout(alarm);
         return typeof cb === "function" ? cb(null) : void 0;
-      };
-    })(this));
-  };
+      });
+    }
 
-  SourceMount.prototype.promoteSource = function(uuid, cb) {
-    var ns;
-    if (ns = _(this.sources).find((function(_this) {
-      return function(s) {
+    //----------
+    promoteSource(uuid, cb) {
+      var ns;
+      // do we have a source with this UUID?
+      if (ns = _(this.sources).find((s) => {
         return s.uuid === uuid;
-      };
-    })(this))) {
-      if (ns === this.sources[0]) {
-        return typeof cb === "function" ? cb(null, {
-          msg: "Source is already active",
-          uuid: uuid
-        }) : void 0;
-      } else {
-        return this.useSource(ns, (function(_this) {
-          return function(err) {
+      })) {
+        // we do...
+        // make sure it isn't already the active source, though
+        if (ns === this.sources[0]) {
+          return typeof cb === "function" ? cb(null, {
+            msg: "Source is already active",
+            uuid: uuid
+          }) : void 0;
+        } else {
+          // it isn't. we can try to promote it
+          return this.useSource(ns, (err) => {
             if (err) {
               return typeof cb === "function" ? cb(err) : void 0;
             } else {
@@ -214,29 +234,39 @@ module.exports = SourceMount = (function(_super) {
                 uuid: uuid
               }) : void 0;
             }
-          };
-        })(this));
+          });
+        }
+      } else {
+        return typeof cb === "function" ? cb(`Unable to find a source with that UUID on ${this.key}`) : void 0;
       }
-    } else {
-      return typeof cb === "function" ? cb("Unable to find a source with that UUID on " + this.key) : void 0;
     }
+
+    //----------
+    dropSource(uuid, cb) {}
+
+    //----------
+    destroy() {
+      var i, len, ref, s;
+      ref = this.sources;
+      for (i = 0, len = ref.length; i < len; i++) {
+        s = ref[i];
+        s.disconnect();
+      }
+      this.emit("destroy");
+      return this.removeAllListeners();
+    }
+
   };
 
-  SourceMount.prototype.dropSource = function(uuid, cb) {};
-
-  SourceMount.prototype.destroy = function() {
-    var s, _i, _len, _ref;
-    _ref = this.sources;
-    for (_i = 0, _len = _ref.length; _i < _len; _i++) {
-      s = _ref[_i];
-      s.disconnect();
-    }
-    this.emit("destroy");
-    return this.removeAllListeners();
+  SourceMount.prototype.DefaultOptions = {
+    monitored: false,
+    password: false,
+    source_password: false,
+    format: "mp3"
   };
 
   return SourceMount;
 
-})(require("events").EventEmitter);
+}).call(this);
 
 //# sourceMappingURL=source_mount.js.map

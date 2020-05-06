@@ -3,7 +3,7 @@ var StreamMachine, defaultConfig;
 defaultConfig = require("./default_config");
 
 module.exports = StreamMachine = (function() {
-  function StreamMachine() {}
+  class StreamMachine {};
 
   StreamMachine.StandaloneMode = require("./modes/standalone");
 
@@ -15,6 +15,6 @@ module.exports = StreamMachine = (function() {
 
   return StreamMachine;
 
-})();
+}).call(this);
 
 //# sourceMappingURL=index.js.map

@@ -1,6 +1,4 @@
-var BaseOutput, LiveStreaming, PTS_TAG, s, tz, uuid, _,
-  __hasProp = {}.hasOwnProperty,
-  __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
+var BaseOutput, LiveStreaming, PTS_TAG, _, s, tz, uuid;
 
 _ = require("underscore");
 
@@ -11,36 +9,40 @@ uuid = require("node-uuid");
 BaseOutput = require("./base");
 
 PTS_TAG = Buffer.from((function() {
-  var _i, _len, _ref, _results;
-  _ref = "49 44 33 04 00 00 00 00 00 3F 50 52 49 56 00 00 00 35 00 00 63 6F 6D\n2E 61 70 70 6C 65 2E 73 74 72 65 61 6D 69 6E 67 2E 74 72 61 6E 73 70\n6F 72 74 53 74 72 65 61 6D 54 69 6D 65 73 74 61 6D 70 00 00 00 00 00\n00 00 00 00".split(/\s+/);
-  _results = [];
-  for (_i = 0, _len = _ref.length; _i < _len; _i++) {
-    s = _ref[_i];
-    _results.push(Number("0x" + s));
+  var i, len, ref, results;
+  ref = `49 44 33 04 00 00 00 00 00 3F 50 52 49 56 00 00 00 35 00 00 63 6F 6D
+2E 61 70 70 6C 65 2E 73 74 72 65 61 6D 69 6E 67 2E 74 72 61 6E 73 70
+6F 72 74 53 74 72 65 61 6D 54 69 6D 65 73 74 61 6D 70 00 00 00 00 00
+00 00 00 00`.split(/\s+/);
+  results = [];
+  for (i = 0, len = ref.length; i < len; i++) {
+    s = ref[i];
+    results.push(Number(`0x${s}`));
   }
-  return _results;
+  return results;
 })());
 
-module.exports = LiveStreaming = (function(_super) {
-  __extends(LiveStreaming, _super);
-
-  function LiveStreaming(stream, opts) {
-    this.stream = stream;
-    this.opts = opts;
-    LiveStreaming.__super__.constructor.call(this, "live_streaming");
-    this.stream.listen(this, {
-      live_segment: this.opts.req.params.seg,
-      pumpOnly: true
-    }, (function(_this) {
-      return function(err, playHead, info) {
+module.exports = LiveStreaming = (function() {
+  class LiveStreaming extends BaseOutput {
+    constructor(stream, opts) {
+      super("live_streaming");
+      this.stream = stream;
+      this.opts = opts;
+      this.stream.listen(this, {
+        live_segment: this.opts.req.params.seg,
+        pumpOnly: true
+      }, (err, playHead, info) => {
         var headers, tag;
         if (err) {
-          _this.opts.res.status(404).end("Segment not found.");
+          this.opts.res.status(404).end("Segment not found.");
           return false;
         }
+        // write our PTS tag
         tag = null;
         if (info.pts) {
           tag = Buffer.from(PTS_TAG);
+          // node 0.10 doesn't know how to write ints over 32-bit, so
+          // we do some gymnastics to get around it
           if (info.pts > Math.pow(2, 32) - 1) {
             tag[0x44] = 0x01;
             tag.writeUInt32BE(info.pts - (Math.pow(2, 32) - 1), 0x45);
@@ -49,61 +51,66 @@ module.exports = LiveStreaming = (function(_super) {
           }
         }
         headers = {
-          "Content-Type": _this.stream.opts.format === "mp3" ? "audio/mpeg" : _this.stream.opts.format === "aac" ? "audio/aac" : "unknown",
+          "Content-Type": this.stream.opts.format === "mp3" ? "audio/mpeg" : this.stream.opts.format === "aac" ? "audio/aac" : "unknown",
           "Connection": "close",
           "Content-Length": info.length + (tag != null ? tag.length : void 0) || 0
         };
-        _this.opts.res.writeHead(200, headers);
+        // write out our headers
+        this.opts.res.writeHead(200, headers);
         if (tag) {
-          _this.opts.res.write(tag);
+          this.opts.res.write(tag);
         }
-        playHead.pipe(_this.opts.res);
-        _this.opts.res.on("finish", function() {
+        // send our pump buffer to the client
+        playHead.pipe(this.opts.res);
+        this.opts.res.on("finish", () => {
           return playHead.disconnect();
         });
-        _this.opts.res.on("close", function() {
+        this.opts.res.on("close", () => {
           return playHead.disconnect();
         });
-        return _this.opts.res.on("end", function() {
+        return this.opts.res.on("end", () => {
           return playHead.disconnect();
         });
-      };
-    })(this));
-  }
+      });
+    }
 
-  LiveStreaming.prototype.prepForHandoff = function(cb) {
-    return cb(true);
+    //----------
+    prepForHandoff(cb) {
+      // we don't do handoffs, so send skip = true
+      return cb(true);
+    }
+
   };
 
-  LiveStreaming.Index = (function(_super1) {
-    __extends(Index, _super1);
-
-    function Index(stream, opts) {
+  //----------
+  LiveStreaming.Index = class Index extends BaseOutput {
+    constructor(stream, opts) {
       var outFunc, session_info;
+      super("live_streaming");
       this.stream = stream;
       this.opts = opts;
-      Index.__super__.constructor.call(this, "live_streaming");
-      session_info = this.client.session_id && this.client.pass_session ? "?session_id=" + this.client.session_id : void 0;
+      session_info = this.client.session_id && this.client.pass_session ? `?session_id=${this.client.session_id}` : void 0;
+      // HACK: This is needed to get ua information on segments until we
+      // can fix client ua for AppleCoreMedia
       if (this.opts.req.query.ua) {
-        session_info = session_info ? "" + session_info + "&ua=" + this.opts.req.query.ua : "?ua=" + this.opts.req.query.ua;
+        session_info = session_info ? `${session_info}&ua=${this.opts.req.query.ua}` : `?ua=${this.opts.req.query.ua}`;
       }
       if (!this.stream.hls) {
         this.opts.res.status(500).end("No data.");
         return;
       }
-      outFunc = (function(_this) {
-        return function(err, writer) {
-          if (writer) {
-            _this.opts.res.writeHead(200, {
-              "Content-type": "application/vnd.apple.mpegurl",
-              "Content-length": writer.length()
-            });
-            return writer.pipe(_this.opts.res);
-          } else {
-            return _this.opts.res.status(500).end("No data.");
-          }
-        };
-      })(this);
+      // which index should we give them?
+      outFunc = (err, writer) => {
+        if (writer) {
+          this.opts.res.writeHead(200, {
+            "Content-type": "application/vnd.apple.mpegurl",
+            "Content-length": writer.length()
+          });
+          return writer.pipe(this.opts.res);
+        } else {
+          return this.opts.res.status(500).end("No data.");
+        }
+      };
       if (this.opts.req.hls_limit) {
         this.stream.hls.short_index(session_info, outFunc);
       } else {
@@ -111,51 +118,47 @@ module.exports = LiveStreaming = (function(_super) {
       }
     }
 
-    return Index;
+  };
 
-  })(BaseOutput);
-
-  LiveStreaming.GroupIndex = (function(_super1) {
-    __extends(GroupIndex, _super1);
-
-    function GroupIndex(group, opts) {
+  //----------
+  LiveStreaming.GroupIndex = class GroupIndex extends BaseOutput {
+    constructor(group, opts) {
+      super("live_streaming");
       this.group = group;
       this.opts = opts;
-      GroupIndex.__super__.constructor.call(this, "live_streaming");
       this.opts.res.writeHead(200, {
         "Content-type": "application/vnd.apple.mpegurl"
       });
-      this.group.startSession(this.client, (function(_this) {
-        return function(err) {
-          var key, session_bits, url, _ref;
-          _this.opts.res.write("#EXTM3U\n");
-          _ref = _this.group.streams;
-          for (key in _ref) {
-            s = _ref[key];
-            url = "/" + s.key + ".m3u8";
-            session_bits = [];
-            if (_this.client.pass_session) {
-              session_bits.push("session_id=" + _this.client.session_id);
-            }
-            if (_this.opts.req.query.ua) {
-              session_bits.push("ua=" + _this.opts.req.query.ua);
-            }
-            if (session_bits.length > 0) {
-              url = "" + url + "?" + (session_bits.join("&"));
-            }
-            _this.opts.res.write("#EXT-X-STREAM-INF:BANDWIDTH=" + s.opts.bandwidth + ",CODECS=\"" + s.opts.codec + "\"\n" + url + "\n");
+      // who do we ask for the session id?
+      this.group.startSession(this.client, (err) => {
+        var key, ref, session_bits, url;
+        this.opts.res.write(`#EXTM3U
+`);
+        ref = this.group.streams;
+        for (key in ref) {
+          s = ref[key];
+          url = `/${s.key}.m3u8`;
+          session_bits = [];
+          if (this.client.pass_session) {
+            session_bits.push(`session_id=${this.client.session_id}`);
           }
-          return _this.opts.res.end();
-        };
-      })(this));
+          if (this.opts.req.query.ua) {
+            session_bits.push(`ua=${this.opts.req.query.ua}`);
+          }
+          if (session_bits.length > 0) {
+            url = `${url}?${session_bits.join("&")}`;
+          }
+          this.opts.res.write(`#EXT-X-STREAM-INF:BANDWIDTH=${s.opts.bandwidth},CODECS="${s.opts.codec}"
+${url}\n`);
+        }
+        return this.opts.res.end();
+      });
     }
 
-    return GroupIndex;
-
-  })(BaseOutput);
+  };
 
   return LiveStreaming;
 
-})(BaseOutput);
+}).call(this);
 
 //# sourceMappingURL=live_streaming.js.map

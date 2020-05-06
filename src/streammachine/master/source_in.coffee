@@ -7,6 +7,8 @@ IcecastSource = require "../sources/icecast"
 
 module.exports = class SourceIn extends require("events").EventEmitter
     constructor: (opts) ->
+        super()
+
         @core = opts.core
 
         @log = @core.log.child mode:"sourcein"
@@ -140,6 +142,8 @@ module.exports = class SourceIn extends require("events").EventEmitter
 
     class @IcyParser extends require("events").EventEmitter
         constructor: (type) ->
+            super()
+
             @["INIT_"+type]()
             @offset = 0
 

@@ -1,56 +1,56 @@
-var Core,
-  __hasProp = {}.hasOwnProperty,
-  __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
+var Core;
 
-module.exports = Core = (function(_super) {
-  __extends(Core, _super);
-
-  function Core() {
+module.exports = Core = class Core extends require("events").EventEmitter {
+  constructor() {
+    super();
+    // see runner for restart trigger based on SIGUSR2
     this.log.debug("Attaching listener for SIGUSR2 restarts.");
     if (process.listeners("SIGUSR2").length > 0) {
       this.log.info("Skipping SIGUSR2 registration for handoffs since another listener is registered.");
     } else {
-      process.on("SIGUSR2", (function(_this) {
-        return function() {
-          if (_this._restarting) {
+      // Support a handoff trigger via USR2
+      process.on("SIGUSR2", () => {
+        if (this._restarting) {
+          return false;
+        }
+        this._restarting = true;
+        if (!this._rpc) {
+          this.log.error("StreamMachine process was asked for external handoff, but there is no RPC interface");
+          this._restarting = false;
+          return false;
+        }
+        this.log.info("Sending process for USR2. Starting handoff via proxy.");
+        return this._rpc.request("HANDOFF_GO", null, null, {
+          timeout: 20000
+        }, (err, reply) => {
+          if (err) {
+            this.log.error(`Error handshaking handoff: ${err}`);
+            this._restarting = false;
             return false;
           }
-          _this._restarting = true;
-          if (!_this._rpc) {
-            _this.log.error("StreamMachine process was asked for external handoff, but there is no RPC interface");
-            _this._restarting = false;
-            return false;
-          }
-          _this.log.info("Sending process for USR2. Starting handoff via proxy.");
-          return _this._rpc.request("HANDOFF_GO", null, null, {
-            timeout: 20000
-          }, function(err, reply) {
-            if (err) {
-              _this.log.error("Error handshaking handoff: " + err);
-              _this._restarting = false;
-              return false;
-            }
-            _this.log.info("Sender got handoff handshake. Starting send.");
-            return _this._sendHandoff(_this._rpc);
-          });
-        };
-      })(this));
+          this.log.info("Sender got handoff handshake. Starting send.");
+          return this._sendHandoff(this._rpc);
+        });
+      });
     }
   }
 
-  Core.prototype.streamInfo = function() {
-    var k, s, _ref, _results;
-    _ref = this.streams;
-    _results = [];
-    for (k in _ref) {
-      s = _ref[k];
-      _results.push(s.info());
+  //----------
+
+    // Build a hash of stream information, including sources and listener counts
+  streamInfo() {
+    var k, ref, results, s;
+    ref = this.streams;
+    results = [];
+    for (k in ref) {
+      s = ref[k];
+      results.push(s.info());
     }
-    return _results;
-  };
+    return results;
+  }
 
-  return Core;
+};
 
-})(require("events").EventEmitter);
+//----------
 
 //# sourceMappingURL=base.js.map

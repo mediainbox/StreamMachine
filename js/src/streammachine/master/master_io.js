@@ -1,133 +1,134 @@
-var MasterIO, debug, _,
-  __hasProp = {}.hasOwnProperty,
-  __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
+var MasterIO, _, debug;
 
 _ = require("underscore");
 
 debug = require("debug")("sm:master:master_io");
 
-module.exports = MasterIO = (function(_super) {
+module.exports = MasterIO = (function() {
   var Slave;
 
-  __extends(MasterIO, _super);
-
-  function MasterIO(master, log, opts) {
-    var cUpdate;
-    this.master = master;
-    this.log = log;
-    this.opts = opts;
-    this.io = null;
-    this.slaves = {};
-    this._config = null;
-    cUpdate = _.debounce((function(_this) {
-      return function() {
-        var config, id, s, _ref, _results;
-        config = _this.master.config();
-        _ref = _this.slaves;
-        _results = [];
-        for (id in _ref) {
-          s = _ref[id];
-          _this.log.debug("emit config to slave " + id);
-          _results.push(s.sock.emit("config", config));
+  class MasterIO extends require("events").EventEmitter {
+    constructor(master, log, opts) {
+      var cUpdate;
+      super();
+      this.master = master;
+      this.log = log;
+      this.opts = opts;
+      this.io = null;
+      this.slaves = {};
+      this._config = null;
+      cUpdate = _.debounce(() => {
+        var config, id, ref, results, s;
+        config = this.master.config();
+        ref = this.slaves;
+        results = [];
+        for (id in ref) {
+          s = ref[id];
+          this.log.debug(`emit config to slave ${id}`);
+          results.push(s.sock.emit("config", config));
         }
-        return _results;
-      };
-    })(this), 200);
-    this.master.on("config_update", cUpdate);
-  }
-
-  MasterIO.prototype.updateConfig = function(config) {
-    var id, s, _ref, _results;
-    this._config = config;
-    _ref = this.slaves;
-    _results = [];
-    for (id in _ref) {
-      s = _ref[id];
-      _results.push(s.sock.emit("config", config));
+        return results;
+      }, 200);
+      this.master.on("config_update", cUpdate);
     }
-    return _results;
-  };
 
-  MasterIO.prototype.listen = function(server) {
-    this.io = require("socket.io").listen(server);
-    this.log.info("Master now listening for slave connections.");
-    this.io.use((function(_this) {
-      return function(socket, next) {
-        var _ref;
+    //----------
+    updateConfig(config) {
+      var id, ref, results, s;
+      this._config = config;
+      ref = this.slaves;
+      results = [];
+      for (id in ref) {
+        s = ref[id];
+        results.push(s.sock.emit("config", config));
+      }
+      return results;
+    }
+
+    //----------
+    listen(server) {
+      // fire up a socket listener on our slave port
+      this.io = require("socket.io").listen(server);
+      this.log.info("Master now listening for slave connections.");
+      // add our authentication
+      this.io.use((socket, next) => {
+        var ref;
         debug("Authenticating slave connection.");
-        if (_this.opts.password === ((_ref = socket.request._query) != null ? _ref.password : void 0)) {
+        if (this.opts.password === ((ref = socket.request._query) != null ? ref.password : void 0)) {
           debug("Slave password is valid.");
           return next();
         } else {
-          _this.log.debug("Slave password is incorrect.");
+          this.log.debug("Slave password is incorrect.");
           debug("Slave password is incorrect.");
           return next(new Error("Invalid slave password."));
         }
-      };
-    })(this));
-    return this.io.on("connection", (function(_this) {
-      return function(sock) {
+      });
+      // look for slave connections
+      return this.io.on("connection", (sock) => {
         debug("Master got connection");
-        return sock.once("ok", function(cb) {
-          debug("Got OK from incoming slave connection at " + sock.id);
+        // a slave may make multiple connections to test transports. we're
+        // only interested in the one that gives us the OK
+        return sock.once("ok", (cb) => {
+          debug(`Got OK from incoming slave connection at ${sock.id}`);
+          // ping back to let the slave know we're here
           cb("OK");
-          _this.log.debug("slave connection is " + sock.id);
-          if (_this._config) {
-            sock.emit("config", _this._config);
+          this.log.debug(`slave connection is ${sock.id}`);
+          if (this._config) {
+            sock.emit("config", this._config);
           }
-          _this.slaves[sock.id] = new Slave(_this, sock);
-          return _this.slaves[sock.id].on("disconnect", function() {
-            delete _this.slaves[sock.id];
-            return _this.emit("disconnect", sock.id);
+          this.slaves[sock.id] = new Slave(this, sock);
+          return this.slaves[sock.id].on("disconnect", () => {
+            delete this.slaves[sock.id];
+            return this.emit("disconnect", sock.id);
           });
         });
-      };
-    })(this));
-  };
-
-  MasterIO.prototype.broadcastHLSSnapshot = function(k, snapshot) {
-    var id, s, _ref, _results;
-    _ref = this.slaves;
-    _results = [];
-    for (id in _ref) {
-      s = _ref[id];
-      _results.push(s.sock.emit("hls_snapshot", {
-        stream: k,
-        snapshot: snapshot
-      }));
+      });
     }
-    return _results;
-  };
 
-  MasterIO.prototype.broadcastAudio = function(k, chunk) {
-    var id, s, _ref, _results;
-    _ref = this.slaves;
-    _results = [];
-    for (id in _ref) {
-      s = _ref[id];
-      _results.push(s.sock.emit("audio", {
-        stream: k,
-        chunk: chunk
-      }));
+    //----------
+    broadcastHLSSnapshot(k, snapshot) {
+      var id, ref, results, s;
+      ref = this.slaves;
+      results = [];
+      for (id in ref) {
+        s = ref[id];
+        results.push(s.sock.emit("hls_snapshot", {
+          stream: k,
+          snapshot: snapshot
+        }));
+      }
+      return results;
     }
-    return _results;
-  };
 
-  MasterIO.prototype.pollForSync = function(cb) {
-    var af, obj, s, statuses, _ref, _results;
-    statuses = [];
-    cb = _.once(cb);
-    af = _.after(Object.keys(this.slaves).length, (function(_this) {
-      return function() {
+    //----------
+    broadcastAudio(k, chunk) {
+      var id, ref, results, s;
+      ref = this.slaves;
+      results = [];
+      for (id in ref) {
+        s = ref[id];
+        results.push(s.sock.emit("audio", {
+          stream: k,
+          chunk: chunk
+        }));
+      }
+      return results;
+    }
+
+    //----------
+    pollForSync(cb) {
+      var af, obj, ref, results, s, statuses;
+      statuses = [];
+      cb = _.once(cb);
+      af = _.after(Object.keys(this.slaves).length, () => {
         return cb(null, statuses);
-      };
-    })(this));
-    _ref = this.slaves;
-    _results = [];
-    for (s in _ref) {
-      obj = _ref[s];
-      _results.push((function(_this) {
-        return function(s, obj) {
+      });
+      ref = this.slaves;
+      // -- now check the slaves -- #
+      results = [];
+      for (s in ref) {
+        obj = ref[s];
+        results.push(((s, obj) => {
           var pollTimeout, saf, sstat;
           saf = _.once(af);
           sstat = {
@@ -137,87 +138,80 @@ module.exports = MasterIO = (function(_super) {
             status: {}
           };
           statuses.push(sstat);
-          pollTimeout = setTimeout(function() {
-            _this.log.error("Slave " + s + " failed to respond to status.");
+          pollTimeout = setTimeout(() => {
+            this.log.error(`Slave ${s} failed to respond to status.`);
             sstat.UNRESPONSIVE = true;
             return saf();
           }, 1000);
-          return obj.status(function(err, stat) {
+          return obj.status((err, stat) => {
             clearTimeout(pollTimeout);
             if (err) {
-              _this.log.error("Slave " + s + " reported status error: " + err);
+              this.log.error(`Slave ${s} reported status error: ${err}`);
             }
             sstat.ERROR = err;
             sstat.status = stat;
             return saf();
           });
-        };
-      })(this)(s, obj));
+        })(s, obj));
+      }
+      return results;
     }
-    return _results;
+
   };
 
-  Slave = (function(_super1) {
-    __extends(Slave, _super1);
-
-    function Slave(sio, sock) {
+  //----------
+  Slave = class Slave extends require("events").EventEmitter {
+    constructor(sio, sock1) {
+      super();
       this.sio = sio;
-      this.sock = sock;
+      this.sock = sock1;
       this.id = this.sock.id;
       this.last_status = null;
       this.last_err = null;
       this.connected_at = new Date();
+      // -- wire up logging -- #
       this.socklogger = this.sio.log.child({
         slave: this.sock.id
       });
-      this.sock.on("log", (function(_this) {
-        return function(obj) {
-          if (obj == null) {
-            obj = {};
-          }
-          return _this.socklogger[obj.level || 'debug'].apply(_this.socklogger, [obj.msg || "", obj.meta || {}]);
-        };
-      })(this));
-      this.sock.on("vitals", (function(_this) {
-        return function(key, cb) {
-          return _this.sio.master.vitals(key, cb);
-        };
-      })(this));
-      this.sock.on("hls_snapshot", (function(_this) {
-        return function(key, cb) {
-          return _this.sio.master.getHLSSnapshot(key, cb);
-        };
-      })(this));
-      this.sock.on("disconnect", (function(_this) {
-        return function() {
-          return _this._handleDisconnect();
-        };
-      })(this));
+      this.sock.on("log", (obj = {}) => {
+        return this.socklogger[obj.level || 'debug'].apply(this.socklogger, [obj.msg || "", obj.meta || {}]);
+      });
+      // -- RPC Handlers -- #
+      this.sock.on("vitals", (key, cb) => {
+        // respond with the stream's vitals
+        return this.sio.master.vitals(key, cb);
+      });
+      this.sock.on("hls_snapshot", (key, cb) => {
+        // respond with the current array of HLS segments for this stream
+        return this.sio.master.getHLSSnapshot(key, cb);
+      });
+      // attach disconnect handler
+      this.sock.on("disconnect", () => {
+        return this._handleDisconnect();
+      });
     }
 
-    Slave.prototype.status = function(cb) {
-      return this.sock.emit("status", (function(_this) {
-        return function(err, status) {
-          _this.last_status = status;
-          _this.last_err = err;
-          return cb(err, status);
-        };
-      })(this));
-    };
+    //----------
+    status(cb) {
+      return this.sock.emit("status", (err, status) => {
+        this.last_status = status;
+        this.last_err = err;
+        return cb(err, status);
+      });
+    }
 
-    Slave.prototype._handleDisconnect = function() {
+    //----------
+    _handleDisconnect() {
       var connected;
       connected = Math.round((Number(new Date()) - Number(this.connected_at)) / 1000);
-      this.sio.log.debug("Slave disconnect from " + this.sock.id + ". Connected for " + connected + " seconds.");
+      this.sio.log.debug(`Slave disconnect from ${this.sock.id}. Connected for ${connected} seconds.`);
       return this.emit("disconnect");
-    };
+    }
 
-    return Slave;
-
-  })(require("events").EventEmitter);
+  };
 
   return MasterIO;
 
-})(require("events").EventEmitter);
+}).call(this);
 
 //# sourceMappingURL=master_io.js.map

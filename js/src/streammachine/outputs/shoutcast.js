@@ -1,6 +1,4 @@
-var BaseOutput, Icy, Shoutcast, debug, _,
-  __hasProp = {}.hasOwnProperty,
-  __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
+var BaseOutput, Icy, Shoutcast, _, debug;
 
 _ = require('underscore');
 
@@ -10,19 +8,18 @@ BaseOutput = require("./base");
 
 debug = require("debug")("sm:outputs:shoutcast");
 
-module.exports = Shoutcast = (function(_super) {
-  __extends(Shoutcast, _super);
-
-  function Shoutcast(stream, opts) {
+module.exports = Shoutcast = class Shoutcast extends BaseOutput {
+  constructor(stream, opts) {
+    super("shoutcast");
     this.stream = stream;
     this.opts = opts;
     this.disconnected = false;
     this.id = null;
-    Shoutcast.__super__.constructor.call(this, "shoutcast");
     this.pump = true;
     this._lastMeta = null;
     if (this.opts.req && this.opts.res) {
       debug("Incoming Request Headers: ", this.opts.req.headers);
+      // -- startup mode...  sending headers -- #
       this.client.offsetSecs = this.opts.req.query.offset || -1;
       this.client.meta_int = this.stream.opts.meta_interval;
       this.opts.res.chunkedEncoding = false;
@@ -34,125 +31,129 @@ module.exports = Shoutcast = (function(_super) {
         "icy-metaint": this.client.meta_int,
         "Accept-Ranges": "none"
       };
+      // write out our headers
       this.opts.res.writeHead(200, this.headers);
       this.opts.res._send('');
-      this.stream.startSession(this.client, (function(_this) {
-        return function(err, session_id) {
-          debug("Incoming connection given session_id of " + session_id);
-          _this.client.session_id = session_id;
-          return process.nextTick(function() {
-            return _this._startAudio(true);
-          });
-        };
-      })(this));
+      this.stream.startSession(this.client, (err, session_id) => {
+        debug(`Incoming connection given session_id of ${session_id}`);
+        this.client.session_id = session_id;
+        return process.nextTick(() => {
+          return this._startAudio(true);
+        });
+      });
     } else if (this.opts.socket) {
+      // -- socket mode... just data -- #
       this.pump = false;
-      process.nextTick((function(_this) {
-        return function() {
-          return _this._startAudio(false);
-        };
-      })(this));
+      process.nextTick(() => {
+        return this._startAudio(false);
+      });
     }
-    this.socket.on("end", (function(_this) {
-      return function() {
-        return _this.disconnect();
-      };
-    })(this));
-    this.socket.on("close", (function(_this) {
-      return function() {
-        return _this.disconnect();
-      };
-    })(this));
-    this.socket.on("error", (function(_this) {
-      return function() {
-        return _this.disconnect();
-      };
-    })(this));
+    // register our various means of disconnection
+    this.socket.on("end", () => {
+      return this.disconnect();
+    });
+    this.socket.on("close", () => {
+      return this.disconnect();
+    });
+    this.socket.on("error", () => {
+      return this.disconnect();
+    });
   }
 
-  Shoutcast.prototype._startAudio = function(initial) {
+  //----------
+  _startAudio(initial) {
+    // -- create an Icecast creator to inject metadata -- #
+
+    // the initial interval value that we pass in may be different than
+    // the one we want to use later.  Since the initializer queues the
+    // first read, we can set both in succession without having to worry
+    // about timing
     this.ice = new Icy.Writer(this.client.bytesToNextMeta || this.client.meta_int);
     this.ice.metaint = this.client.meta_int;
     delete this.client.bytesToNextMeta;
+    // connect the icecast metadata injector to our output
     this.ice.pipe(this.socket);
     if (initial && this.stream.preroll && !this.opts.req.query.preskip) {
       debug("Pumping preroll");
-      return this.stream.preroll.pump(this, this.ice, (function(_this) {
-        return function(err) {
-          debug("Back from preroll. Connecting to stream.");
-          return _this.connectToStream();
-        };
-      })(this));
+      return this.stream.preroll.pump(this, this.ice, (err) => {
+        debug("Back from preroll. Connecting to stream.");
+        return this.connectToStream();
+      });
     } else {
       return this.connectToStream();
     }
-  };
+  }
 
-  Shoutcast.prototype.disconnect = function() {
-    return Shoutcast.__super__.disconnect.call(this, (function(_this) {
-      return function() {
-        var _ref, _ref1, _ref2, _ref3;
-        if ((_ref = _this.ice) != null) {
-          _ref.unpipe();
-        }
-        if ((_ref1 = _this.source) != null) {
-          _ref1.disconnect();
-        }
-        if (!((_ref2 = _this.socket) != null ? _ref2.destroyed : void 0)) {
-          return (_ref3 = _this.socket) != null ? _ref3.end() : void 0;
-        }
-      };
-    })(this));
-  };
+  //----------
+  disconnect() {
+    return super.disconnect(() => {
+      var ref, ref1, ref2, ref3;
+      if ((ref = this.ice) != null) {
+        ref.unpipe();
+      }
+      if ((ref1 = this.source) != null) {
+        ref1.disconnect();
+      }
+      if (!((ref2 = this.socket) != null ? ref2.destroyed : void 0)) {
+        return (ref3 = this.socket) != null ? ref3.end() : void 0;
+      }
+    });
+  }
 
-  Shoutcast.prototype.prepForHandoff = function(cb) {
+  //----------
+  prepForHandoff(cb) {
+    // we need to know where we are in relation to the icecast metaint
+    // boundary so that we can set up our new stream and keep everything
+    // in sync
     this.client.bytesToNextMeta = this.ice._parserBytesLeft;
+    // remove the initial client.offsetSecs if it exists
     delete this.client.offsetSecs;
     return typeof cb === "function" ? cb() : void 0;
-  };
+  }
 
-  Shoutcast.prototype.connectToStream = function() {
+  //----------
+  connectToStream() {
     if (!this.disconnected) {
       return this.stream.listen(this, {
         offsetSecs: this.client.offsetSecs,
         offset: this.client.offset,
         pump: this.pump,
         startTime: this.opts.startTime
-      }, (function(_this) {
-        return function(err, source) {
-          var _ref;
-          _this.source = source;
-          if (err) {
-            if (_this.opts.res != null) {
-              _this.opts.res.status(500).end(err);
-            } else {
-              if ((_ref = _this.socket) != null) {
-                _ref.end();
-              }
+      }, (err, source) => {
+        var ref;
+        this.source = source;
+        if (err) {
+          if (this.opts.res != null) {
+            this.opts.res.status(500).end(err);
+          } else {
+            if ((ref = this.socket) != null) {
+              ref.end();
             }
-            return false;
           }
-          _this.client.offset = _this.source.offset();
-          _this.source.onFirstMeta(function(err, meta) {
-            if (meta) {
-              return _this.ice.queue(meta);
-            }
-          });
-          _this.metaFunc = function(data) {
-            if (!(_this._lastMeta && _(data).isEqual(_this._lastMeta))) {
-              _this.ice.queue(data);
-              return _this._lastMeta = data;
-            }
-          };
-          _this.source.pipe(_this.ice);
-          return _this.source.on("meta", _this.metaFunc);
+          return false;
+        }
+        // set our offset (in chunks) now that it's been checked for availability
+        this.client.offset = this.source.offset();
+        this.source.onFirstMeta((err, meta) => {
+          if (meta) {
+            return this.ice.queue(meta);
+          }
+        });
+        this.metaFunc = (data) => {
+          if (!(this._lastMeta && _(data).isEqual(this._lastMeta))) {
+            this.ice.queue(data);
+            return this._lastMeta = data;
+          }
         };
-      })(this));
+        // -- pipe source audio to icecast -- #
+        this.source.pipe(this.ice);
+        return this.source.on("meta", this.metaFunc);
+      });
     }
-  };
+  }
 
-  return Shoutcast;
+};
 
-})(BaseOutput);
+//----------
 
 //# sourceMappingURL=shoutcast.js.map

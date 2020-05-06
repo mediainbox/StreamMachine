@@ -17,13 +17,14 @@ module.exports = class MasterMode extends require("./base")
 
     MODE: "Master"
     constructor: (@opts,cb) ->
+        super()
+
         @log = new Logger _.extend(@opts.log, nconf.get('log')), @opts.mode
 
         debug "Master instance initialized."
 
         process.title = "StreamM:master"
 
-        super
 
         # create a master
         @master = new Master _.extend {}, @opts, logger:@log

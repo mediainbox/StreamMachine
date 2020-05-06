@@ -20,12 +20,13 @@ Throttle    = require "throttle"
 
 class LoopingSource extends require('stream').Duplex
     constructor: (opts) ->
+        super opts
+
         @_reading = false
 
         @_data = Buffer.alloc 0
         @_readPos = 0
 
-        super opts
 
     #----------
 

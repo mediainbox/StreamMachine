@@ -1,102 +1,106 @@
-var IcecastSource,
-  __hasProp = {}.hasOwnProperty,
-  __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
+var IcecastSource;
 
-module.exports = IcecastSource = (function(_super) {
-  __extends(IcecastSource, _super);
+module.exports = IcecastSource = (function() {
+  class IcecastSource extends require("./base") {
+    TYPE() {
+      return `Icecast (${[this.opts.source_ip, this.opts.sock.remotePort].join(":")})`;
+    }
 
-  IcecastSource.prototype.TYPE = function() {
-    return "Icecast (" + ([this.opts.source_ip, this.opts.sock.remotePort].join(":")) + ")";
+    // opts should include:
+    // format:   Format for Parser (aac or mp3)
+    // sock:     Socket for incoming data
+    // headers:  Headers from the source request
+    // uuid:     Source UUID, if this is a handoff source (optional)
+    // logger:   Logger (optional)
+    constructor(opts) {
+      var ref;
+      super({
+        useHeartbeat: true
+      });
+      this.opts = opts;
+      this._shouldHandoff = true;
+      // data is going to start streaming in as data on req. We need to pipe
+      // it into a parser to turn it into frames, headers, etc
+      if ((ref = this.log) != null) {
+        ref.debug("New Icecast source.");
+      }
+      this._vtimeout = setTimeout(() => {
+        var ref1;
+        if ((ref1 = this.log) != null) {
+          ref1.error("Failed to get source vitals before timeout. Forcing disconnect.");
+        }
+        return this.disconnect();
+      }, 3000);
+      this.once("vitals", () => {
+        var ref1;
+        if ((ref1 = this.log) != null) {
+          ref1.debug("Vitals parsed for source.");
+        }
+        clearTimeout(this._vtimeout);
+        return this._vtimeout = null;
+      });
+      this.createParser();
+      // incoming -> Parser
+      this.opts.sock.pipe(this.parser);
+      this.last_ts = null;
+      // outgoing -> Stream
+      this.on("_chunk", function(chunk) {
+        this.last_ts = chunk.ts;
+        return this.emit("data", chunk);
+      });
+      this.opts.sock.on("close", () => {
+        var ref1;
+        if ((ref1 = this.log) != null) {
+          ref1.debug("Icecast source got close event");
+        }
+        return this.disconnect();
+      });
+      this.opts.sock.on("end", () => {
+        var ref1;
+        if ((ref1 = this.log) != null) {
+          ref1.debug("Icecast source got end event");
+        }
+        return this.disconnect();
+      });
+      // return with success
+      this.connected = true;
+    }
+
+    //----------
+    status() {
+      var ref;
+      return {
+        source: (ref = typeof this.TYPE === "function" ? this.TYPE() : void 0) != null ? ref : this.TYPE,
+        connected: this.connected,
+        url: [this.opts.source_ip, this.opts.sock.remotePort].join(":"),
+        streamKey: this.streamKey,
+        uuid: this.uuid,
+        last_ts: this.last_ts,
+        connected_at: this.connectedAt
+      };
+    }
+
+    //----------
+    disconnect() {
+      if (this.connected) {
+        super.disconnect();
+        if (this._vtimeout) {
+          clearTimeout(this._vtimeout);
+        }
+        this.opts.sock.destroy();
+        this.opts.sock.removeAllListeners();
+        this.connected = false;
+        this.emit("disconnect");
+        return this.removeAllListeners();
+      }
+    }
+
   };
 
   IcecastSource.prototype.HANDOFF_TYPE = "icecast";
 
-  function IcecastSource(opts) {
-    var _ref;
-    this.opts = opts;
-    IcecastSource.__super__.constructor.call(this, {
-      useHeartbeat: true
-    });
-    this._shouldHandoff = true;
-    if ((_ref = this.log) != null) {
-      _ref.debug("New Icecast source.");
-    }
-    this._vtimeout = setTimeout((function(_this) {
-      return function() {
-        var _ref1;
-        if ((_ref1 = _this.log) != null) {
-          _ref1.error("Failed to get source vitals before timeout. Forcing disconnect.");
-        }
-        return _this.disconnect();
-      };
-    })(this), 3000);
-    this.once("vitals", (function(_this) {
-      return function() {
-        var _ref1;
-        if ((_ref1 = _this.log) != null) {
-          _ref1.debug("Vitals parsed for source.");
-        }
-        clearTimeout(_this._vtimeout);
-        return _this._vtimeout = null;
-      };
-    })(this));
-    this.createParser();
-    this.opts.sock.pipe(this.parser);
-    this.last_ts = null;
-    this.on("_chunk", function(chunk) {
-      this.last_ts = chunk.ts;
-      return this.emit("data", chunk);
-    });
-    this.opts.sock.on("close", (function(_this) {
-      return function() {
-        var _ref1;
-        if ((_ref1 = _this.log) != null) {
-          _ref1.debug("Icecast source got close event");
-        }
-        return _this.disconnect();
-      };
-    })(this));
-    this.opts.sock.on("end", (function(_this) {
-      return function() {
-        var _ref1;
-        if ((_ref1 = _this.log) != null) {
-          _ref1.debug("Icecast source got end event");
-        }
-        return _this.disconnect();
-      };
-    })(this));
-    this.connected = true;
-  }
-
-  IcecastSource.prototype.status = function() {
-    var _ref;
-    return {
-      source: (_ref = typeof this.TYPE === "function" ? this.TYPE() : void 0) != null ? _ref : this.TYPE,
-      connected: this.connected,
-      url: [this.opts.source_ip, this.opts.sock.remotePort].join(":"),
-      streamKey: this.streamKey,
-      uuid: this.uuid,
-      last_ts: this.last_ts,
-      connected_at: this.connectedAt
-    };
-  };
-
-  IcecastSource.prototype.disconnect = function() {
-    if (this.connected) {
-      IcecastSource.__super__.disconnect.apply(this, arguments);
-      if (this._vtimeout) {
-        clearTimeout(this._vtimeout);
-      }
-      this.opts.sock.destroy();
-      this.opts.sock.removeAllListeners();
-      this.connected = false;
-      this.emit("disconnect");
-      return this.removeAllListeners();
-    }
-  };
-
   return IcecastSource;
 
-})(require("./base"));
+}).call(this);
 
 //# sourceMappingURL=icecast.js.map

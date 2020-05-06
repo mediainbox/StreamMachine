@@ -191,7 +191,7 @@ module.exports = class HLSIndex
 
     class @Writer extends require("stream").Readable
         constructor: (@header,@index,@ilength,@session) ->
-            super
+            super()
 
             @_sentHeader = false
             @_idx = 0

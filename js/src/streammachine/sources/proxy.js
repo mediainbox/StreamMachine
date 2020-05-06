@@ -1,7 +1,5 @@
-var Icy, ProxySource, debug, domain, moment, url, util, _,
-  __bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; },
-  __hasProp = {}.hasOwnProperty,
-  __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
+var Icy, ProxySource, _, debug, domain, moment, url, util,
+  boundMethodCheck = function(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new Error('Bound instance method accessed before binding'); } };
 
 Icy = require('icy');
 
@@ -17,26 +15,35 @@ _ = require("underscore");
 
 debug = require("debug")("sm:sources:proxy");
 
-module.exports = ProxySource = (function(_super) {
-  __extends(ProxySource, _super);
+module.exports = ProxySource = class ProxySource extends require("./base") {
+  TYPE() {
+    return `Proxy (${this.url})`;
+  }
 
-  ProxySource.prototype.TYPE = function() {
-    return "Proxy (" + this.url + ")";
-  };
-
-  function ProxySource(opts) {
-    this.opts = opts;
-    this.reconnect = __bind(this.reconnect, this);
-    this.checkStatus = __bind(this.checkStatus, this);
-    this.broadcastData = __bind(this.broadcastData, this);
-    this.connect = __bind(this.connect, this);
-    this.status = __bind(this.status, this);
-    this._niceError = __bind(this._niceError, this);
-    ProxySource.__super__.constructor.call(this, {
+  // opts should include:
+  // format:   Format for Parser (aac or mp3)
+  // url:      URL for original stream
+  // fallback: Should we set the isFallback flag? (default false)
+  // logger:   Logger (optional)
+  constructor(opts) {
+    super({
       useHeartbeat: false
     });
+    //----------
+    this._niceError = this._niceError.bind(this);
+    //----------
+    this.status = this.status.bind(this);
+    //----------
+    this.connect = this.connect.bind(this);
+    //----------
+    this.broadcastData = this.broadcastData.bind(this);
+    //----------
+    this.checkStatus = this.checkStatus.bind(this);
+    //----------
+    this.reconnect = this.reconnect.bind(this);
+    this.opts = opts;
     this.url = this.opts.url;
-    debug("ProxySource created for " + this.url);
+    debug(`ProxySource created for ${this.url}`);
     this.isFallback = this.opts.fallback || false;
     this.defaultHeaders = this.opts.headers || {
       "user-agent": "StreamMachine 0.1.0"
@@ -45,27 +52,26 @@ module.exports = ProxySource = (function(_super) {
     this.framesPerSec = null;
     this.connected_at = null;
     this._in_disconnect = false;
+    // connection drop handling
+    // (FIXME: bouncing not yet implemented)
     this._maxBounces = 10;
     this._bounces = 0;
     this._bounceInt = 5;
     this.StreamTitle = null;
     this.StreamUrl = null;
     this.d = domain.create();
-    this.d.on("error", (function(_this) {
-      return function(err) {
-        return _this._niceError(err);
-      };
-    })(this));
-    this.d.run((function(_this) {
-      return function() {
-        return _this.connect();
-      };
-    })(this));
+    this.d.on("error", (err) => {
+      return this._niceError(err);
+    });
+    this.d.run(() => {
+      return this.connect();
+    });
   }
 
-  ProxySource.prototype._niceError = function(err) {
-    var nice_err, _ref;
-    debug("Caught error: " + err, err.stack);
+  _niceError(err) {
+    var nice_err, ref;
+    boundMethodCheck(this, ProxySource);
+    debug(`Caught error: ${err}`, err.stack);
     nice_err = (function() {
       switch (err.syscall) {
         case "getaddrinfo":
@@ -76,13 +82,14 @@ module.exports = ProxySource = (function(_super) {
           return "Error making connection to Icecast proxy";
       }
     })();
-    return (_ref = this.log) != null ? _ref.error("ProxySource encountered an error: " + nice_err, err) : void 0;
-  };
+    return (ref = this.log) != null ? ref.error(`ProxySource encountered an error: ${nice_err}`, err) : void 0;
+  }
 
-  ProxySource.prototype.status = function() {
-    var _ref;
+  status() {
+    var ref;
+    boundMethodCheck(this, ProxySource);
     return {
-      source: (_ref = typeof this.TYPE === "function" ? this.TYPE() : void 0) != null ? _ref : this.TYPE,
+      source: (ref = typeof this.TYPE === "function" ? this.TYPE() : void 0) != null ? ref : this.TYPE,
       connected: this.connected,
       url: this.url,
       streamKey: this.streamKey,
@@ -91,79 +98,81 @@ module.exports = ProxySource = (function(_super) {
       last_ts: this.last_ts,
       connected_at: this.connected_at
     };
-  };
+  }
 
-  ProxySource.prototype.connect = function() {
+  connect() {
     var url_opts;
+    boundMethodCheck(this, ProxySource);
     this.createParser();
-    debug("Begin connection to Icecast from " + this.url);
+    debug(`Begin connection to Icecast from ${this.url}`);
     url_opts = url.parse(this.url);
     url_opts.headers = _.clone(this.defaultHeaders);
     this.last_ts = null;
     this.chunker.resetTime(new Date());
-    this.ireq = Icy.get(url_opts, (function(_this) {
-      return function(ice) {
-        debug("Connected to Icecast from " + _this.url);
-        if (ice.statusCode === 302) {
-          _this.url = ice.headers.location;
-        }
-        _this.icecast = ice;
-        _this.icecast.once("end", function() {
-          debug("Received Icecast END event");
-          return _this.reconnect();
-        });
-        _this.icecast.once("close", function() {
-          debug("Received Icecast CLOSE event");
-          return _this.reconnect();
-        });
-        _this.icecast.on("metadata", function(data) {
-          var meta;
-          debug("Received Icecast METADATA event");
-          if (!_this._in_disconnect) {
-            meta = Icy.parse(data);
-            if (meta.StreamTitle) {
-              _this.StreamTitle = meta.StreamTitle;
-            }
-            if (meta.StreamUrl) {
-              _this.StreamUrl = meta.StreamUrl;
-            }
-            return _this.emit("metadata", {
-              StreamTitle: _this.StreamTitle || "",
-              StreamUrl: _this.StreamUrl || ""
-            });
+    this.ireq = Icy.get(url_opts, (ice) => {
+      debug(`Connected to Icecast from ${this.url}`);
+      if (ice.statusCode === 302) {
+        this.url = ice.headers.location;
+      }
+      this.icecast = ice;
+      this.icecast.once("end", () => {
+        debug("Received Icecast END event");
+        return this.reconnect();
+      });
+      this.icecast.once("close", () => {
+        debug("Received Icecast CLOSE event");
+        return this.reconnect();
+      });
+      this.icecast.on("metadata", (data) => {
+        var meta;
+        debug("Received Icecast METADATA event");
+        if (!this._in_disconnect) {
+          meta = Icy.parse(data);
+          if (meta.StreamTitle) {
+            this.StreamTitle = meta.StreamTitle;
           }
-        });
-        _this.icecast.on("data", function(chunk) {
-          return _this.parser.write(chunk);
-        });
-        _this.connected = true;
-        _this.connected_at = new Date();
-        _this.emit("connect");
-        return setTimeout(_this.checkStatus, 30000);
-      };
-    })(this));
-    this.ireq.once("error", (function(_this) {
-      return function(err) {
-        debug("Got icecast stream error " + err + ", reconnecting");
-        _this._niceError(err);
-        return _this.reconnect(true);
-      };
-    })(this));
+          if (meta.StreamUrl) {
+            this.StreamUrl = meta.StreamUrl;
+          }
+          return this.emit("metadata", {
+            StreamTitle: this.StreamTitle || "",
+            StreamUrl: this.StreamUrl || ""
+          });
+        }
+      });
+      // incoming -> Parser
+      this.icecast.on("data", (chunk) => {
+        return this.parser.write(chunk);
+      });
+      // return with success
+      this.connected = true;
+      this.connected_at = new Date();
+      this.emit("connect");
+      return setTimeout(this.checkStatus, 30000);
+    });
+    this.ireq.once("error", (err) => {
+      debug(`Got icecast stream error ${err}, reconnecting`);
+      this._niceError(err);
+      return this.reconnect(true);
+    });
+    // outgoing -> Stream
     return this.on("_chunk", this.broadcastData);
-  };
+  }
 
-  ProxySource.prototype.broadcastData = function(chunk) {
-    debug("Received chunk from parser (" + chunk.ts + ")");
+  broadcastData(chunk) {
+    boundMethodCheck(this, ProxySource);
+    debug(`Received chunk from parser (${chunk.ts})`);
     this.last_ts = chunk.ts;
     return this.emit("data", chunk);
-  };
+  }
 
-  ProxySource.prototype.checkStatus = function() {
+  checkStatus() {
+    boundMethodCheck(this, ProxySource);
     if (!this.connected) {
       debug("Check status: not connected, skipping");
       return;
     }
-    debug("Check status: last chunk timestamp is " + this.last_ts);
+    debug(`Check status: last chunk timestamp is ${this.last_ts}`);
     if (!this.last_ts) {
       return setTimeout(this.checkStatus, 5000);
     }
@@ -172,40 +181,38 @@ module.exports = ProxySource = (function(_super) {
       return this.reconnect();
     }
     return setTimeout(this.checkStatus, 30000);
-  };
+  }
 
-  ProxySource.prototype.reconnect = function(ignoreConnectionStatus) {
-    var msWaitToConnect, _ref, _ref1, _ref2, _ref3;
-    if (ignoreConnectionStatus == null) {
-      ignoreConnectionStatus = false;
-    }
+  reconnect(ignoreConnectionStatus = false) {
+    var msWaitToConnect, ref, ref1, ref2, ref3;
+    boundMethodCheck(this, ProxySource);
     if (!this.connected && !ignoreConnectionStatus) {
       return;
     }
     msWaitToConnect = 5000;
-    debug("Reconnect to Icecast source from " + this.url + " in " + msWaitToConnect + "ms");
+    debug(`Reconnect to Icecast source from ${this.url} in ${msWaitToConnect}ms`);
     this.connected = false;
+    // Clean proxy listeners
     this.removeListener("_chunk", this.broadcastData);
-    if ((_ref = this.ireq) != null) {
-      _ref.end();
+    // Clean icecast
+    if ((ref = this.ireq) != null) {
+      ref.end();
     }
-    if ((_ref1 = this.ireq) != null) {
-      if ((_ref2 = _ref1.res) != null) {
-        _ref2.client.destroy();
+    if ((ref1 = this.ireq) != null) {
+      if ((ref2 = ref1.res) != null) {
+        ref2.client.destroy();
       }
     }
-    if ((_ref3 = this.icecast) != null) {
-      _ref3.removeAllListeners();
+    if ((ref3 = this.icecast) != null) {
+      ref3.removeAllListeners();
     }
     this.icecast = null;
     this.ireq = null;
     this.parser = null;
     this.chunker = null;
     return setTimeout(this.connect, msWaitToConnect);
-  };
+  }
 
-  return ProxySource;
-
-})(require("./base"));
+};
 
 //# sourceMappingURL=proxy.js.map

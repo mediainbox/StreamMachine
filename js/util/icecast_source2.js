@@ -1,4 +1,4 @@
-var IcecastSource, filepath, fs, path, source, _ref, _ref1;
+var IcecastSource, filepath, fs, path, ref, ref1, source;
 
 IcecastSource = require("../src/streammachine/util/icecast_source");
 
@@ -12,16 +12,17 @@ this.args = require("yargs").usage("Usage: $0 --host localhost --port 8001 --str
   source: "Source Mount key",
   password: "Source password",
   format: "File Format (mp3 or aac)"
-}).demand(["host", "port", "source", "format"]).alias('stream', 'source')["default"]({
+}).demand(["host", "port", "source", "format"]).alias('stream', 'source').default({
   host: "127.0.0.1",
   format: "mp3"
 }).argv;
 
-if (((_ref = this.args._) != null ? _ref[0] : void 0) === "source") {
+if (((ref = this.args._) != null ? ref[0] : void 0) === "source") {
   this.args._.shift();
 }
 
-filepath = (_ref1 = this.args._) != null ? _ref1[0] : void 0;
+// -- Make sure they gave us a file -- #
+filepath = (ref1 = this.args._) != null ? ref1[0] : void 0;
 
 if (!filepath) {
   console.error("A file path is required.");
@@ -37,6 +38,7 @@ if (!fs.existsSync(filepath)) {
 
 console.log("file is ", filepath);
 
+// -- Start streaming -- #
 source = new IcecastSource({
   format: this.args.format,
   filePath: filepath,
@@ -46,16 +48,12 @@ source = new IcecastSource({
   password: this.args.password
 });
 
-source.on("disconnect", (function(_this) {
-  return function() {
-    return process.exit(1);
-  };
-})(this));
+source.on("disconnect", () => {
+  return process.exit(1);
+});
 
-source.start((function(_this) {
-  return function(err) {
-    return console.log("Streaming!");
-  };
-})(this));
+source.start((err) => {
+  return console.log("Streaming!");
+});
 
 //# sourceMappingURL=icecast_source2.js.map

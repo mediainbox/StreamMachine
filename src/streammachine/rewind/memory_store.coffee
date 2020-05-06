@@ -4,6 +4,8 @@ debug = require("debug")("sm:rewind:memory_store")
 
 module.exports = class MemoryStore extends require("./base_store")
     constructor: (@max_length = null) ->
+        super()
+
         @buffer = []
 
     #----------

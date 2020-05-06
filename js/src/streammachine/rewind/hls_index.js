@@ -1,150 +1,184 @@
-var HLSIndex, _,
-  __hasProp = {}.hasOwnProperty,
-  __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
+var HLSIndex, _;
 
 _ = require("underscore");
 
 module.exports = HLSIndex = (function() {
-  function HLSIndex(stream, tz, group) {
-    this.stream = stream;
-    this.tz = tz;
-    this.group = group;
-    this._shouldRun = false;
-    this._running = false;
-    this._segment_idx = {};
-    this._segments = [];
-    this._segment_length = null;
-    this._header = null;
-    this._index = null;
-    this._short_header = null;
-    this._short_index = null;
-  }
-
-  HLSIndex.prototype.disconnect = function() {
-    return this.stream = null;
-  };
-
-  HLSIndex.prototype.loadSnapshot = function(snapshot) {
-    if (snapshot) {
-      this._segments = snapshot.segments;
-      this._segment_duration = snapshot.segment_duration;
-      return this.queueIndex();
+  class HLSIndex {
+    constructor(stream, tz, group) {
+      this.stream = stream;
+      this.tz = tz;
+      this.group = group;
+      this._shouldRun = false;
+      this._running = false;
+      this._segment_idx = {};
+      this._segments = [];
+      this._segment_length = null;
+      this._header = null;
+      this._index = null;
+      this._short_header = null;
+      this._short_index = null;
     }
-  };
 
-  HLSIndex.prototype.queueIndex = function() {
-    this._shouldRun = true;
-    return this._runIndex();
-  };
-
-  HLSIndex.prototype._runIndex = function() {
-    var b, dseq, has_disc, head, i, id, idx_length, idx_segs, old_seg_ids, s, seg, seg_ids, seg_map, segs, short_head, short_length, _after, _i, _j, _k, _l, _len, _len1, _len2, _len3, _ref, _ref1, _ref2, _short_length, _short_start;
-    if (this._running || !this.stream) {
-      return false;
+    //----------
+    disconnect() {
+      return this.stream = null;
     }
-    this._running = true;
-    this._shouldRun = false;
-    _after = (function(_this) {
-      return function() {
-        _this._running = false;
-        if (_this._shouldRun) {
-          return _this._runIndex();
+
+    //----------
+    loadSnapshot(snapshot) {
+      if (snapshot) {
+        this._segments = snapshot.segments;
+        this._segment_duration = snapshot.segment_duration;
+        return this.queueIndex();
+      }
+    }
+
+    //----------
+    queueIndex() {
+      this._shouldRun = true;
+      return this._runIndex();
+    }
+
+    //----------
+    _runIndex() {
+      var _after, _short_length, _short_start, b, dseq, has_disc, head, i, id, idx_length, idx_segs, j, k, l, len, len1, len2, len3, m, old_seg_ids, ref, ref1, ref2, s, seg, seg_ids, seg_map, segs, short_head, short_length;
+      if (this._running || !this.stream) {
+        return false;
+      }
+      this._running = true;
+      this._shouldRun = false;
+      _after = () => {
+        // -- should we run again? -- #
+        this._running = false;
+        if (this._shouldRun) {
+          return this._runIndex();
         }
       };
-    })(this);
-    segs = this._segments.slice(0);
-    if (segs.length < 3) {
-      this.header = null;
-      this._index = null;
-      _after();
-      return false;
-    }
-    _short_length = 120 / this._segment_duration;
-    _short_start = segs.length - 1 - _short_length;
-    if (_short_start < 2) {
-      _short_start = 2;
-    }
-    head = Buffer.from("#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:" + this._segment_duration + "\n#EXT-X-MEDIA-SEQUENCE:" + segs[2].id + "\n#EXT-X-DISCONTINUITY-SEQUENCE:" + segs[2].discontinuitySeq + "\n#EXT-X-INDEPENDENT-SEGMENTS\n");
-    short_head = Buffer.from("#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:" + this._segment_duration + "\n#EXT-X-MEDIA-SEQUENCE:" + segs[_short_start].id + "\n#EXT-X-DISCONTINUITY-SEQUENCE:" + segs[_short_start].discontinuitySeq + "\n#EXT-X-INDEPENDENT-SEGMENTS\n");
-    idx_segs = [];
-    idx_length = 0;
-    seg_ids = (function() {
-      var _i, _len, _results;
-      _results = [];
-      for (_i = 0, _len = segs.length; _i < _len; _i++) {
-        seg = segs[_i];
-        _results.push(String(seg.id));
+      // clone the segments array, in case it changes while we're running
+      segs = this._segments.slice(0);
+      if (segs.length < 3) {
+        // not enough buffer for a playlist yet
+        this.header = null;
+        this._index = null;
+        _after();
+        return false;
       }
-      return _results;
-    })();
-    dseq = segs[1].discontinuitySeq;
-    _ref = segs.slice(2);
-    for (i = _i = 0, _len = _ref.length; _i < _len; i = ++_i) {
-      seg = _ref[i];
-      if (!this._segment_idx[seg.id]) {
-        has_disc = !(seg.discontinuitySeq === dseq);
-        seg.idx_buffer = Buffer.from("" + (has_disc ? "#EXT-X-DISCONTINUITY\n" : "") + "#EXTINF:" + (seg.duration / 1000) + ",\n#EXT-X-PROGRAM-DATE-TIME:" + (this.tz(seg.ts_actual, "%FT%T.%3N%:z")) + "\n/" + this.stream.key + "/ts/" + seg.id + "." + this.stream.opts.format);
-        this._segment_idx[seg.id] = seg;
+      // -- Determine Short Index Start -- #
+      _short_length = 120 / this._segment_duration;
+      _short_start = segs.length - 1 - _short_length;
+      if (_short_start < 2) {
+        _short_start = 2;
       }
-      b = this._segment_idx[seg.id].idx_buffer;
-      idx_length += b.length;
-      idx_segs.push(b);
-      dseq = seg.discontinuitySeq;
-    }
-    seg_map = {};
-    for (_j = 0, _len1 = segs.length; _j < _len1; _j++) {
-      s = segs[_j];
-      seg_map[s.id] = s;
-    }
-    this._header = head;
-    this._index = idx_segs;
-    this._index_length = idx_length;
-    this._short_header = short_head;
-    this._short_index = idx_segs.slice(_short_start);
-    short_length = 0;
-    _ref1 = this._short_index;
-    for (_k = 0, _len2 = _ref1.length; _k < _len2; _k++) {
-      b = _ref1[_k];
-      short_length += b.length;
-    }
-    this._short_length = short_length;
-    old_seg_ids = Object.keys(this._segment_idx);
-    _ref2 = _(old_seg_ids).difference(seg_ids);
-    for (_l = 0, _len3 = _ref2.length; _l < _len3; _l++) {
-      id = _ref2[_l];
-      if (this._segment_idx[id]) {
-        delete this._segment_idx[id];
+      // -- build our header -- #
+      head = Buffer.from(`#EXTM3U
+#EXT-X-VERSION:3
+#EXT-X-TARGETDURATION:${this._segment_duration}
+#EXT-X-MEDIA-SEQUENCE:${segs[2].id}
+#EXT-X-DISCONTINUITY-SEQUENCE:${segs[2].discontinuitySeq}
+#EXT-X-INDEPENDENT-SEGMENTS
+`);
+      short_head = Buffer.from(`#EXTM3U
+#EXT-X-VERSION:3
+#EXT-X-TARGETDURATION:${this._segment_duration}
+#EXT-X-MEDIA-SEQUENCE:${segs[_short_start].id}
+#EXT-X-DISCONTINUITY-SEQUENCE:${segs[_short_start].discontinuitySeq}
+#EXT-X-INDEPENDENT-SEGMENTS
+`);
+      // run through segments and build the index
+      // We skip the first three segments for the index, but we'll use
+      // segment #2 for our next ts
+      idx_segs = [];
+      idx_length = 0;
+      // what ids are in this segment list?
+      seg_ids = (function() {
+        var j, len, results;
+        results = [];
+        for (j = 0, len = segs.length; j < len; j++) {
+          seg = segs[j];
+          results.push(String(seg.id));
+        }
+        return results;
+      })();
+      // -- loop through remaining segments -- #
+      dseq = segs[1].discontinuitySeq;
+      ref = segs.slice(2);
+      for (i = j = 0, len = ref.length; j < len; i = ++j) {
+        seg = ref[i];
+        if (!this._segment_idx[seg.id]) {
+          // is the segment where we expect it in the timeline?
+          has_disc = !(seg.discontinuitySeq === dseq);
+          seg.idx_buffer = Buffer.from(`${has_disc ? "#EXT-X-DISCONTINUITY\n" : ""}#EXTINF:${seg.duration / 1000},
+#EXT-X-PROGRAM-DATE-TIME:${this.tz(seg.ts_actual, "%FT%T.%3N%:z")}
+/${this.stream.key}/ts/${seg.id}.${this.stream.opts.format}`);
+          this._segment_idx[seg.id] = seg;
+        }
+        b = this._segment_idx[seg.id].idx_buffer;
+        idx_length += b.length;
+        idx_segs.push(b);
+        dseq = seg.discontinuitySeq;
       }
+      // -- build the segment map -- #
+      seg_map = {};
+      for (k = 0, len1 = segs.length; k < len1; k++) {
+        s = segs[k];
+        seg_map[s.id] = s;
+      }
+      // -- set these as active -- #
+      this._header = head;
+      this._index = idx_segs;
+      this._index_length = idx_length;
+      this._short_header = short_head;
+      this._short_index = idx_segs.slice(_short_start);
+      short_length = 0;
+      ref1 = this._short_index;
+      for (l = 0, len2 = ref1.length; l < len2; l++) {
+        b = ref1[l];
+        short_length += b.length;
+      }
+      this._short_length = short_length;
+      // what segments should be removed from our index?
+      old_seg_ids = Object.keys(this._segment_idx);
+      ref2 = _(old_seg_ids).difference(seg_ids);
+      for (m = 0, len3 = ref2.length; m < len3; m++) {
+        id = ref2[m];
+        if (this._segment_idx[id]) {
+          delete this._segment_idx[id];
+        }
+      }
+      return _after();
     }
-    return _after();
-  };
 
-  HLSIndex.prototype.short_index = function(session, cb) {
-    var writer;
-    session = session ? Buffer.from(session + "\n") : Buffer.from("\n");
-    if (!this._short_header) {
-      return cb(null, null);
+    //----------
+    short_index(session, cb) {
+      var writer;
+      session = session ? Buffer.from(session + "\n") : Buffer.from("\n");
+      if (!this._short_header) {
+        return cb(null, null);
+      }
+      writer = new HLSIndex.Writer(this._short_header, this._short_index, this._short_length, session);
+      return cb(null, writer);
     }
-    writer = new HLSIndex.Writer(this._short_header, this._short_index, this._short_length, session);
-    return cb(null, writer);
-  };
 
-  HLSIndex.prototype.index = function(session, cb) {
-    var writer;
-    session = session ? Buffer.from(session + "\n") : Buffer.from("\n");
-    if (!this._header) {
-      return cb(null, null);
+    //----------
+    index(session, cb) {
+      var writer;
+      session = session ? Buffer.from(session + "\n") : Buffer.from("\n");
+      if (!this._header) {
+        return cb(null, null);
+      }
+      writer = new HLSIndex.Writer(this._header, this._index, this._index_length, session);
+      return cb(null, writer);
     }
-    writer = new HLSIndex.Writer(this._header, this._index, this._index_length, session);
-    return cb(null, writer);
-  };
 
-  HLSIndex.prototype.pumpSegment = function(rewinder, id, cb) {
-    var dur, s;
-    if (s = this._segment_idx[Number(id)]) {
-      dur = this.stream.secsToOffset(s.duration / 1000);
-      return this.stream.pumpFrom(rewinder, s.ts_actual, dur, false, (function(_this) {
-        return function(err, info) {
+    //----------
+    pumpSegment(rewinder, id, cb) {
+      var dur, s;
+      // given a segment id, look the segment up in our store to get start ts
+      // and duration, then ask the RewindBuffer for the appropriate data
+      if (s = this._segment_idx[Number(id)]) {
+        // valid segment...
+        dur = this.stream.secsToOffset(s.duration / 1000);
+        return this.stream.pumpFrom(rewinder, s.ts_actual, dur, false, (err, info) => {
           if (err) {
             return cb(err);
           } else {
@@ -152,32 +186,33 @@ module.exports = HLSIndex = (function() {
               pts: s.pts
             }));
           }
-        };
-      })(this));
-    } else {
-      return cb("Segment not found in index.");
+        });
+      } else {
+        return cb("Segment not found in index.");
+      }
     }
+
   };
 
-  HLSIndex.Writer = (function(_super) {
-    __extends(Writer, _super);
-
-    function Writer(header, index, ilength, session) {
+  //----------
+  HLSIndex.Writer = class Writer extends require("stream").Readable {
+    constructor(header, index, ilength, session1) {
+      super();
       this.header = header;
       this.index = index;
       this.ilength = ilength;
-      this.session = session;
-      Writer.__super__.constructor.apply(this, arguments);
+      this.session = session1;
       this._sentHeader = false;
       this._idx = 0;
+      // determine total length
       this._length = this.header.length + this.ilength + (this.session.length * this.index.length);
     }
 
-    Writer.prototype.length = function() {
+    length() {
       return this._length;
-    };
+    }
 
-    Writer.prototype._read = function(size) {
+    _read(size) {
       var bufs, sent;
       sent = 0;
       bufs = [];
@@ -200,14 +235,12 @@ module.exports = HLSIndex = (function() {
       if (this._idx === this.index.length) {
         return this.push(null);
       }
-    };
+    }
 
-    return Writer;
-
-  })(require("stream").Readable);
+  };
 
   return HLSIndex;
 
-})();
+}).call(this);
 
 //# sourceMappingURL=hls_index.js.map

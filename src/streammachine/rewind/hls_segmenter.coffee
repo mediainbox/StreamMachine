@@ -14,6 +14,8 @@ MAX_PTS = Math.pow(2,33) - 1
 
 module.exports = class HLSSegmenter extends require("events").EventEmitter
     constructor: (@rewind,@segment_length,@log) ->
+        super()
+
         @segments = []
         @_rewindLoading = false
 
@@ -153,10 +155,10 @@ module.exports = class HLSSegmenter extends require("events").EventEmitter
 
     class @Injector extends require("stream").Transform
         constructor: (@segment_length,@log) ->
+            super objectMode:true
+
             @first_seg  = null
             @last_seg   = null
-
-            super objectMode:true
 
         #----------
 
@@ -254,6 +256,8 @@ module.exports = class HLSSegmenter extends require("events").EventEmitter
 
     class @Finalizer extends require("stream").Writable
         constructor: (@log,@segmentLen,seg_data=null) ->
+            super objectMode:true
+
             @segments       = []
             @segment_idx    = {}
 
@@ -269,7 +273,6 @@ module.exports = class HLSSegmenter extends require("events").EventEmitter
 
             @_min_ts        = null
 
-            super objectMode:true
 
         #----------
 

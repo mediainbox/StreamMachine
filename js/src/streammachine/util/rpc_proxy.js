@@ -1,51 +1,44 @@
-var RPCProxy,
-  __hasProp = {}.hasOwnProperty,
-  __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
+var RPCProxy;
 
-module.exports = RPCProxy = (function(_super) {
-  __extends(RPCProxy, _super);
-
-  function RPCProxy(a, b) {
+module.exports = RPCProxy = class RPCProxy extends require("events").EventEmitter {
+  constructor(a, b) {
+    super();
     this.a = a;
     this.b = b;
     this.messages = [];
-    this._aFunc = (function(_this) {
-      return function(msg, handle) {
-        _this.messages.push({
-          sender: "a",
-          msg: msg,
-          handle: handle != null
-        });
-        _this.b.send(msg, handle);
-        if (msg.err) {
-          return _this.emit("error", msg);
-        }
-      };
-    })(this);
-    this._bFunc = (function(_this) {
-      return function(msg, handle) {
-        _this.messages.push({
-          sender: "b",
-          msg: msg,
-          handle: handle != null
-        });
-        _this.a.send(msg, handle);
-        if (msg.err) {
-          return _this.emit("error", msg);
-        }
-      };
-    })(this);
+    this._aFunc = (msg, handle) => {
+      this.messages.push({
+        sender: "a",
+        msg: msg,
+        handle: handle != null
+      });
+      //console.log "a->b: #{msg.key}\t#{handle?}"
+      this.b.send(msg, handle);
+      if (msg.err) {
+        return this.emit("error", msg);
+      }
+    };
+    this._bFunc = (msg, handle) => {
+      this.messages.push({
+        sender: "b",
+        msg: msg,
+        handle: handle != null
+      });
+      //console.log "b->a: #{msg.id || msg.reply_id}\t#{msg.key}\t#{handle?}"
+      this.a.send(msg, handle);
+      if (msg.err) {
+        return this.emit("error", msg);
+      }
+    };
     this.a.on("message", this._aFunc);
     this.b.on("message", this._bFunc);
   }
 
-  RPCProxy.prototype.disconnect = function() {
+  disconnect() {
     this.a.removeListener("message", this._aFunc);
     return this.b.removeListener("message", this._bFunc);
-  };
+  }
 
-  return RPCProxy;
-
-})(require("events").EventEmitter);
+};
 
 //# sourceMappingURL=rpc_proxy.js.map

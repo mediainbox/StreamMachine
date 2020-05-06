@@ -6,6 +6,7 @@ _ = require "underscore"
 
 module.exports = class StreamListener extends require("events").EventEmitter
     constructor: (@host,@port,@stream,@shoutcast=false) ->
+        super()
         @bytesReceived = 0
 
         @url = "http://#{@host}:#{@port}/#{@stream}"

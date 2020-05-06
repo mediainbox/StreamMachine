@@ -6,10 +6,11 @@ debug = require("debug")("sm:util:chunk_generator")
 
 module.exports = class ChunkGenerator extends require("stream").Readable
     constructor: (@start_ts,@chunk_duration) ->
+        super objectMode:true
+
         @_count_f   = 0
         @_count_b   = 1
 
-        super objectMode:true
 
     skip_forward: (count,cb) ->
         @_count_f += count

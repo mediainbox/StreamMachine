@@ -1,6 +1,4 @@
-var RewindDumpRestore, fs, path, _,
-  __hasProp = {}.hasOwnProperty,
-  __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
+var RewindDumpRestore, _, fs, path;
 
 path = require("path");
 
@@ -8,78 +6,82 @@ fs = require("fs");
 
 _ = require("underscore");
 
-module.exports = RewindDumpRestore = (function(_super) {
+// RewindDumpRestore is in charge of making periodic backups of a RewindBuffer's
+// data. This is important for helping a crashed process get back up to
+// speed quickly. The `settings` should define the directory to write
+// dump files into and the frequency in seconds with which dumps should
+// occur.
+module.exports = RewindDumpRestore = (function() {
   var Dumper;
 
-  __extends(RewindDumpRestore, _super);
+  class RewindDumpRestore extends require('events').EventEmitter {
+    constructor(master, settings) {
+      var obj, ref, ref1, s;
+      super();
+      this.master = master;
+      this.settings = settings;
+      this._streams = {};
+      this._queue = [];
+      this._working = false;
+      this._shouldLoad = false;
+      this.log = this.master.log.child({
+        module: "rewind_dump_restore"
+      });
+      // -- make sure directory is valid -- #
+      this._path = fs.realpathSync(path.resolve(process.cwd(), this.settings.dir));
+      if ((ref = (s = fs.statSync(this._path))) != null ? ref.isDirectory() : void 0) {
 
-  function RewindDumpRestore(master, settings) {
-    var obj, s, _ref, _ref1;
-    this.master = master;
-    this.settings = settings;
-    this._streams = {};
-    this._queue = [];
-    this._working = false;
-    this._shouldLoad = false;
-    this.log = this.master.log.child({
-      module: "rewind_dump_restore"
-    });
-    this._path = fs.realpathSync(path.resolve(process.cwd(), this.settings.dir));
-    if ((_ref = (s = fs.statSync(this._path))) != null ? _ref.isDirectory() : void 0) {
-
-    } else {
-      this.log.error("RewindDumpRestore path (" + this._path + ") is invalid.");
-      return false;
-    }
-    _ref1 = this.master.streams;
-    for (s in _ref1) {
-      obj = _ref1[s];
-      this._streams[s] = new Dumper(s, obj.rewind, this._path);
-      obj.once("destroy", (function(_this) {
-        return function() {
-          return delete _this._streams[s];
-        };
-      })(this));
-    }
-    this.master.on("new_stream", (function(_this) {
-      return function(stream) {
-        _this.log.debug("RewindDumpRestore got new stream: " + stream.key);
-        return _this._streams[stream.key] = new Dumper(stream.key, stream.rewind, _this._path);
-      };
-    })(this));
-    if ((this.settings.frequency || -1) > 0) {
-      this.log.debug("RewindDumpRestore initialized with interval of " + this.settings.frequency + " seconds.");
-      this._int = setInterval((function(_this) {
-        return function() {
-          return _this._triggerDumps();
-        };
-      })(this), this.settings.frequency * 1000);
-    }
-  }
-
-  RewindDumpRestore.prototype.load = function(cb) {
-    var d, k, load_q, results, _load;
-    this._shouldLoad = true;
-    load_q = (function() {
-      var _ref, _results;
-      _ref = this._streams;
-      _results = [];
-      for (k in _ref) {
-        d = _ref[k];
-        _results.push(d);
+      } else {
+        // good
+        this.log.error(`RewindDumpRestore path (${this._path}) is invalid.`);
+        return false;
       }
-      return _results;
-    }).call(this);
-    results = {
-      success: 0,
-      errors: 0
-    };
-    _load = (function(_this) {
-      return function() {
+      ref1 = this.master.streams;
+      // -- create agents for each stream -- #
+      for (s in ref1) {
+        obj = ref1[s];
+        this._streams[s] = new Dumper(s, obj.rewind, this._path);
+        obj.once("destroy", () => {
+          return delete this._streams[s];
+        });
+      }
+      // watch for new streams
+      this.master.on("new_stream", (stream) => {
+        this.log.debug(`RewindDumpRestore got new stream: ${stream.key}`);
+        return this._streams[stream.key] = new Dumper(stream.key, stream.rewind, this._path);
+      });
+      // -- set our interval -- #
+      if ((this.settings.frequency || -1) > 0) {
+        this.log.debug(`RewindDumpRestore initialized with interval of ${this.settings.frequency} seconds.`);
+        this._int = setInterval(() => {
+          return this._triggerDumps();
+        }, this.settings.frequency * 1000);
+      }
+    }
+
+    //----------
+    load(cb) {
+      var _load, d, k, load_q, results;
+      this._shouldLoad = true;
+      load_q = (function() {
+        var ref, results1;
+        ref = this._streams;
+        results1 = [];
+        for (k in ref) {
+          d = ref[k];
+          results1.push(d);
+        }
+        return results1;
+      }).call(this);
+      results = {
+        success: 0,
+        errors: 0
+      };
+      _load = () => {
         if (d = load_q.shift()) {
-          return d._tryLoad(function(err, stats) {
+          return d._tryLoad((err, stats) => {
             if (err) {
-              _this.log.error("Load for " + d.key + " errored: " + err, {
+              this.log.error(`Load for ${d.key} errored: ${err}`, {
                 stream: d.key
               });
               results.errors += 1;
@@ -89,67 +91,70 @@ module.exports = RewindDumpRestore = (function(_super) {
             return _load();
           });
         } else {
-          _this.log.info("RewindDumpRestore load complete.", {
+          // done
+          this.log.info("RewindDumpRestore load complete.", {
             success: results.success,
             errors: results.errors
           });
           return typeof cb === "function" ? cb(null, results) : void 0;
         }
       };
-    })(this);
-    return _load();
-  };
-
-  RewindDumpRestore.prototype._triggerDumps = function(cb) {
-    var d, k, _ref;
-    this.log.silly("Queuing Rewind dumps");
-    (_ref = this._queue).push.apply(_ref, (function() {
-      var _ref, _results;
-      _ref = this._streams;
-      _results = [];
-      for (k in _ref) {
-        d = _ref[k];
-        _results.push(d);
-      }
-      return _results;
-    }).call(this));
-    if (!this._working) {
-      return this._dump(cb);
+      return _load();
     }
-  };
 
-  RewindDumpRestore.prototype._dump = function(cb) {
-    var d;
-    this._working = true;
-    if (d = this._queue.shift()) {
-      return d._dump((function(_this) {
-        return function(err, file, timing) {
+    //----------
+    _triggerDumps(cb) {
+      var d, k;
+      this.log.silly("Queuing Rewind dumps");
+      this._queue.push(...((function() {
+        var ref, results1;
+        ref = this._streams;
+        results1 = [];
+        for (k in ref) {
+          d = ref[k];
+          results1.push(d);
+        }
+        return results1;
+      }).call(this)));
+      if (!this._working) {
+        return this._dump(cb);
+      }
+    }
+
+    //----------
+    _dump(cb) {
+      var d;
+      this._working = true;
+      if (d = this._queue.shift()) {
+        return d._dump((err, file, timing) => {
           if (err) {
             if (d.stream) {
-              _this.log.error("Dump for " + d.key + " errored: " + err, {
+              this.log.error(`Dump for ${d.key} errored: ${err}`, {
                 stream: d.stream.key
               });
             } else {
-              _this.log.error("Dump for " + d.key + " errored (with no stream): " + err);
+              this.log.error(`Dump for ${d.key} errored (with no stream): ${err}`);
             }
           }
-          _this.emit("debug", "dump", d.key, err, {
+          // for tests...
+          this.emit("debug", "dump", d.key, err, {
             file: file,
             timing: timing
           });
-          return _this._dump(cb);
-        };
-      })(this));
-    } else {
-      this._working = false;
-      return typeof cb === "function" ? cb() : void 0;
+          return this._dump(cb);
+        });
+      } else {
+        this._working = false;
+        return typeof cb === "function" ? cb() : void 0;
+      }
     }
+
   };
 
-  Dumper = (function(_super1) {
-    __extends(Dumper, _super1);
-
-    function Dumper(key, rewind, _path) {
+  //----------
+  Dumper = class Dumper extends require('events').EventEmitter {
+    constructor(key, rewind, _path) {
+      super();
       this.key = key;
       this.rewind = rewind;
       this._path = _path;
@@ -157,49 +162,51 @@ module.exports = RewindDumpRestore = (function(_super) {
       this._active = false;
       this._loaded = null;
       this._tried_load = false;
-      this._filepath = path.join(this._path, "" + this.rewind._rkey + ".dump");
+      this._filepath = path.join(this._path, `${this.rewind._rkey}.dump`);
     }
 
-    Dumper.prototype._tryLoad = function(cb) {
+    //----------
+    _tryLoad(cb) {
       var rs;
+      // try loading our filepath. catch the error if it is not found
       rs = fs.createReadStream(this._filepath);
-      rs.once("error", (function(_this) {
-        return function(err) {
-          _this._setLoaded(false);
-          if (err.code === "ENOENT") {
-            return cb(null);
-          }
-          return cb(err);
-        };
-      })(this));
-      return rs.once("open", (function(_this) {
-        return function() {
-          return _this.rewind.loadBuffer(rs, function(err, stats) {
-            _this._setLoaded(true);
-            return cb(null, stats);
-          });
-        };
-      })(this));
-    };
+      rs.once("error", (err) => {
+        this._setLoaded(false);
+        if (err.code === "ENOENT") {
+          // not an error. just doesn't exist
+          return cb(null);
+        }
+        return cb(err);
+      });
+      return rs.once("open", () => {
+        return this.rewind.loadBuffer(rs, (err, stats) => {
+          this._setLoaded(true);
+          return cb(null, stats);
+        });
+      });
+    }
 
-    Dumper.prototype._setLoaded = function(status) {
+    //----------
+    _setLoaded(status) {
       this._loaded = status;
       this._tried_load = true;
       return this.emit("loaded", status);
-    };
+    }
 
-    Dumper.prototype.once_loaded = function(cb) {
+    //----------
+    once_loaded(cb) {
       if (this._tried_load) {
         return typeof cb === "function" ? cb() : void 0;
       } else {
         return this.once("loaded", cb);
       }
-    };
+    }
 
-    Dumper.prototype._dump = function(cb) {
+    //----------
+    _dump(cb) {
       var start_ts, w;
       if (this._active) {
-        cb(new Error("RewindDumper failed: Already active for " + this.rewind._rkey));
+        cb(new Error(`RewindDumper failed: Already active for ${this.rewind._rkey}`));
         return false;
       }
       if (this.rewind.isLoading()) {
@@ -209,62 +216,61 @@ module.exports = RewindDumpRestore = (function(_super) {
       this._active = true;
       start_ts = _.now();
       cb = _.once(cb);
-      w = fs.createWriteStream("" + this._filepath + ".new");
-      w.once("open", (function(_this) {
-        return function() {
-          return _this.rewind.dumpBuffer(function(err, writer) {
-            writer.pipe(w);
-            return w.once("close", function() {
-              var af;
-              if (w.bytesWritten === 0) {
-                err = null;
-                af = _.after(2, function() {
-                  var end_ts;
-                  end_ts = _.now();
-                  _this._active = false;
-                  return cb(err, null, end_ts - start_ts);
-                });
-                fs.unlink("" + _this._filepath + ".new", function(e) {
-                  if (e) {
-                    err = e;
-                  }
-                  return af();
-                });
-                return fs.unlink(_this._filepath, function(e) {
-                  if (e && e.code !== "ENOENT") {
-                    err = e;
-                  }
-                  return af();
-                });
-              } else {
-                return fs.rename("" + _this._filepath + ".new", _this._filepath, function(err) {
-                  var end_ts;
-                  if (err) {
-                    cb(err);
-                    return false;
-                  }
-                  end_ts = _.now();
-                  _this._active = false;
-                  return cb(null, _this._filepath, end_ts - start_ts);
-                });
-              }
-            });
+      // -- open our output file -- #
+
+      // To make sure we don't crash mid-write, we want to write to a temp file
+      // and then get renamed to our actual filepath location.
+      w = fs.createWriteStream(`${this._filepath}.new`);
+      w.once("open", () => {
+        return this.rewind.dumpBuffer((err, writer) => {
+          writer.pipe(w);
+          return w.once("close", () => {
+            var af;
+            if (w.bytesWritten === 0) {
+              err = null;
+              af = _.after(2, () => {
+                var end_ts;
+                end_ts = _.now();
+                this._active = false;
+                return cb(err, null, end_ts - start_ts);
+              });
+              fs.unlink(`${this._filepath}.new`, (e) => {
+                if (e) {
+                  err = e;
+                }
+                return af();
+              });
+              // we also want to unlink any existing dump file
+              return fs.unlink(this._filepath, (e) => {
+                if (e && e.code !== "ENOENT") {
+                  err = e;
+                }
+                return af();
+              });
+            } else {
+              return fs.rename(`${this._filepath}.new`, this._filepath, (err) => {
+                var end_ts;
+                if (err) {
+                  cb(err);
+                  return false;
+                }
+                end_ts = _.now();
+                this._active = false;
+                return cb(null, this._filepath, end_ts - start_ts);
+              });
+            }
           });
-        };
-      })(this));
-      return w.on("error", (function(_this) {
-        return function(err) {
-          return cb(err);
-        };
-      })(this));
-    };
+        });
+      });
+      return w.on("error", (err) => {
+        return cb(err);
+      });
+    }
 
-    return Dumper;
-
-  })(require('events').EventEmitter);
+  };
 
   return RewindDumpRestore;
 
-})(require('events').EventEmitter);
+}).call(this);
 
 //# sourceMappingURL=dump_restore.js.map

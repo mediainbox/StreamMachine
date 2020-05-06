@@ -24,6 +24,8 @@ RewindDumpRestore   = require "../rewind/dump_restore"
 
 module.exports = class Master extends require("events").EventEmitter
     constructor: (@options) ->
+        super()
+
         @_configured = false
 
         @source_mounts  = {}
@@ -629,6 +631,8 @@ module.exports = class Master extends require("events").EventEmitter
 
     class @StreamProxy extends require("events").EventEmitter
         constructor: (opts) ->
+            super()
+
             @key = opts.key
             @stream = opts.stream
             @master = opts.master

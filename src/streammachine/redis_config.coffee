@@ -6,6 +6,8 @@ debug = require("debug")("sm:redis_config")
 
 module.exports = class RedisConfig extends EventEmitter
     constructor: (@redis) ->
+        super()
+
         process.nextTick =>
             @_config()
 

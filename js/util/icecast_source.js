@@ -1,6 +1,4 @@
-var LoopingSource, Throttle, file, filepath, fs, lsource, net, path, sock, throttle, _ref,
-  __hasProp = {}.hasOwnProperty,
-  __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
+var LoopingSource, Throttle, file, filepath, fs, lsource, net, path, ref, sock, throttle;
 
 fs = require("fs");
 
@@ -16,21 +14,21 @@ this.args = require("optimist").usage("Usage: $0 --host localhost --port 8001 --
   stream: "Stream key",
   password: "Stream password",
   rate: "Throttle rate for streaming"
-})["default"]({
+}).default({
   rate: 32000
 }).demand("host", "port", "stream").argv;
 
-LoopingSource = (function(_super) {
-  __extends(LoopingSource, _super);
-
-  function LoopingSource(opts) {
+// -- Looping Source -- #
+LoopingSource = class LoopingSource extends require('stream').Duplex {
+  constructor(opts) {
+    super(opts);
     this._reading = false;
     this._data = Buffer.alloc(0);
     this._readPos = 0;
-    LoopingSource.__super__.constructor.call(this, opts);
   }
 
-  LoopingSource.prototype._write = function(chunk, encoding, cb) {
+  //----------
+  _write(chunk, encoding, cb) {
     var buf;
     buf = Buffer.concat([this._data, chunk]);
     this._data = buf;
@@ -39,9 +37,10 @@ LoopingSource = (function(_super) {
       this.emit("readable");
     }
     return cb();
-  };
+  }
 
-  LoopingSource.prototype._read = function(size) {
+  //----------
+  _read(size) {
     var rFunc;
     if (this._reading) {
       console.log("_read while reading");
@@ -52,33 +51,30 @@ LoopingSource = (function(_super) {
       return true;
     }
     this._reading = true;
-    rFunc = (function(_this) {
-      return function() {
-        var buf, remaining;
-        remaining = Math.min(_this._data.length - _this._readPos, size);
-        console.log("reading from " + _this._readPos + " with " + remaining);
-        buf = Buffer.from(remaining);
-        _this._data.copy(buf, 0, _this._readPos, _this._readPos.remaining);
-        _this._readPos = _this._readPos + remaining;
-        if (_this._readPos >= _this._data.length) {
-          _this._readPos = 0;
-        }
-        console.log("pushing buffer of " + buf.length);
-        if (_this.push(buf, 'binary')) {
-          return rFunc();
-        } else {
-          return _this._reading = false;
-        }
-      };
-    })(this);
+    rFunc = () => {
+      var buf, remaining;
+      remaining = Math.min(this._data.length - this._readPos, size);
+      console.log(`reading from ${this._readPos} with ${remaining}`);
+      buf = Buffer.from(remaining);
+      this._data.copy(buf, 0, this._readPos, this._readPos.remaining);
+      this._readPos = this._readPos + remaining;
+      if (this._readPos >= this._data.length) {
+        this._readPos = 0;
+      }
+      console.log(`pushing buffer of ${buf.length}`);
+      if (this.push(buf, 'binary')) {
+        return rFunc();
+      } else {
+        return this._reading = false;
+      }
+    };
     return rFunc();
-  };
+  }
 
-  return LoopingSource;
+};
 
-})(require('stream').Duplex);
-
-filepath = (_ref = this.args._) != null ? _ref[0] : void 0;
+// -- Make sure they gave us a file -- #
+filepath = (ref = this.args._) != null ? ref[0] : void 0;
 
 if (!filepath) {
   console.error("A file path is required.");
@@ -94,7 +90,8 @@ if (!fs.existsSync(filepath)) {
 
 console.log("file is ", filepath);
 
-lsource = new LoopingSource;
+// -- Read the file -- #
+lsource = new LoopingSource();
 
 throttle = new Throttle(this.args.rate);
 
@@ -104,41 +101,40 @@ file.pipe(lsource);
 
 lsource.pipe(throttle);
 
-sock = net.connect(this.args.port, this.args.host, (function(_this) {
-  return function() {
-    var auth, authTimeout;
-    console.log("Connected!");
-    authTimeout = null;
-    sock.once("readable", function() {
-      var resp;
-      resp = sock.read();
-      if (/^HTTP\/1\.0 200 OK/.test(resp.toString())) {
-        console.log("Got HTTP OK. Starting streaming.");
-        clearTimeout(authTimeout);
-        return throttle.pipe(sock);
-      } else {
-        console.error("Unknown response: " + (resp.toString()));
-        return process.exit(1);
-      }
-    });
-    sock.write("SOURCE /" + _this.args.stream + " ICE/1.0\r\n");
-    if (_this.args.password) {
-      auth = Buffer.from("source:" + _this.args.password, 'ascii').toString("base64");
-      sock.write("Authorization: basic " + auth + "\r\n\r\n");
-      console.log("Writing auth with " + auth + ".");
-    }
-    return authTimeout = setTimeout(function() {
-      console.error("Timed out waiting for authentication.");
+// -- Open our connection to the server -- #
+sock = net.connect(this.args.port, this.args.host, () => {
+  var auth, authTimeout;
+  console.log("Connected!");
+  authTimeout = null;
+  // we really only care about the first thing we see
+  sock.once("readable", () => {
+    var resp;
+    resp = sock.read();
+    if (/^HTTP\/1\.0 200 OK/.test(resp.toString())) {
+      console.log("Got HTTP OK. Starting streaming.");
+      clearTimeout(authTimeout);
+      return throttle.pipe(sock);
+    } else {
+      console.error(`Unknown response: ${resp.toString()}`);
       return process.exit(1);
-    }, 5000);
-  };
-})(this));
-
-sock.on("error", (function(_this) {
-  return function(err) {
-    console.error("Socket error: " + err);
+    }
+  });
+  sock.write(`SOURCE /${this.args.stream} ICE/1.0\r\n`);
+  if (this.args.password) {
+    // username doesn't matter.
+    auth = Buffer.from(`source:${this.args.password}`, 'ascii').toString("base64");
+    sock.write(`Authorization: basic ${auth}\r\n\r\n`);
+    console.log(`Writing auth with ${auth}.`);
+  }
+  return authTimeout = setTimeout(() => {
+    console.error("Timed out waiting for authentication.");
     return process.exit(1);
-  };
-})(this));
+  }, 5000);
+});
+
+sock.on("error", (err) => {
+  console.error(`Socket error: ${err}`);
+  return process.exit(1);
+});
 
 //# sourceMappingURL=icecast_source.js.map

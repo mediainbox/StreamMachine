@@ -9,6 +9,8 @@ module.exports = class Source extends require("events").EventEmitter
     #----------
 
     constructor: (source_opts={}) ->
+        super()
+
         @uuid = @opts.uuid || uuid.v4()
 
         @connectedAt = @opts.connectedAt || new Date()

@@ -15,8 +15,9 @@ class DebugTransport extends winston.Transport
 #----------
 
 class ConsoleTransport extends winston.transports.Console
-    constructor: (@opts) ->
-        super @opts
+    constructor: (opts) ->
+        super opts
+        @opts = opts
         @ignore_levels = (@opts.ignore||"").split(",")
 
     log: (level, msg, meta, callback) ->

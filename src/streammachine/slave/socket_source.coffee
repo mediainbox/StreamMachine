@@ -4,6 +4,8 @@ http = require "http"
 
 module.exports = class SocketSource extends require("events").EventEmitter
     constructor: (@slave,@stream) ->
+        super()
+
         @log = @stream.log.child subcomponent:"socket_source"
 
         @log.debug "created SocketSource for #{@stream.key}"

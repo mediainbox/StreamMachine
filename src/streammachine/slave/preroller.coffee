@@ -67,6 +67,8 @@ module.exports = class Preroller
 
     class @AdRequest extends require("events").EventEmitter
         constructor: (@output,@writer,@config,@count,@_cb) ->
+            super()
+
             @_cb = _.once @_cb
 
             @_aborted = false

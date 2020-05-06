@@ -7,10 +7,11 @@ debug = require("debug")("sm:outputs:shoutcast")
 
 module.exports = class Shoutcast extends BaseOutput
     constructor: (@stream,@opts) ->
+        super "shoutcast"
+
         @disconnected = false
         @id = null
 
-        super "shoutcast"
 
         @pump = true
 
