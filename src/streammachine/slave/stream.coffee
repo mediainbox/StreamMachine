@@ -261,6 +261,8 @@ module.exports = class Stream extends require('../rewind_buffer')
         @_totalKBytesSent += opts.kbytes if _.isNumber(opts.kbytes)
 
         if lmeta = @_lmeta[opts.id]
+            nothing = 1
+            ###
             @log.interaction "",
                 type:           "listen"
                 client:         lmeta.obj.client
@@ -269,15 +271,18 @@ module.exports = class Stream extends require('../rewind_buffer')
                 duration:       opts.seconds
                 offsetSeconds:  opts.offsetSeconds
                 contentTime:    opts.contentTime
+            ###
 
     #----------
 
     startSession: (client,cb) ->
+        ###
         @log.interaction "",
             type:       "session_start"
             client:     client
             time:       new Date()
             session_id: client.session_id
+        ###
 
         cb null, client.session_id
 
@@ -309,10 +314,12 @@ module.exports = class Stream extends require('../rewind_buffer')
         #----------
 
         startSession: (client,cb) ->
+            ###
             @log.interaction "",
                 type:       "session_start"
                 client:     client
                 time:       new Date()
                 id:         client.session_id
+            ###
 
             cb null, client.session_id

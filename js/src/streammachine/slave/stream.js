@@ -278,7 +278,7 @@ module.exports = Stream = (function() {
 
       // Log a partial listening segment
     recordListen(opts) {
-      var lmeta;
+      var lmeta, nothing;
       if (opts.bytes) {
         // temporary conversion support...
         opts.kbytes = Math.floor(opts.bytes / 1024);
@@ -287,26 +287,29 @@ module.exports = Stream = (function() {
         this._totalKBytesSent += opts.kbytes;
       }
       if (lmeta = this._lmeta[opts.id]) {
-        return this.log.interaction("", {
-          type: "listen",
-          client: lmeta.obj.client,
-          time: new Date(),
-          kbytes: opts.kbytes,
-          duration: opts.seconds,
-          offsetSeconds: opts.offsetSeconds,
-          contentTime: opts.contentTime
-        });
+        return nothing = 1;
       }
     }
 
+    /*
+    @log.interaction "",
+        type:           "listen"
+        client:         lmeta.obj.client
+        time:           new Date()
+        kbytes:         opts.kbytes
+        duration:       opts.seconds
+        offsetSeconds:  opts.offsetSeconds
+        contentTime:    opts.contentTime
+    */
     //----------
     startSession(client, cb) {
-      this.log.interaction("", {
-        type: "session_start",
-        client: client,
-        time: new Date(),
-        session_id: client.session_id
-      });
+      /*
+      @log.interaction "",
+          type:       "session_start"
+          client:     client
+          time:       new Date()
+          session_id: client.session_id
+      */
       return cb(null, client.session_id);
     }
 
@@ -343,12 +346,13 @@ module.exports = Stream = (function() {
 
     //----------
     startSession(client, cb) {
-      this.log.interaction("", {
-        type: "session_start",
-        client: client,
-        time: new Date(),
-        id: client.session_id
-      });
+      /*
+      @log.interaction "",
+          type:       "session_start"
+          client:     client
+          time:       new Date()
+          id:         client.session_id
+      */
       return cb(null, client.session_id);
     }
 

@@ -4,7 +4,7 @@ uuid = require "node-uuid"
 debug = require('debug')('sm:outputs:base')
 
 module.exports = class BaseOutput extends require("events").EventEmitter
-    constructor: (output) ->
+    constructor: (output, @stream, @opts) ->
         super()
 
         @disconnected = false

@@ -3,8 +3,8 @@ BaseOutput = require "./base"
 debug = require("debug")("sm:outputs:raw_audio")
 
 module.exports = class RawAudio extends BaseOutput
-    constructor: (@stream,@opts) ->
-        super("raw")
+    constructor: (stream, opts) ->
+        super("raw", stream, opts)
 
         @disconnected = false
 

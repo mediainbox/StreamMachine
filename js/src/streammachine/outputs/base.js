@@ -7,9 +7,11 @@ uuid = require("node-uuid");
 debug = require('debug')('sm:outputs:base');
 
 module.exports = BaseOutput = class BaseOutput extends require("events").EventEmitter {
-  constructor(output) {
+  constructor(output, stream, opts) {
     var a_session, ref, ref1;
     super();
+    this.stream = stream;
+    this.opts = opts;
     this.disconnected = false;
     // turn @opts into @client
     this.client = {

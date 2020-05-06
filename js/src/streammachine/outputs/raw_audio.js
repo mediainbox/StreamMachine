@@ -7,9 +7,7 @@ debug = require("debug")("sm:outputs:raw_audio");
 module.exports = RawAudio = class RawAudio extends BaseOutput {
   constructor(stream, opts) {
     var headers;
-    super("raw");
-    this.stream = stream;
-    this.opts = opts;
+    super("raw", stream, opts);
     this.disconnected = false;
     debug("Incoming request.");
     this.pump = true;
