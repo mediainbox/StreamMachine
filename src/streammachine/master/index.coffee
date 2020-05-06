@@ -24,6 +24,8 @@ RewindDumpRestore   = require "../rewind/dump_restore"
 Events = require('./events').MasterEvents
 
 
+StreamDataBroadcaster = require('./stream_data_broadcaster')
+
 # A Master handles configuration, slaves, incoming sources, logging and the admin interface
 
 module.exports = class Master extends require("events").EventEmitter
@@ -35,7 +37,7 @@ module.exports = class Master extends require("events").EventEmitter
         @source_mounts  = {}
         @streams        = {}
         @stream_groups  = {}
-        @proxies        = {}
+        @dataBroadcasters        = {}
 
         @config = @ctx.config
         @logger = @ctx.logger.child({
@@ -226,7 +228,7 @@ module.exports = class Master extends require("events").EventEmitter
 
         if mount
             @source_mounts[ key ] = mount
-            @emit "new_source_mount", mount
+            @emit Events.NEW_SOURCE_MOUNT, mount
             return mount
         else
             return false
@@ -247,7 +249,7 @@ module.exports = class Master extends require("events").EventEmitter
             @streams[ key ] = stream
             @_attachIOProxy stream
 
-            @emit "new_stream", stream
+            @emit Events.NEW_STREAM, stream
             return stream
         else
             return false
@@ -585,20 +587,20 @@ module.exports = class Master extends require("events").EventEmitter
     #----------
 
     _attachIOProxy: (stream) ->
-        @logger.debug "attachIOProxy call for #{stream.key}.", slaves:@slaves?, proxy:@proxies[stream.key]?
+        @logger.debug "attachIOProxy call for #{stream.key}.", slaves:@slaves?, proxy:@dataBroadcasters[stream.key]?
         return false if !@slaves
 
-        if @proxies[ stream.key ]
+        if @dataBroadcasters[ stream.key ]
             return false
 
         # create a new proxy
-        @logger.debug "Creating StreamProxy for #{stream.key}"
-        @proxies[ stream.key ] = new Master.StreamProxy key:stream.key, stream:stream, master:@
+        @logger.debug "Creating StreamDataBroadcaster for #{stream.key}"
+        @dataBroadcasters[ stream.key ] = new StreamDataBroadcaster key:stream.key, stream:stream, master:@
 
         # and attach a listener to destroy it if the stream is removed
         stream.once "destroy", =>
-            @proxies[ stream.key ]?.destroy()
-            delete @proxies[ stream.key ]
+            @dataBroadcasters[ stream.key ]?.destroy()
+            delete @dataBroadcasters[ stream.key ]
 
     #----------
 
@@ -637,27 +639,3 @@ module.exports = class Master extends require("events").EventEmitter
                     writer.pipe( new Throttle 100*1024*1024 ).pipe(res)
                     res.on "end", =>
                         @master.logger.debug "Rewind dumpBuffer finished."
-
-    #----------
-
-    class @StreamProxy extends require("events").EventEmitter
-        constructor: (opts) ->
-            super()
-
-            @key = opts.key
-            @stream = opts.stream
-            @master = opts.master
-
-            @dataFunc = (chunk) =>
-                @master.slaves.broadcastAudio @key, chunk
-
-            @stream.on "data", @dataFunc
-
-        destroy: ->
-            @stream.removeListener "data", @dataFunc
-            @stream = null
-            @emit "destroy"
-
-            @removeAllListeners()
-
-    #----------

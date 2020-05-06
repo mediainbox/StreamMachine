@@ -1,4 +1,4 @@
-var Alerts, Analytics, Events, Master, MasterAPI, MasterConfigRedisStore, Monitoring, Redis, RewindDumpRestore, SlaveServer, SourceIn, SourceMount, Stream, Throttle, _, debug, express, fs, net, temp;
+var Alerts, Analytics, Events, Master, MasterAPI, MasterConfigRedisStore, Monitoring, Redis, RewindDumpRestore, SlaveServer, SourceIn, SourceMount, Stream, StreamDataBroadcaster, Throttle, _, debug, express, fs, net, temp;
 
 _ = require("underscore");
 
@@ -38,6 +38,8 @@ RewindDumpRestore = require("../rewind/dump_restore");
 
 Events = require('./events').MasterEvents;
 
+StreamDataBroadcaster = require('./stream_data_broadcaster');
+
 // A Master handles configuration, slaves, incoming sources, logging and the admin interface
 module.exports = Master = (function() {
   class Master extends require("events").EventEmitter {
@@ -49,7 +51,7 @@ module.exports = Master = (function() {
       this.source_mounts = {};
       this.streams = {};
       this.stream_groups = {};
-      this.proxies = {};
+      this.dataBroadcasters = {};
       this.config = this.ctx.config;
       this.logger = this.ctx.logger.child({
         component: "master"
@@ -262,7 +264,7 @@ module.exports = Master = (function() {
       }), opts);
       if (mount) {
         this.source_mounts[key] = mount;
-        this.emit("new_source_mount", mount);
+        this.emit(Events.NEW_SOURCE_MOUNT, mount);
         return mount;
       } else {
         return false;
@@ -288,7 +290,7 @@ module.exports = Master = (function() {
         });
         this.streams[key] = stream;
         this._attachIOProxy(stream);
-        this.emit("new_stream", stream);
+        this.emit(Events.NEW_STREAM, stream);
         return stream;
       } else {
         return false;
@@ -721,17 +723,17 @@ module.exports = Master = (function() {
     _attachIOProxy(stream) {
       this.logger.debug(`attachIOProxy call for ${stream.key}.`, {
         slaves: this.slaves != null,
-        proxy: this.proxies[stream.key] != null
+        proxy: this.dataBroadcasters[stream.key] != null
       });
       if (!this.slaves) {
         return false;
       }
-      if (this.proxies[stream.key]) {
+      if (this.dataBroadcasters[stream.key]) {
         return false;
       }
       // create a new proxy
-      this.logger.debug(`Creating StreamProxy for ${stream.key}`);
-      this.proxies[stream.key] = new Master.StreamProxy({
+      this.logger.debug(`Creating StreamDataBroadcaster for ${stream.key}`);
+      this.dataBroadcasters[stream.key] = new StreamDataBroadcaster({
         key: stream.key,
         stream: stream,
         master: this
@@ -739,10 +741,10 @@ module.exports = Master = (function() {
       // and attach a listener to destroy it if the stream is removed
       return stream.once("destroy", () => {
         var ref;
-        if ((ref = this.proxies[stream.key]) != null) {
+        if ((ref = this.dataBroadcasters[stream.key]) != null) {
           ref.destroy();
         }
-        return delete this.proxies[stream.key];
+        return delete this.dataBroadcasters[stream.key];
       });
     }
 
@@ -793,32 +795,8 @@ module.exports = Master = (function() {
 
   };
 
-  //----------
-  Master.StreamProxy = class StreamProxy extends require("events").EventEmitter {
-    constructor(opts) {
-      super();
-      this.key = opts.key;
-      this.stream = opts.stream;
-      this.master = opts.master;
-      this.dataFunc = (chunk) => {
-        return this.master.slaves.broadcastAudio(this.key, chunk);
-      };
-      this.stream.on("data", this.dataFunc);
-    }
-
-    destroy() {
-      this.stream.removeListener("data", this.dataFunc);
-      this.stream = null;
-      this.emit("destroy");
-      return this.removeAllListeners();
-    }
-
-  };
-
   return Master;
 
 }).call(this);
-
-//----------
 
 //# sourceMappingURL=index.js.map

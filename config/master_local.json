@@ -6,6 +6,10 @@
   "ping-master": 1588779458203,
   "options": {
     "mode": "master",
+    "rewind_dump": {
+      "dir": "/dev/stream-machine/dump",
+      "frequency": 10
+    },
     "debug_incoming_requests": true,
     "log": {
     },

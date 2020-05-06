@@ -24,7 +24,7 @@ module.exports = RewindDumpRestore = (function() {
       this._queue = [];
       this._working = false;
       this._shouldLoad = false;
-      this.log = this.master.log.child({
+      this.log = this.master.logger.child({
         module: "rewind_dump_restore"
       });
       // -- make sure directory is valid -- #

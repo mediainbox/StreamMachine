@@ -42,8 +42,8 @@ module.exports = SlaveConnection = class SlaveConnection extends require("events
   //----------
   _handleDisconnect() {
     var connected;
-    connected = Math.round((Number(new Date()) - Number(this.connected_at)) / 1000);
-    this.logger.debug(`Slave disconnect from ${this.socket.id}. Connected for ${connected} seconds.`);
+    connected = Math.round((Number(new Date()) - Number(this.connected_at)) / 60000);
+    this.logger.debug(`slave ${this.socket.id} disconnected (connection lasted ${connected} minutes)`);
     return this.emit("disconnect");
   }
 

@@ -6,8 +6,8 @@
     "events.coffee"
   ],
   "names": [],
-  "mappings": "AAAA,IAAA,MAAA,EAAA;;AAAA,YAAA,GACE;EAAA,cAAA,EAAgB,SAAhB;EACA,aAAA,EAAe;AADf;;AAGF,MAAA,GACE;EAAA,YAAA,EAAc;AAAd;;AAEF,MAAM,CAAC,OAAP,GAAiB",
+  "mappings": "AAAA,IAAA,MAAA,EAAA;;AAAA,YAAA,GACE;EAAA,cAAA,EAAgB,SAAhB;EACA,aAAA,EAAe,eADf;EAEA,gBAAA,EAAkB,kBAFlB;EAGA,UAAA,EAAY;AAHZ;;AAKF,MAAA,GACE;EAAA,YAAA,EAAc;AAAd;;AAEF,MAAM,CAAC,OAAP,GAAiB",
   "sourcesContent": [
-    "MasterEvents =\r\n  STREAMS_UPDATE: \"streams\"\r\n  CONFIG_UPDATE: \"config_update\"\r\n\r\nEvents =\r\n  MasterEvents: MasterEvents\r\n\r\nmodule.exports = Events\r\n"
+    "MasterEvents =\r\n  STREAMS_UPDATE: \"streams\"\r\n  CONFIG_UPDATE: \"config_update\"\r\n  NEW_SOURCE_MOUNT: \"new_source_mount\"\r\n  NEW_STREAM: \"new_stream\"\r\n\r\nEvents =\r\n  MasterEvents: MasterEvents\r\n\r\nmodule.exports = Events\r\n"
   ]
 }

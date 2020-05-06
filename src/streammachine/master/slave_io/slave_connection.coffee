@@ -42,7 +42,7 @@ module.exports = class SlaveConnection extends require("events").EventEmitter
 #----------
 
     _handleDisconnect: ->
-        connected = Math.round( (Number(new Date()) - Number(@connected_at)) / 1000 )
-        @logger.debug "Slave disconnect from #{@socket.id}. Connected for #{ connected } seconds."
+        connected = Math.round( (Number(new Date()) - Number(@connected_at)) / 60000 )
+        @logger.debug "slave #{@socket.id} disconnected (connection lasted #{connected} minutes)"
 
         @emit "disconnect"

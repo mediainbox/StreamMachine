@@ -160,7 +160,7 @@ module.exports = UrlSource = class UrlSource extends require("./base/base_source
     });
     // outgoing -> Stream
     this.on("_chunk", this.broadcastData);
-    this.logChunk = _.throttle(this._logChunk.bind(this), 5000);
+    this.logChunk = _.throttle(this._logChunk.bind(this), 10000);
     return this.on("_chunk", this.logChunk);
   }
 

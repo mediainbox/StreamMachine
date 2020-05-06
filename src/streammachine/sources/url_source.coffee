@@ -140,7 +140,7 @@ module.exports = class UrlSource extends require("./base/base_source")
         # outgoing -> Stream
         @on "_chunk", @broadcastData
 
-        @logChunk = _.throttle(@_logChunk.bind(this), 5000)
+        @logChunk = _.throttle(@_logChunk.bind(this), 10000)
         @on "_chunk", @logChunk
 
     #----------

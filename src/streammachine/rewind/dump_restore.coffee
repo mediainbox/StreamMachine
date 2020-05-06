@@ -18,7 +18,7 @@ module.exports = class RewindDumpRestore extends require('events').EventEmitter
         @_working       = false
         @_shouldLoad    = false
 
-        @log = @master.log.child(module:"rewind_dump_restore")
+        @log = @master.logger.child(module:"rewind_dump_restore")
 
         # -- make sure directory is valid -- #
 
