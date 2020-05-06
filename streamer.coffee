@@ -1,9 +1,9 @@
 process.env.NEW_RELIC_NO_CONFIG_FILE = 'true';
 
 if !process.env.NEW_RELIC_APP_NAME ||!process.env.NEW_RELIC_LICENSE_KEY
-    console.log('Skipping NewRelic, missing NEW_RELIC_APP_NAME or NEW_RELIC_LICENSE_KEY env vars')
+    console.log('[integrations] skipping NewRelic, missing NEW_RELIC_APP_NAME or NEW_RELIC_LICENSE_KEY env vars')
 else
-    console.log('Loading NewRelic')
+    console.log('[integrations] loading NewRelic')
     require('newrelic')
 
 
@@ -11,9 +11,9 @@ require('@google-cloud/trace-agent').start
     projectId: process.env.GCLOUD_PROJECT
     keyFilename: process.env.GCLOUD_KEY_FILENAME
 
-require('@google-cloud/debug-agent').start
-    projectId: process.env.GCLOUD_PROJECT
-    keyFilename: process.env.GCLOUD_KEY_FILENAME
+#require('@google-cloud/debug-agent').start
+#    projectId: process.env.GCLOUD_PROJECT
+#    keyFilename: process.env.GCLOUD_KEY_FILENAME
 
 _ = require "underscore"
 nconf = require "nconf"
@@ -23,7 +23,7 @@ debug = require("debug") "sm:master:streamer"
 class Streamer
     constructor: (@config) ->
         @mode = nconf.get("mode") or "standalone"
-        debug "Created as #{@mode}"
+        debug "Streamer created in mode #{@mode.toUpperCase()}"
 
     #----------
 
@@ -35,16 +35,19 @@ class Streamer
     #----------
 
     getRadio: (callback) ->
+        debug "Fetch radio config from #{@config.uri}"
         request.get(@config.uri,
             json: true,
             qs: ping: @mode
         , (error, response, body) =>
             if error
                 debug error
+                debug "Error ocurred, retrying"
                 return @retry callback
             if not body
-                debug "No radio available"
+                debug "No radio available, retrying"
                 return @retry callback
+            debug "Fetched radio config successfully"
             callback body
         )
 

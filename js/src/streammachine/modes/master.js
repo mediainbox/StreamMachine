@@ -8,11 +8,11 @@ express = require("express");
 
 nconf = require("nconf");
 
+RPC = require("ipc-rpc");
+
 Logger = require("../logger");
 
 Master = require("../master");
-
-RPC = require("ipc-rpc");
 
 debug = require("debug")("sm:modes:master");
 
@@ -23,7 +23,7 @@ module.exports = MasterMode = (function(_super) {
 
   function MasterMode(opts, cb) {
     this.opts = opts;
-    this.log = new Logger(_.extend(this.opts.log, nconf.get('log')));
+    this.log = new Logger(_.extend(this.opts.log, nconf.get('log')), this.opts.mode);
     debug("Master instance initialized.");
     process.title = "StreamM:master";
     MasterMode.__super__.constructor.apply(this, arguments);

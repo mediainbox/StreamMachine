@@ -1,11 +1,9 @@
 _       = require "underscore"
 express = require "express"
 nconf   = require "nconf"
-
+RPC     = require "ipc-rpc"
 Logger  = require "../logger"
 Master  = require "../master"
-
-RPC     = require "ipc-rpc"
 
 debug = require("debug")("sm:modes:master")
 
@@ -19,7 +17,7 @@ module.exports = class MasterMode extends require("./base")
 
     MODE: "Master"
     constructor: (@opts,cb) ->
-        @log = new Logger _.extend @opts.log, nconf.get 'log'
+        @log = new Logger _.extend(@opts.log, nconf.get('log')), @opts.mode
 
         debug "Master instance initialized."
 

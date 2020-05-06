@@ -1,11 +1,15 @@
 var Streamer, debug, heapdump, nconf, request, streamer, _;
 
-require('@google-cloud/trace-agent').start({
-  projectId: process.env.GCLOUD_PROJECT,
-  keyFilename: process.env.GCLOUD_KEY_FILENAME
-});
+process.env.NEW_RELIC_NO_CONFIG_FILE = 'true';
 
-require('@google-cloud/debug-agent').start({
+if (!process.env.NEW_RELIC_APP_NAME || !process.env.NEW_RELIC_LICENSE_KEY) {
+  console.log('[integrations] skipping NewRelic, missing NEW_RELIC_APP_NAME or NEW_RELIC_LICENSE_KEY env vars');
+} else {
+  console.log('[integrations] loading NewRelic');
+  require('newrelic');
+}
+
+require('@google-cloud/trace-agent').start({
   projectId: process.env.GCLOUD_PROJECT,
   keyFilename: process.env.GCLOUD_KEY_FILENAME
 });
@@ -22,7 +26,7 @@ Streamer = (function() {
   function Streamer(config) {
     this.config = config;
     this.mode = nconf.get("mode") || "standalone";
-    debug("Created as " + this.mode);
+    debug("Streamer created in mode " + (this.mode.toUpperCase()));
   }
 
   Streamer.prototype.initialize = function() {
@@ -35,6 +39,7 @@ Streamer = (function() {
   };
 
   Streamer.prototype.getRadio = function(callback) {
+    debug("Fetch radio config from " + this.config.uri);
     return request.get(this.config.uri, {
       json: true,
       qs: {
@@ -44,12 +49,14 @@ Streamer = (function() {
       return function(error, response, body) {
         if (error) {
           debug(error);
+          debug("Error ocurred, retrying");
           return _this.retry(callback);
         }
         if (!body) {
-          debug("No radio available");
+          debug("No radio available, retrying");
           return _this.retry(callback);
         }
+        debug("Fetched radio config successfully");
         return callback(body);
       };
     })(this));

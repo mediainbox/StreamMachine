@@ -1,5 +1,6 @@
 module.exports = class Core extends require("events").EventEmitter
     constructor: ->
+        # see runner for restart trigger based on SIGUSR2
         @log.debug "Attaching listener for SIGUSR2 restarts."
 
         if process.listeners("SIGUSR2").length > 0
