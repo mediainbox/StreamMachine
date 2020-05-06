@@ -60,12 +60,12 @@ module.exports = class Slave extends require("events").EventEmitter
             @io.on "connected", =>
                 debug "IO is connected"
                 @alerts.update "slave_disconnected", @io.id, false
-                @log.proxyToMaster(@io)
+                # TODO @log.proxyToMaster(@io)
 
             @io.on "disconnected", =>
                 debug "IO is disconnected"
                 @alerts.update "slave_disconnected", @io.id, true
-                @log.proxyToMaster()
+                # TODO @log.proxyToMaster()
 
         @once "streams", =>
             debug "Streams event received"

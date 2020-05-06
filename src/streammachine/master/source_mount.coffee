@@ -20,7 +20,7 @@ module.exports = class SourceMount extends require("events").EventEmitter
 
         @_vitals = null
 
-        @log.event "Source Mount is initializing."
+        @log.info "Source Mount is initializing."
 
         @dataFunc = (data) =>
             @emit "data", data
@@ -87,13 +87,13 @@ module.exports = class SourceMount extends require("events").EventEmitter
                     @useSource @sources[0]
                     @emit "disconnect", active:true, count:@sources.length, source:@source
                 else
-                    @log.alert "Source disconnected. No sources remaining."
+                    @log.warning "Source disconnected. No sources remaining."
                     @_disconnectSource @source
                     @source = null
                     @emit "disconnect", active:true, count:0, source:null
             else
                 # no... just remove it from the list
-                @log.event "Inactive source disconnected."
+                @log.info "Inactive source disconnected."
                 @emit "disconnect", active:false, count:@sources.length, source:@source
 
         # -- Add the source to our list -- #
@@ -107,12 +107,12 @@ module.exports = class SourceMount extends require("events").EventEmitter
 
         if @sources[0] == source || @sources[0]?.isFallback
             # our new source should be promoted
-            @log.event "Promoting new source to active.", source:(source.TYPE?() ? source.TYPE)
+            @log.info "Promoting new source to active.", source:(source.TYPE?() ? source.TYPE)
             @useSource source, cb
 
         else
             # add the source to the end of our list
-            @log.event "Source connected.", source:(source.TYPE?() ? source.TYPE)
+            @log.info "Source connected.", source:(source.TYPE?() ? source.TYPE)
 
             # and emit our source event
             @emit "add_source", source
@@ -146,7 +146,7 @@ module.exports = class SourceMount extends require("events").EventEmitter
             if @source && old_source != @source
                 # source changed while we were waiting for vitals. we'll
                 # abort our change attempt
-                @log.event "Source changed while waiting for vitals.",
+                @log.info "Source changed while waiting for vitals.",
                     new_source:     (newsource.TYPE?() ? newsource.TYPE)
                     old_source:     (old_source?.TYPE?() ? old_source?.TYPE)
                     current_source: (@source.TYPE?() ? @source.TYPE)
@@ -169,7 +169,7 @@ module.exports = class SourceMount extends require("events").EventEmitter
 
             # note that we've got a new source
             process.nextTick =>
-                @log.event "New source is active.",
+                @log.info "New source is active.",
                     new_source: (newsource.TYPE?() ? newsource.TYPE)
                     old_source: (old_source?.TYPE?() ? old_source?.TYPE)
 

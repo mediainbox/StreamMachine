@@ -10,48 +10,44 @@ $file = function(file) {
   return path.resolve(__dirname, "..", file);
 };
 
-PrerollServer = (function() {
-  function PrerollServer(files, on) {
+PrerollServer = class PrerollServer {
+  constructor(files, _on = true) {
     this.files = files;
-    this.on = on != null ? on : true;
+    this._on = _on;
     this.app = express();
-    this.app.get("/:key/:streamkey", (function(_this) {
-      return function(req, res, next) {
-        var f, stream, _ref;
-        console.log("Preroll request for " + req.path);
-        if (f = (_ref = _this.files[req.param("key")]) != null ? _ref[req.param("streamkey")] : void 0) {
-          if (_this.on) {
-            res.header("Content-Type", "audio/mpeg");
-            res.status(200);
-            stream = fs.createReadStream(f);
-            return stream.pipe(res);
-          } else {
-            return setTimeout(function() {
-              return res.end();
-            }, 3000);
-          }
+    this.app.get("/:key/:streamkey", (req, res, next) => {
+      var f, ref, stream;
+      console.log(`Preroll request for ${req.path}`);
+      if (f = (ref = this.files[req.param("key")]) != null ? ref[req.param("streamkey")] : void 0) {
+        if (this._on) {
+          res.header("Content-Type", "audio/mpeg");
+          res.status(200);
+          stream = fs.createReadStream(f);
+          return stream.pipe(res);
         } else {
-          return next();
+          // what should we do to test a bad server?
+          return setTimeout(() => {
+            // end unexpectedly
+            return res.end();
+          }, 3000);
         }
-      };
-    })(this));
-    this.app.get("*", (function(_this) {
-      return function(req, res, next) {
-        console.log("Invalid request to " + req.path);
+      } else {
         return next();
-      };
-    })(this));
+      }
+    });
+    this.app.get("*", (req, res, next) => {
+      console.log(`Invalid request to ${req.path}`);
+      return next();
+    });
     this.app.listen(process.argv[2]);
   }
 
-  PrerollServer.prototype.toggle = function() {
-    this.on = !this.on;
-    return console.log("Responses are " + (this.on ? "on" : "off"));
-  };
+  toggle() {
+    this._on = !this._on;
+    return console.log(`Responses are ${this._on ? "on" : "off"}`);
+  }
 
-  return PrerollServer;
-
-})();
+};
 
 pre = new PrerollServer({
   test: {
@@ -63,6 +59,6 @@ process.on("SIGUSR2", function() {
   return pre.toggle();
 });
 
-console.log("PID is " + process.pid);
+console.log(`PID is ${process.pid}`);
 
 //# sourceMappingURL=test_preroll_server.js.map

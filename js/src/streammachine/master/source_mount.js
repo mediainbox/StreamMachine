@@ -14,7 +14,7 @@ module.exports = SourceMount = (function() {
       // Support the old streams-style password key
       this.password = this.opts.password || this.opts.source_password;
       this._vitals = null;
-      this.log.event("Source Mount is initializing.");
+      this.log.info("Source Mount is initializing.");
       this.dataFunc = (data) => {
         return this.emit("data", data);
       };
@@ -103,7 +103,7 @@ module.exports = SourceMount = (function() {
               source: this.source
             });
           } else {
-            this.log.alert("Source disconnected. No sources remaining.");
+            this.log.warning("Source disconnected. No sources remaining.");
             this._disconnectSource(this.source);
             this.source = null;
             return this.emit("disconnect", {
@@ -114,7 +114,7 @@ module.exports = SourceMount = (function() {
           }
         } else {
           // no... just remove it from the list
-          this.log.event("Inactive source disconnected.");
+          this.log.info("Inactive source disconnected.");
           return this.emit("disconnect", {
             active: false,
             count: this.sources.length,
@@ -130,13 +130,13 @@ module.exports = SourceMount = (function() {
       // the active source is defined as a fallback
       if (this.sources[0] === source || ((ref = this.sources[0]) != null ? ref.isFallback : void 0)) {
         // our new source should be promoted
-        this.log.event("Promoting new source to active.", {
+        this.log.info("Promoting new source to active.", {
           source: (ref1 = typeof source.TYPE === "function" ? source.TYPE() : void 0) != null ? ref1 : source.TYPE
         });
         return this.useSource(source, cb);
       } else {
         // add the source to the end of our list
-        this.log.event("Source connected.", {
+        this.log.info("Source connected.", {
           source: (ref2 = typeof source.TYPE === "function" ? source.TYPE() : void 0) != null ? ref2 : source.TYPE
         });
         // and emit our source event
@@ -172,7 +172,7 @@ module.exports = SourceMount = (function() {
         if (this.source && old_source !== this.source) {
           // source changed while we were waiting for vitals. we'll
           // abort our change attempt
-          this.log.event("Source changed while waiting for vitals.", {
+          this.log.info("Source changed while waiting for vitals.", {
             new_source: (ref = typeof newsource.TYPE === "function" ? newsource.TYPE() : void 0) != null ? ref : newsource.TYPE,
             old_source: (ref1 = old_source != null ? typeof old_source.TYPE === "function" ? old_source.TYPE() : void 0 : void 0) != null ? ref1 : old_source != null ? old_source.TYPE : void 0,
             current_source: (ref2 = typeof (base = this.source).TYPE === "function" ? base.TYPE() : void 0) != null ? ref2 : this.source.TYPE
@@ -193,7 +193,7 @@ module.exports = SourceMount = (function() {
         // note that we've got a new source
         process.nextTick(() => {
           var ref3, ref4;
-          this.log.event("New source is active.", {
+          this.log.info("New source is active.", {
             new_source: (ref3 = typeof newsource.TYPE === "function" ? newsource.TYPE() : void 0) != null ? ref3 : newsource.TYPE,
             old_source: (ref4 = old_source != null ? typeof old_source.TYPE === "function" ? old_source.TYPE() : void 0 : void 0) != null ? ref4 : old_source != null ? old_source.TYPE : void 0
           });

@@ -1,10 +1,8 @@
-Redis = require 'redis'
-Url = require "url"
 EventEmitter = require('events').EventEmitter
 
 debug = require("debug")("sm:redis_config")
 
-module.exports = class RedisConfig extends EventEmitter
+module.exports = class MasterConfigRedisStore extends EventEmitter
     constructor: (@redis) ->
         super()
 

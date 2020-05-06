@@ -1,20 +1,14 @@
-var StreamMachine, defaultConfig;
+var defaultConfig;
 
 defaultConfig = require("./default_config");
 
-module.exports = StreamMachine = (function() {
-  class StreamMachine {};
-
-  StreamMachine.StandaloneMode = require("./modes/standalone");
-
-  StreamMachine.MasterMode = require("./modes/master");
-
-  StreamMachine.SlaveMode = require("./modes/slave");
-
-  StreamMachine.Defaults = defaultConfig;
-
-  return StreamMachine;
-
-}).call(this);
+module.exports = {
+  Modes: {
+    StandaloneMode: require("./modes/standalone"),
+    MasterMode: require("./modes/master"),
+    SlaveMode: require("./modes/slave")
+  },
+  Defaults: defaultConfig
+};
 
 //# sourceMappingURL=index.js.map

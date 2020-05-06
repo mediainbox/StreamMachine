@@ -1,4 +1,4 @@
-FileSource = require "../sources/file"
+FileSource = require "../sources/file_source"
 net = require "net"
 
 debug = require("debug")("sm:sources:icecast")

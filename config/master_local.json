@@ -1,0 +1,65 @@
+{
+  "ping-standalone": 1,
+  "ping-slave": 1588038747915,
+  "ping-archiver": 1,
+  "client": "cadena3",
+  "ping-master": 1588779458203,
+  "options": {
+    "mode": "master",
+    "debug_incoming_requests": true,
+    "log": {
+    },
+    "source_port": 8080,
+    "enable-heapdump": true,
+    "master": {
+      "port": 8020,
+      "password": "polkmn1!c3"
+    },
+    "streams": {
+      "cadena3.mp3": {
+        "key": "cadena3.mp3",
+        "preroll": "",
+        "transcoder": "",
+        "log_interval": 30000,
+        "meta_interval": 32768,
+        "max_buffer": 4194304,
+        "seconds": 300,
+        "burst": 2,
+        "source_password": "c3source",
+        "host": "cadena3.com.ar",
+        "fallback": "http://c3dl1.mediainbox.net:8000/cadena3.mp3",
+        "acceptSourceMeta": true,
+        "log_minutes": true,
+        "monitored": false,
+        "metaTitle": "Cadena3",
+        "metaUrl": "cadena3.com.ar",
+        "format": "mp3",
+        "preroll_key": "",
+        "root_route": true,
+        "group": null,
+        "bandwidth": 0,
+        "codec": null,
+        "ffmpeg_args": null,
+        "stream_key": null,
+        "impression_delay": 5000,
+        "geolock": {
+          "enabled": false,
+          "mode": "whitelist",
+          "fallback": "",
+          "countryCodes": [
+            "AR"
+          ]
+        }
+      }
+    },
+    "sources": {
+      "cadena3.mp3": {
+        "monitored": true,
+        "password": false,
+        "source_password": "c3source",
+        "format": "mp3"
+      }
+    }
+  },
+  "name": "dev"
+}

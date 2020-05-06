@@ -3,11 +3,7 @@ uuid    = require "node-uuid"
 URL     = require "url"
 
 Rewind              = require '../rewind_buffer'
-FileSource          = require "../sources/file"
-ProxySource         = require '../sources/proxy'
-TranscodingSource   = require "../sources/transcoding"
-HLSSegmenter        = require "../rewind/hls_segmenter"
-SourceMount         = require "./source_mount"
+ProxySource         = require '../sources/url_source'
 
 module.exports = class Stream extends require('events').EventEmitter
     DefaultOptions:
@@ -70,7 +66,7 @@ module.exports = class Stream extends require('events').EventEmitter
 
         @STATUS = "Initializing"
 
-        @log.event "Stream is initializing."
+        @log.debug "Stream is initializing."
 
         # -- Initialize Master Rewinder -- #
 
@@ -82,18 +78,12 @@ module.exports = class Stream extends require('events').EventEmitter
             burst:      @opts.burst
             key:        "master__#{@key}"
             log:        @log.child(module:"rewind")
-            hls:        @opts.hls?.segment_duration
 
         # Rewind listens to us, not to our source
         @rewind.emit "source", @
 
         # Pass along buffer loads
         @rewind.on "buffer", (c) => @emit "buffer", c
-
-        # if we're doing HLS, pass along new segments
-        if @opts.hls?
-            @rewind.hls_segmenter.on "snapshot", (snap) =>
-                @emit "hls_snapshot", snap
 
         # -- Set up data functions -- #
 
@@ -149,7 +139,7 @@ module.exports = class Stream extends require('events').EventEmitter
                         if err
                             @log.error "Connection to fallback source failed."
                         else
-                            @log.event "Fallback source connected."
+                            @log.debug "Fallback source connected."
 
                 newsource.on "error", (err) =>
                     @log.error "Fallback source error: #{err}", error:err
@@ -199,14 +189,6 @@ module.exports = class Stream extends require('events').EventEmitter
             _vFunc @_vitals
         else
             @once "vitals", _vFunc
-
-    #----------
-
-    getHLSSnapshot: (cb) ->
-        if @rewind.hls_segmenter
-            @rewind.hls_segmenter.snapshot cb
-        else
-            cb "Stream does not support HLS"
 
     #----------
 
@@ -325,14 +307,5 @@ module.exports = class Stream extends require('events').EventEmitter
 
             id:         @key
             streams:    sstatus
-
-        #----------
-
-        hlsUpdateMinSegment: (id) ->
-            if !@hls_min_id || id > @hls_min_id
-                prev = @hls_min_id
-                @hls_min_id = id
-                @emit "hls_update_min_segment", id
-                @log.debug "New HLS min segment id: #{id} (Previously: #{prev})"
 
         #----------

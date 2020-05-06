@@ -1,11 +1,15 @@
-var Streamer, _, debug, heapdump, nconf, request, streamer;
+var StreamMachine, Streamer, _, debug, heapdump, nconf, request, streamer;
+
+debug = require('debug')('integrations');
 
 process.env.NEW_RELIC_NO_CONFIG_FILE = 'true';
 
+_ = require("lodash");
+
 if (!process.env.NEW_RELIC_APP_NAME || !process.env.NEW_RELIC_LICENSE_KEY) {
-  console.log('[integrations] skipping NewRelic, missing NEW_RELIC_APP_NAME or NEW_RELIC_LICENSE_KEY env vars');
+  debug('[integrations] skipping NewRelic, missing NEW_RELIC_APP_NAME or NEW_RELIC_LICENSE_KEY env vars');
 } else {
-  console.log('[integrations] loading NewRelic');
+  debug('[integrations] loading NewRelic');
   require('newrelic');
 }
 
@@ -25,24 +29,32 @@ request = require("request");
 
 debug = require("debug")("sm:master:streamer");
 
+StreamMachine = require("./src/streammachine");
+
 Streamer = class Streamer {
-  constructor(config) {
-    this.config = config;
-    this.mode = nconf.get("mode") || "standalone";
-    debug(`Streamer created in mode ${this.mode.toUpperCase()}`);
+  constructor(config1) {
+    this.config = config1;
   }
 
   //----------
   initialize() {
-    return this.getRadio((radio) => {
+    return this.readConfig((config) => {
       this.ping();
-      return this.createStreamMachine(radio);
+      return this.createStreamMachine(config);
     });
   }
 
   //----------
-  getRadio(callback) {
-    debug(`Fetch radio config from ${this.config.uri}`);
+  readConfig(callback) {
+    if (this.config.client) {
+      debug(`Using local config: ${this.config.config}`);
+      callback(this.config);
+      return;
+    }
+    if (!this.config.uri) {
+      throw new Error('No remote config URL supplied in config file');
+    }
+    debug(`Fetch remove config from ${this.config.uri}`);
     return request.get(this.config.uri, {
       json: true,
       qs: {
@@ -67,44 +79,41 @@ Streamer = class Streamer {
   retry(callback) {
     return setTimeout(() => {
       debug("Retry");
-      return this.getRadio(callback);
+      return this.readConfig(callback);
     }, this.config.ping / 2);
   }
 
   //----------
-  createStreamMachine(radio1) {
-    this.radio = radio1;
+  createStreamMachine(config1) {
+    this.config = config1;
     // There are three potential modes of operation:
     // 1) Standalone -- One server, handling boths streams and configuration
     // 2) Master -- Central server in a master/slave setup. Does not handle any streams
     //    directly, but hands out config info to slaves and gets back logging.
     // 3) Slave -- Connects to a master server for stream information.  Passes back
     //    logging data. Offers up stream connections to clients.
-    _.defaults(this.radio.options, this.getStreamMachine().Defaults);
+    _.defaults(this.config.options, StreamMachine.Defaults);
+    this.mode = nconf.get("mode") || this.config.options.mode;
     switch (this.mode) {
       case "master":
-        return new (this.getStreamMachine()).MasterMode(this.radio.options);
+        return new StreamMachine.Modes.MasterMode(this.config.options);
       case "slave":
-        return new (this.getStreamMachine()).SlaveMode(this.radio.options);
+        return new StreamMachine.Modes.SlaveMode(this.config.options);
       default:
-        return new (this.getStreamMachine()).StandaloneMode(this.radio.options);
+        return new StreamMachine.Modes.StandaloneMode(this.config.options);
     }
-  }
-
-  //----------
-  getStreamMachine() {
-    this.streamMachine = this.streamMachine || require("./src/streammachine");
-    return this.streamMachine;
   }
 
   //----------
   ping() {
     return setTimeout(() => {
-      debug("Ping");
+      _.throttle(() => {
+        return debug("Ping", 10000);
+      });
       return request.put(this.config.uri, {
         qs: {
           ping: this.mode,
-          name: this.radio.name
+          name: this.config.name
         }
       }, () => {
         return this.ping();

@@ -1,8 +1,6 @@
 var BaseStore;
 
 module.exports = BaseStore = class BaseStore extends require("events").EventEmitter {
-  constructor() {}
-
   setMax(l) {
     this.max_length = l;
     return this._truncate();

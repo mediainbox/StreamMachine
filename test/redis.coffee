@@ -1,4 +1,4 @@
-RedisManager    = $src "redis"
+RedisStore    = $src "redis"
 RedisConfig     = $src "redis_config"
 
 MasterHelper = require "./helpers/master"
@@ -38,7 +38,7 @@ describe "Redis", ->
     describe "Manager", ->
         manager = null
         it "can connect to Redis", (done) ->
-            manager = new RedisManager config
+            manager = new RedisStore config
 
             manager.once_connected -> done()
 
@@ -63,7 +63,7 @@ describe "Redis", ->
     describe "Config", ->
         manager = null
         before (done) ->
-            manager = new RedisManager config
+            manager = new RedisStore config
             manager.once_connected -> done()
 
         c = null

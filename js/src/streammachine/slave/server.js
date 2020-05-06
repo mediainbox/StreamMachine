@@ -295,7 +295,7 @@ module.exports = Server = class Server extends require('events').EventEmitter {
   _setupServer(app) {
     var packageRoot, server;
     if (process.env.NO_GREENLOCK) {
-      this.logger.info("Setup http server on port " + this.config.port);
+      this.logger.info("Setup http server on port " + this.config.http_port);
       server = http.createServer(app);
       return server.listen(this.config.http_port || 80);
     } else {

@@ -1,8 +1,16 @@
-var Core;
+var Core, Logger, _, nconf;
+
+nconf = require("nconf");
+
+Logger = require("../logger");
+
+_ = require("underscore");
 
 module.exports = Core = class Core extends require("events").EventEmitter {
-  constructor() {
+  constructor(opts) {
     super();
+    this.opts = opts;
+    this.log = new Logger(_.extend(this.opts.log, nconf.get('log')), this.opts.mode);
     // see runner for restart trigger based on SIGUSR2
     this.log.debug("Attaching listener for SIGUSR2 restarts.");
     if (process.listeners("SIGUSR2").length > 0) {

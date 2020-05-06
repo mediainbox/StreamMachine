@@ -1,4 +1,4 @@
-var Concentrate, Dissolve, HLSSegmenter, MemoryStore, RewindBuffer, Rewinder, _, nconf;
+var Concentrate, Dissolve, MemoryStore, RewindBuffer, Rewinder, _, nconf;
 
 _ = require('underscore');
 
@@ -9,8 +9,6 @@ Dissolve = require("dissolve");
 nconf = require("nconf");
 
 Rewinder = require("./rewind/rewinder");
-
-HLSSegmenter = require("./rewind/hls_segmenter");
 
 MemoryStore = require("./rewind/memory_store");
 
@@ -61,13 +59,6 @@ module.exports = RewindBuffer = (function() {
       this._rbuffer.on("unshift", (b) => {
         return this.emit("runshift", b);
       });
-      // -- set up Live Streaming segments -- #
-      if (rewind_opts.hls) {
-        this.log.debug("Setting up HLS Segmenter.", {
-          segment_duration: rewind_opts.hls
-        });
-        this.hls_segmenter = new HLSSegmenter(this, rewind_opts.hls, this.log);
-      }
       // -- set up header and frame functions -- #
       this._rdataFunc = (chunk) => {
         var i, l, len, ref, results;
@@ -153,9 +144,6 @@ module.exports = RewindBuffer = (function() {
         first_buffer_ts: (ref = this._rbuffer.first()) != null ? ref.ts : void 0,
         last_buffer_ts: (ref1 = this._rbuffer.last()) != null ? ref1.ts : void 0
       };
-      if (this.hls_segmenter) {
-        _.extend(status, this.hls_segmenter.status());
-      }
       return status;
     }
 
@@ -238,9 +226,6 @@ module.exports = RewindBuffer = (function() {
           this.emit("rewind_loaded");
           return this._risLoading = false;
         });
-        if (this.hls_segmenter) {
-          this.hls_segmenter._loadMap(null);
-        }
         return cb(null, {
           seconds: 0,
           length: 0
@@ -282,9 +267,6 @@ module.exports = RewindBuffer = (function() {
               emitDuration: c.secs_per_chunk,
               streamKey: c.stream_key
             });
-            if (c.hls && this.hls_segmenter) {
-              this.hls_segmenter._loadMap(c.hls);
-            }
           } else {
             this._insertBuffer(c);
             this.emit("buffer", c);
@@ -323,16 +305,7 @@ module.exports = RewindBuffer = (function() {
           writer = new RewindBuffer.RewindWriter(rbuf_copy, this._rsecsPerChunk, this._rstreamKey, hls);
           return cb(null, writer);
         };
-        if (this.hls_segmenter) {
-          return this.hls_segmenter._dumpMap((err, info) => {
-            if (err) {
-              return cb(err);
-            }
-            return go(info);
-          });
-        } else {
-          return go();
-        }
+        return go();
       });
     }
 
@@ -346,16 +319,16 @@ module.exports = RewindBuffer = (function() {
       var bl;
       bl = this._rbuffer.length();
       if (offset < 0) {
-        this.log.silly("offset is invalid! 0 for live.");
+        this.log.debug("offset is invalid! 0 for live.");
         return 0;
       }
       if (bl >= offset) {
-        this.log.silly("Granted. current buffer length is ", {
+        this.log.debug("Granted. current buffer length is ", {
           length: bl
         });
         return offset;
       } else {
-        this.log.silly("Not available. Instead giving max buffer of ", {
+        this.log.debug("Not available. Instead giving max buffer of ", {
           length: bl - 1
         });
         return bl - 1;
@@ -425,7 +398,7 @@ module.exports = RewindBuffer = (function() {
         // buffer?
         offsetSeconds = offset instanceof Date ? (Number(this._rbuffer.last().ts) - Number(offset)) / 1000 : this.offsetToSecs(offset);
         if ((ref = this.log) != null) {
-          ref.silly("Converting offset to seconds: ", {
+          ref.debug("Converting offset to seconds: ", {
             offset: offset,
             secs: offsetSeconds
           });
@@ -479,7 +452,9 @@ module.exports = RewindBuffer = (function() {
   //----------
   RewindBuffer.RewindWriter = class RewindWriter extends require("stream").Readable {
     constructor(buf, secs1, streamKey, hls1) {
-      super();
+      super({
+        highWaterMark: 25 * 1024 * 1024
+      });
       this.buf = buf;
       this.secs = secs1;
       this.streamKey = streamKey;
@@ -488,13 +463,6 @@ module.exports = RewindBuffer = (function() {
       this.slices = 0;
       this.i = this.buf.length - 1;
       this._ended = false;
-      super({
-        highWaterMark: 25 * 1024 * 1024
-      });
-      this.buf = buf;
-      this.secs = secs1;
-      this.streamKey = streamKey;
-      this.hls = hls1;
       // make sure there's something to send
       if (this.buf.length === 0) {
         this.push(null);

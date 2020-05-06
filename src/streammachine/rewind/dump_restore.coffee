@@ -81,7 +81,7 @@ module.exports = class RewindDumpRestore extends require('events').EventEmitter
     #----------
 
     _triggerDumps: (cb) ->
-        @log.silly "Queuing Rewind dumps"
+        @log.debug "Queuing Rewind dumps"
         @_queue.push ( d for k,d of @_streams )...
 
         @_dump cb if !@_working

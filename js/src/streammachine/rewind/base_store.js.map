@@ -6,8 +6,8 @@
     "base_store.coffee"
   ],
   "names": [],
-  "mappings": "AACC,IAAA;;AAAA,MAAM,CAAC,OAAP,GAAuB,YAAN,MAAA,UAAA,QAAwB,OAAA,CAAQ,QAAR,CAAiB,CAAC,aAA1C;EACb,WAAa,CAAA,CAAA,EAAA;;EAEb,MAAQ,CAAC,CAAD,CAAA;IACJ,IAAC,CAAA,UAAD,GAAc;WACd,IAAC,CAAA,SAAD,CAAA;EAFI;;EAIR,MAAQ,CAAA,CAAA,EAAA;;EAER,EAAI,CAAC,CAAD,CAAA,EAAA;;EAEJ,MAAQ,CAAC,KAAD,CAAA,EAAA;;EAER,IAAM,CAAA,CAAA,EAAA;;AAbO",
+  "mappings": "AACC,IAAA;;AAAA,MAAM,CAAC,OAAP,GAAuB,YAAN,MAAA,UAAA,QAAwB,OAAA,CAAQ,QAAR,CAAiB,CAAC,aAA1C;EACb,MAAQ,CAAC,CAAD,CAAA;IACJ,IAAC,CAAA,UAAD,GAAc;WACd,IAAC,CAAA,SAAD,CAAA;EAFI;;EAIR,MAAQ,CAAA,CAAA,EAAA;;EAER,EAAI,CAAC,CAAD,CAAA,EAAA;;EAEJ,MAAQ,CAAC,KAAD,CAAA,EAAA;;EAER,IAAM,CAAA,CAAA,EAAA;;AAXO",
   "sourcesContent": [
-    "\r\nmodule.exports = class BaseStore extends require(\"events\").EventEmitter\r\n    constructor: ->\r\n\r\n    setMax: (l) ->\r\n        @max_length = l\r\n        @_truncate()\r\n\r\n    length: ->\r\n\r\n    at: (i) ->\r\n\r\n    insert: (chunk) ->\r\n\r\n    info: ->\r\n"
+    "\r\nmodule.exports = class BaseStore extends require(\"events\").EventEmitter\r\n    setMax: (l) ->\r\n        @max_length = l\r\n        @_truncate()\r\n\r\n    length: ->\r\n\r\n    at: (i) ->\r\n\r\n    insert: (chunk) ->\r\n\r\n    info: ->\r\n"
   ]
 }

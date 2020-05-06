@@ -20,7 +20,7 @@ debug = require("debug")("sm:modes:slave");
 
 //----------
 module.exports = SlaveMode = (function() {
-  class SlaveMode extends require("./base") {
+  class SlaveMode extends require("./base_mode") {
     constructor(opts, cb) {
       super();
       this.opts = opts;
@@ -137,7 +137,7 @@ module.exports = SlaveMode = (function() {
         });
         return;
       }
-      this.log.silly(`Distributing listener to worker ${w.id} (${w.pid})`);
+      this.log.debug(`Distributing listener to worker ${w.id} (${w.pid})`);
       return w.rpc.request("connection", null, conn, (err) => {
         if (err) {
           this.log.error(`Failed to land incoming connection: ${err}`);

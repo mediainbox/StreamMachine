@@ -111,7 +111,7 @@ module.exports = HLSSegmenter = (function() {
       this._gSyncFunc = (ts) => {
         var ref;
         return (ref = this.finalizer) != null ? ref.setMinTS(ts, (err, seg_id) => {
-          return this.log.silly(`Synced min segment TS to ${ts}. Got ${seg_id}.`);
+          return this.log.debug(`Synced min segment TS to ${ts}. Got ${seg_id}.`);
         }) : void 0;
       };
     }
@@ -377,7 +377,7 @@ module.exports = HLSSegmenter = (function() {
       seg_pts = null;
       if (this.segment_map[Number(segment.ts)] != null) {
         seg_id = this.segment_map[Number(segment.ts)];
-        this.log.silly("Pulling segment ID from loaded segment map", {
+        this.log.debug("Pulling segment ID from loaded segment map", {
           id: seg_id,
           ts: segment.ts
         });

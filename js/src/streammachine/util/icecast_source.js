@@ -1,6 +1,6 @@
 var FileSource, IcecastSource, debug, net;
 
-FileSource = require("../sources/file");
+FileSource = require("../sources/file_source");
 
 net = require("net");
 

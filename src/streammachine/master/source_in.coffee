@@ -3,27 +3,25 @@ express = require "express"
 
 debug = require("debug")("sm:master:source_in")
 
-IcecastSource = require "../sources/icecast"
+IcecastSource = require "../sources/icecast_source"
 
 module.exports = class SourceIn extends require("events").EventEmitter
-    constructor: (opts) ->
+    constructor: (@ctx) ->
         super()
 
-        @core = opts.core
+        @config = @ctx.config
+        @port = @ctx.config.port
+        @behind_proxy = @ctx.config.behind_proxy
 
-        @log = @core.log.child mode:"sourcein"
-
-        # grab our listening port
-        @port = opts.port
-
-        @behind_proxy = opts.behind_proxy
+        @logger = @ctx.logger.child({
+            component: "sourcein"
+        })
 
         # create our server
-
         @server = net.createServer (c) => @_connection(c)
 
     listen: (spec=@port) ->
-        #@core.log.debug "SourceIn listening on ", spec:spec
+        #@ctx.master.log.debug "SourceIn listening on ", spec:spec
         debug "SourceIn listening on #{spec}"
         @server.listen spec
 
@@ -100,9 +98,9 @@ module.exports = class SourceIn extends require("events").EventEmitter
 
         # -- source request... is the endpoint one that we recognize? -- #
 
-        if Object.keys(@core.source_mounts).length > 0 && m = ///^/(#{Object.keys(@core.source_mounts).join("|")})///.exec info.url
+        if Object.keys(@ctx.master.source_mounts).length > 0 && m = ///^/(#{Object.keys(@ctx.master.source_mounts).join("|")})///.exec info.url
             debug "Incoming source matched mount: #{m[1]}"
-            mount = @core.source_mounts[ m[1] ]
+            mount = @ctx.master.source_mounts[ m[1] ]
             _authFunc mount
 
         else

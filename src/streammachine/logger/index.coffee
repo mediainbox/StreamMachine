@@ -1,14 +1,13 @@
 _ = require "underscore"
-winston = require "winston"
-LoggingWinston = require('@google-cloud/logging-winston').LoggingWinston
+StackdriverLogging = require('@google-cloud/logging-winston').LoggingWinston
 customTransports = require "./transports";
 
-fs          = require "fs"
-path        = require "path"
+winston = require "winston"
+{ combine, timestamp, label, prettyPrint } = winston.format;
 
 debug = require("debug")("sm:logger")
 
-module.exports = class LogController
+module.exports = createLogger: (config) ->
     CustomLevels:
         error:          80
         alert:          75
@@ -20,71 +19,72 @@ module.exports = class LogController
         debug:          10
         silly:          5
 
-    constructor: (config, mode, env) ->
-        console.log "[logging] configure logger, mode: #{mode}, env: #{env}"
+    debug "create logger (mode: #{config.mode}, env: #{config.env})"
 
-        transports = []
+    transports = []
 
-        # -- debug -- #
+    # -- debug -- #
 
-        transports.push new customTransports.DebugTransport level:"silly"
+    transports.push new customTransports.DebugTransport
 
-        # -- stdout -- #
+    # -- stdout -- #
 
-        if config.stdout
-            console.log "[logging] adding console transport"
-            transports.push new customTransports.ConsoleTransport
-                level:      config.stdout?.level        || "debug"
-                colorize:   config.stdout?.colorize     || false
-                timestamp:  config.stdout?.timestamp    || false
-                ignore:     config.stdout?.ignore       || ""
+    if config.stdout
+        debug "adding console transport"
+        transports.push new winston.transports.Console(
+            colorize: true,
+            prettyPrint: true,
+            timestamp: true
+        )
 
-        # -- JSON -- #
+    ###
+    transports.push new customTransports.ConsoleTransport
+        level:      config.stdout?.level        || "debug"
+        colorize:   config.stdout?.colorize     || false
+        timestamp:  config.stdout?.timestamp    || false
+        ignore:     config.stdout?.ignore       || ""
+    ###
 
-        if config.json?.file
-            console.log "Setting up JSON logger with ", config.json
-            transports.push new (winston.transports.File)
-                level:      config.json.level || "interaction"
-                timestamp:  true
-                filename:   config.json.file
-                json:       true
-                options:
-                    flags: 'a'
-                    highWaterMark: 24
+    # -- JSON -- #
 
-        # -- W3C -- #
-
-        if config.w3c?.file
-            # set up W3C-format logging
-            transports.push new customTransports.W3CLogger
-                level:      config.w3c.level || "request"
-                filename:   config.w3c.file
-
-
-        # -- Stackdriver -- #
-
-        if config.stackdriver? || 1
-            console.log "[logging] adding stackdriver transport"
-            transports.push new LoggingWinston(
-                name: "stackdriver"
-                logname: 'stream_machine'
-                logName: 'stream_machine'
-                prefix: mode
-                labels:
-                        mode: mode,
-                        env: env
-
-            )
+    if config.json?.file
+        debug "Setting up JSON logger with ", config.json
+        transports.push new (winston.transports.File)
+            level:      config.json.level || "interaction"
+            timestamp:  true
+            filename:   config.json.file
+            json:       true
+            options:
+                flags: 'a'
+                highWaterMark: 24
 
 
-        # create a winston logger for this instance
-        @logger = new (winston.Logger) transports:transports, levels:@CustomLevels #, rewriters:[@RequestRewriter]
-        @logger.extend(@)
+    # -- Stackdriver -- #
 
-    #----------
+    if config.stackdriver? || 1
+        debug "adding stackdriver transport"
+        transports.push new StackdriverLogging(
+            name: "stackdriver"
+            logname: 'stream_machine'
+            logName: 'stream_machine'
+            prefix: config.mode
+            labels:
+                    mode: config.mode,
+                    env: config.env
+        )
 
-    # returns a logger that will automatically merge in the given data
-    child: (opts={}) -> new LogController.Child(@,opts)
+
+    # create a winston logger for this instance
+    logger = winston.createLogger
+        level: 'debug'
+        levels: winston.config.syslog.levels
+        transports: transports
+        #levels:@CustomLevels
+        #, rewriters:[@RequestRewriter]
+
+    winston.addColors(winston.config.syslog.levels)
+
+    return logger
 
     #----------
 
@@ -92,7 +92,7 @@ module.exports = class LogController
     # to a master server over WebSockets
     proxyToMaster: (sock) ->
         @logger.remove(@logger.transports['socket']) if @logger.transports['socket']
-        @logger.add (new LogController.SocketLogger sock, level:"interaction"), {}, true if sock
+        @logger.add (new Logger.SocketLogger sock, level:"interaction"), {}, true if sock
 
     #----------
 
@@ -108,7 +108,7 @@ module.exports = class LogController
                     @parent[k].apply @, args
 
             @logger = @parent.logger
-            @child = (opts={}) -> new LogController.Child(@parent,_.extend({},@opts,opts))
+            @child = (opts={}) -> new Logger.Child(@parent,_.extend({},@opts,opts))
 
         proxyToMaster: (sock) ->
             @parent.proxyToMaster(sock)

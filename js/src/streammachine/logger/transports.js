@@ -1,10 +1,8 @@
-var ConsoleTransport, DebugTransport, LoggingWinston, SocketLogger, Transport, W3CLogger, WinstonCommon, fs, path, strftime, winston;
+var ConsoleTransport, DebugTransport, SocketLogger, Transport, W3CLogger, WinstonCommon, debug, fs, path, strftime, winston;
 
 winston = require("winston");
 
 WinstonCommon = require("winston/lib/winston/common");
-
-LoggingWinston = require('@google-cloud/logging-winston').LoggingWinston;
 
 fs = require("fs");
 
@@ -14,10 +12,30 @@ strftime = require("prettydate").strftime;
 
 Transport = require('winston-transport');
 
+debug = require("debug");
+
 DebugTransport = (function() {
-  class DebugTransport extends winston.Transport {
-    log(level, msg, meta, callback) {
-      debug(`${level}: ${msg}`, meta);
+  class DebugTransport extends Transport {
+    constructor(opts) {
+      super(opts);
+      this.defaultFn = require("debug")("sm:log");
+      this.debugFnByLabel = {};
+    }
+
+    getDebugFn(label) {
+      var fn;
+      fn = this.debugFnByLabel[label];
+      if (!fn) {
+        fn = debug(label);
+        this.debugFnByLabel[label] = fn;
+      }
+      return fn;
+    }
+
+    log(info, callback) {
+      var fn;
+      fn = info.component ? this.getDebugFn(info.component) : this.defaultFn;
+      fn(`[${info.level.toUpperCase()}] ${info.message}`);
       return callback(null, true);
     }
 
@@ -37,7 +55,7 @@ ConsoleTransport = class ConsoleTransport extends winston.transports.Console {
     this.ignore_levels = (this.opts.ignore || "").split(",");
   }
 
-  log(level, msg, meta, callback) {
+  log(info, callback) {
     var i, k, len, output, prefixes, ref;
     if (this.silent) {
       return callback(null, true);
@@ -50,9 +68,9 @@ ConsoleTransport = class ConsoleTransport extends winston.transports.Console {
     ref = ['pid', 'mode', 'component'];
     for (i = 0, len = ref.length; i < len; i++) {
       k = ref[i];
-      if (meta[k]) {
-        prefixes.push(meta[k]);
-        delete meta[k];
+      if (info[k]) {
+        prefixes.push(info[k]);
+        delete info[k];
       }
     }
     output = WinstonCommon.log({
@@ -60,7 +78,7 @@ ConsoleTransport = class ConsoleTransport extends winston.transports.Console {
       json: this.json,
       level: level,
       message: msg,
-      meta: meta,
+      meta: info,
       stringify: this.stringify,
       timestamp: this.timestamp,
       prettyPrint: this.prettyPrint,

@@ -20,17 +20,13 @@ debug = require("debug")("sm:modes:master");
 // source streams and proxy them to the slaves, providing an admin
 // interface and a point to consolidate logs and listener counts.
 module.exports = MasterMode = (function() {
-  class MasterMode extends require("./base") {
-    constructor(opts, cb) {
-      super();
-      this.opts = opts;
-      this.log = new Logger(_.extend(this.opts.log, nconf.get('log')), this.opts.mode);
-      debug("Master instance initialized.");
-      process.title = "StreamM:master";
+  class MasterMode extends require("./base_mode") {
+    constructor(config, cb) {
+      super(config);
+      process.title = "SM:MASTER";
+      this.logger.debug("Master mode starting");
       // create a master
-      this.master = new Master(_.extend({}, this.opts, {
-        logger: this.log
-      }));
+      this.master = new Master(this.ctx);
       // Set up a server for our admin
       this.server = express();
       this.server.use("/s", this.master.transport.app);
@@ -71,7 +67,7 @@ module.exports = MasterMode = (function() {
     _handoffStart(cb) {
       return this._acceptHandoff((err) => {
         if (err) {
-          this.log.error(`_handoffStart Failed! Falling back to normal start: ${err}`);
+          this.logger.error(`_handoffStart Failed! Falling back to normal start: ${err}`);
           return this._normalStart(cb);
         }
       });
@@ -81,27 +77,27 @@ module.exports = MasterMode = (function() {
     _normalStart(cb) {
       // load any rewind buffers from disk
       this.master.loadRewinds();
-      this.handle = this.server.listen(this.opts.master.port);
+      this.handle = this.server.listen(this.ctx.config.master.port);
       this.master.slaves.listen(this.handle);
       this.master.sourcein.listen();
-      this.log.info("Listening.");
+      this.logger.info("Listening.");
       return typeof cb === "function" ? cb(null, this) : void 0;
     }
 
     //----------
     _sendHandoff(rpc) {
-      this.log.event("Got handoff signal from new process.");
+      this.logger.info("Got handoff signal from new process.");
       debug("In _sendHandoff. Waiting for config.");
       return rpc.once("configured", (msg, handle, cb) => {
         debug("Handoff recipient is configured. Syncing running config.");
         // send stream/source info so we make sure our configs are matched
         return rpc.request("config", this.master.config(), (err, streams) => {
           if (err) {
-            this.log.error(`Error setting config on new process: ${err}`);
+            this.logger.error(`Error setting config on new process: ${err}`);
             cb(`Error sending config: ${err}`);
             return false;
           }
-          this.log.info("New Master confirmed configuration.");
+          this.logger.info("New Master confirmed configuration.");
           debug("New master confirmed configuration.");
           // basically we leave the config request open while we send streams
           cb();
@@ -110,24 +106,24 @@ module.exports = MasterMode = (function() {
           return this.master.sendHandoffData(rpc, (err) => {
             var _afterSockets;
             debug("Back in _sendHandoff. Sending listening sockets.");
-            this.log.event("Sent master data to new process.");
+            this.logger.info("Sent master data to new process.");
             _afterSockets = _.after(2, () => {
               debug("Socket transfer is done.");
-              this.log.info("Sockets transferred.  Exiting.");
+              this.logger.info("Sockets transferred.  Exiting.");
               return process.exit();
             });
             // Hand over the source port
-            this.log.info("Hand off source socket.");
+            this.logger.info("Hand off source socket.");
             rpc.request("source_socket", null, this.master.sourcein.server, (err) => {
               if (err) {
-                this.log.error(`Error sending source socket: ${err}`);
+                this.logger.error(`Error sending source socket: ${err}`);
               }
               return _afterSockets();
             });
-            this.log.info("Hand off master socket.");
+            this.logger.info("Hand off master socket.");
             return rpc.request("master_handle", null, this.handle, (err) => {
               if (err) {
-                this.log.error(`Error sending master handle: ${err}`);
+                this.logger.error(`Error sending master handle: ${err}`);
               }
               return _afterSockets();
             });
@@ -139,7 +135,7 @@ module.exports = MasterMode = (function() {
     //----------
     _acceptHandoff(cb) {
       var handoff_timer;
-      this.log.info("Initializing handoff receptor.");
+      this.logger.info("Initializing handoff receptor.");
       debug("In _acceptHandoff");
       if (!this._rpc) {
         cb(new Error("Handoff called, but no RPC interface set up."));
@@ -165,27 +161,27 @@ module.exports = MasterMode = (function() {
           return this._rpc.request("configured", this.master.config(), (err, reply) => {
             var aFunc;
             if (err) {
-              this.log.error(`Failed to send config broadcast when starting handoff: ${err}`);
+              this.logger.error(`Failed to send config broadcast when starting handoff: ${err}`);
               return false;
             }
             debug("Handoff sender ACKed config.");
-            this.log.info("Handoff initiator ACKed our config broadcast.");
+            this.logger.info("Handoff initiator ACKed our config broadcast.");
             this.master.loadHandoffData(this._rpc, () => {
-              return this.log.info("Handoff receiver believes all stream and source data has arrived.");
+              return this.logger.info("Handoff receiver believes all stream and source data has arrived.");
             });
             aFunc = _.after(2, () => {
-              this.log.info("Source and Master handles are up.");
+              this.logger.info("Source and Master handles are up.");
               return typeof cb === "function" ? cb(null, this) : void 0;
             });
             this._rpc.once("source_socket", (msg, handle, cb) => {
-              this.log.info("Source socket is incoming.");
+              this.logger.info("Source socket is incoming.");
               this.master.sourcein.listen(handle);
               cb(null);
               return aFunc();
             });
             return this._rpc.once("master_handle", (msg, handle, cb) => {
               var ref;
-              this.log.info("Master socket is incoming.");
+              this.logger.info("Master socket is incoming.");
               this.handle = this.server.listen(handle);
               if ((ref = this.master.slaves) != null) {
                 ref.listen(this.handle);

@@ -32,19 +32,19 @@ module.exports = Users = (function() {
 
   //-----------
   Users.Local = class Local extends Users {
-    constructor(admin) {
+    constructor(ctx) {
       var nconf;
       super();
-      this.admin = admin;
-      if (this.admin.master.redis != null) {
+      this.ctx = ctx;
+      if (this.ctx.providers.redis != null) {
         // we're using redis for users
         this._user_list = (cb) => {
-          return this.admin.master.redis.once_connected((redis) => {
+          return this.ctx.providers.redis.once_connected((redis) => {
             return redis.hkeys("users", cb);
           });
         };
         this._user_lookup = (user, password, cb) => {
-          return this.admin.master.redis.once_connected((redis) => {
+          return this.ctx.providers.redis.once_connected((redis) => {
             return redis.hget("users", user, (err, val) => {
               if (err) {
                 if (typeof cb === "function") {
@@ -62,7 +62,7 @@ module.exports = Users = (function() {
           });
         };
         this._user_store = (user, password, cb) => {
-          return this.admin.master.redis.once_connected((redis) => {
+          return this.ctx.providers.redis.once_connected((redis) => {
             var hashed;
             console.log("in user_store for ", user, password);
             if (password) {

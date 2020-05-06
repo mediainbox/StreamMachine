@@ -2,8 +2,8 @@ module.exports =
     mode:           "standalone"
     handoff_type:   "external"
 
-    http_port:      443
-    https_port:     80
+    http_port:      9001 # 80
+    https_port:     443
 
     port:           8000
     source_port:    8001

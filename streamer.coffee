@@ -1,9 +1,11 @@
+debug = require('debug')('integrations');
 process.env.NEW_RELIC_NO_CONFIG_FILE = 'true';
+_ = require "lodash"
 
 if !process.env.NEW_RELIC_APP_NAME ||!process.env.NEW_RELIC_LICENSE_KEY
-    console.log('[integrations] skipping NewRelic, missing NEW_RELIC_APP_NAME or NEW_RELIC_LICENSE_KEY env vars')
+    debug('[integrations] skipping NewRelic, missing NEW_RELIC_APP_NAME or NEW_RELIC_LICENSE_KEY env vars')
 else
-    console.log('[integrations] loading NewRelic')
+    debug('[integrations] loading NewRelic')
     require('newrelic')
 
 
@@ -20,22 +22,30 @@ nconf = require "nconf"
 request = require "request"
 debug = require("debug") "sm:master:streamer"
 
+StreamMachine = require "./src/streammachine"
+
 class Streamer
     constructor: (@config) ->
-        @mode = nconf.get("mode") or "standalone"
-        debug "Streamer created in mode #{@mode.toUpperCase()}"
 
     #----------
 
     initialize: () ->
-        @getRadio (radio) =>
+        @readConfig (config) =>
             @ping()
-            @createStreamMachine radio
+            @createStreamMachine config
 
     #----------
 
-    getRadio: (callback) ->
-        debug "Fetch radio config from #{@config.uri}"
+    readConfig: (callback) ->
+        if @config.client
+            debug "Using local config: #{@config.config}"
+            callback @config
+            return
+
+        if !@config.uri
+            throw new Error('No remote config URL supplied in config file')
+
+        debug "Fetch remove config from #{@config.uri}"
         request.get(@config.uri,
             json: true,
             qs: ping: @mode
@@ -56,40 +66,36 @@ class Streamer
     retry: (callback) ->
         setTimeout () =>
             debug "Retry"
-            @getRadio callback
+            @readConfig callback
         , @config.ping / 2
 
     #----------
 
-    createStreamMachine: (@radio) ->
+    createStreamMachine: (@config) ->
         # There are three potential modes of operation:
         # 1) Standalone -- One server, handling boths streams and configuration
         # 2) Master -- Central server in a master/slave setup. Does not handle any streams
         #    directly, but hands out config info to slaves and gets back logging.
         # 3) Slave -- Connects to a master server for stream information.  Passes back
         #    logging data. Offers up stream connections to clients.
-        _.defaults @radio.options, @getStreamMachine().Defaults
+        _.defaults @config.options, StreamMachine.Defaults
+        @mode = nconf.get("mode") or @config.options.mode
+
         switch @mode
             when "master"
-                new (@getStreamMachine()).MasterMode @radio.options
+                new StreamMachine.Modes.MasterMode @config.options
             when "slave"
-                new (@getStreamMachine()).SlaveMode @radio.options
+                new StreamMachine.Modes.SlaveMode @config.options
             else
-                new (@getStreamMachine()).StandaloneMode @radio.options
-
-    #----------
-
-    getStreamMachine: () ->
-        @streamMachine = @streamMachine or require "./src/streammachine"
-        @streamMachine
+                new StreamMachine.Modes.StandaloneMode @config.options
 
     #----------
 
     ping: () ->
         setTimeout () =>
-            debug "Ping"
+            _.throttle(() => debug "Ping", 10000)
             request.put @config.uri,
-                qs: ping: @mode, name: @radio.name
+                qs: ping: @mode, name: @config.name
             , () =>
                 @ping()
         , @config.ping

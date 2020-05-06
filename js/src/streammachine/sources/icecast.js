@@ -1,7 +1,7 @@
 var IcecastSource;
 
 module.exports = IcecastSource = (function() {
-  class IcecastSource extends require("./base") {
+  class IcecastSource extends require("./base/base_source") {
     TYPE() {
       return `Icecast (${[this.opts.source_ip, this.opts.sock.remotePort].join(":")})`;
     }
@@ -14,10 +14,9 @@ module.exports = IcecastSource = (function() {
     // logger:   Logger (optional)
     constructor(opts) {
       var ref;
-      super({
+      super(opts, {
         useHeartbeat: true
       });
-      this.opts = opts;
       this._shouldHandoff = true;
       // data is going to start streaming in as data on req. We need to pipe
       // it into a parser to turn it into frames, headers, etc

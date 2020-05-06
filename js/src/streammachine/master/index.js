@@ -1,4 +1,4 @@
-var API, Alerts, Analytics, Master, Monitoring, Redis, RedisConfig, RewindDumpRestore, SlaveIO, SourceIn, SourceMount, Stream, Throttle, _, debug, express, fs, net, temp;
+var Alerts, Analytics, Master, MasterAPI, MasterConfigRedisStore, Monitoring, Redis, RewindDumpRestore, SlaveIO, SourceIn, SourceMount, Stream, Throttle, _, debug, express, fs, net, temp;
 
 _ = require("underscore");
 
@@ -14,11 +14,11 @@ Throttle = require("throttle");
 
 debug = require("debug")("sm:master:index");
 
-Redis = require("../redis");
+Redis = require("../stores/redis_store");
 
-RedisConfig = require("../redis_config");
+MasterConfigRedisStore = require("./config/redis_config");
 
-API = require("./admin/api");
+MasterAPI = require("./admin/api");
 
 Stream = require("./stream");
 
@@ -39,92 +39,90 @@ RewindDumpRestore = require("../rewind/dump_restore");
 // A Master handles configuration, slaves, incoming sources, logging and the admin interface
 module.exports = Master = (function() {
   class Master extends require("events").EventEmitter {
-    constructor(options1) {
-      var ref, ref1;
+    constructor(ctx) {
+      var ref;
       super();
-      this.options = options1;
+      this.ctx = ctx;
       this._configured = false;
       this.source_mounts = {};
       this.streams = {};
       this.stream_groups = {};
       this.proxies = {};
-      // -- set up logging -- #
-      this.log = this.options.logger;
-      if (this.options.redis != null) {
+      this.config = this.ctx.config;
+      this.logger = this.ctx.logger;
+      this.log = this.ctx.logger; // compatibility
+      this.ctx.master = this;
+      if (this.config.redis != null) {
         // -- load our streams configuration from redis -- #
 
         // we store streams and sources into Redis, but not our full
         // config object. Other stuff still loads from the config file
-        this.log.debug("Initializing Redis connection");
-        this.redis = new Redis(this.options.redis);
-        this.redis_config = new RedisConfig(this.redis);
-        this.redis_config.on("config", (config) => {
+        this.logger.debug("Initializing Redis connection");
+        this.ctx.providers.redis = new Redis(this.config.redis);
+        this.configStore = new MasterConfigRedisStore(this.ctx.providers.redis);
+        this.configStore.on("config", (config) => {
           if (config) {
             // stash the configuration
-            this.options = _.defaults(config, this.options);
+            this.config = _.defaults(config, this.config);
             // (re-)configure our master stream objects
-            return this.configure(this.options);
+            return this.configure(this.config);
           }
         });
         // Persist changed configuration to Redis
-        this.log.debug("Registering config_update listener");
+        this.logger.debug("Registering config_update listener");
         this.on("config_update", () => {
-          return this.redis_config._update(this.config(), (err) => {
-            return this.log.info(`Redis config update saved: ${err}`);
+          return this.configStore._update(this.getStreamsAndSourceConfig(), (err) => {
+            return this.logger.info(`Redis config update saved: ${err}`);
           });
         });
       } else {
         // -- look for hard-coded configuration -- #
         process.nextTick(() => {
-          return this.configure(this.options);
+          return this.configure(this.config);
         });
       }
       this.once("streams", () => {
         return this._configured = true;
       });
       // -- create a server to provide the API -- #
-      this.api = new API(this, (ref = this.options.admin) != null ? ref.require_auth : void 0);
+      this.api = new MasterAPI(this.ctx);
       // -- create a backend server for stream requests -- #
       this.transport = new Master.StreamTransport(this);
       // -- start the source listener -- #
-      this.sourcein = new SourceIn({
-        core: this,
-        port: this.options.source_port,
-        behind_proxy: this.options.behind_proxy
-      });
+      this.sourcein = new SourceIn(this.ctx);
       // -- create an alerts object -- #
       this.alerts = new Alerts({
-        logger: this.log.child({
+        logger: this.logger.child({
           module: "alerts"
         })
       });
       // -- create a listener for slaves -- #
-      if (this.options.master) {
-        this.slaves = new SlaveIO(this, this.log.child({
+      if (this.config.master) {
+        this.slaves = new SlaveIO(this, this.logger.child({
           module: "master_io"
-        }), this.options.master);
+        }), this.config.master);
         this.on("streams", () => {
-          return this.slaves.updateConfig(this.config());
+          return this.slaves.updateConfig(this.getStreamsAndSourceConfig());
         });
       }
       // -- Analytics -- #
-      if ((ref1 = this.options.analytics) != null ? ref1.es_uri : void 0) {
+      if ((ref = this.config.analytics) != null ? ref.es_uri : void 0) {
         this.analytics = new Analytics({
-          config: this.options.analytics,
-          log: this.log.child({
+          config: this.config.analytics,
+          log: this.logger.child({
             module: "analytics"
           }),
           redis: this.redis
         });
         // add a log transport
-        this.log.logger.add(new Analytics.LogTransport(this.analytics), {}, true);
+        this.logger.logger.add(new Analytics.LogTransport(this.analytics), {}, true);
       }
-      if (this.options.rewind_dump) {
-        // -- Rewind Dump and Restore -- #
-        this.rewind_dr = new RewindDumpRestore(this, this.options.rewind_dump);
+      // -- Rewind Dump and Restore -- #
+      if (this.config.rewind_dump) {
+        this.rewind_dr = new RewindDumpRestore(this, this.config.rewind_dump);
       }
       // -- Set up our monitoring module -- #
-      this.monitoring = new Monitoring(this, this.log.child({
+      this.monitoring = new Monitoring(this, this.logger.child({
         module: "monitoring"
       }));
     }
@@ -149,7 +147,7 @@ module.exports = Master = (function() {
     }
 
     //----------
-    config() {
+    getStreamsAndSourceConfig() {
       var config, k, ref, ref1, s;
       config = {
         streams: {},
@@ -174,13 +172,14 @@ module.exports = Master = (function() {
     // reconfigure an existing core.  we need to support either one.
     configure(options, cb) {
       var all_keys, base, g, k, key, mount, mount_key, new_sources, new_streams, obj, opts, ref, ref1, sg;
+      this.logger.debug("configure master");
       all_keys = {};
       // -- Sources -- #
       new_sources = (options != null ? options.sources : void 0) || {};
       for (k in new_sources) {
         opts = new_sources[k];
         all_keys[k] = 1;
-        this.log.debug(`Configuring Source Mapping ${k}`);
+        this.logger.debug(`Configuring Source Mapping ${k}`);
         if (this.source_mounts[k]) {
           // existing...
           this.source_mounts[k].configure(opts);
@@ -197,7 +196,7 @@ module.exports = Master = (function() {
       for (k in ref) {
         obj = ref[k];
         if (!(new_streams != null ? new_streams[k] : void 0)) {
-          this.log.debug("calling destroy on ", k);
+          this.logger.debug("calling destroy on ", k);
           obj.destroy();
           delete this.streams[k];
         }
@@ -206,25 +205,25 @@ module.exports = Master = (function() {
 // creating rewind buffers
       for (key in new_streams) {
         opts = new_streams[key];
-        this.log.debug(`Parsing stream for ${key}`);
+        this.logger.debug(`Parsing stream for ${key}`);
         // does this stream have a mount?
         mount_key = opts.source || key;
         all_keys[mount_key] = 1;
         if (!this.source_mounts[mount_key]) {
           // create a mount
-          this.log.debug(`Creating an unspecified source mount for ${mount_key} (via ${key}).`);
+          this.logger.debug(`Creating an unspecified source mount for ${mount_key} (via ${key}).`);
           this._startSourceMount(mount_key, _(opts).pick('source_password', 'format', 'monitored'));
         }
         mount = this.source_mounts[mount_key];
         // do we need to create the stream?
         if (this.streams[key]) {
           // existing stream...  pass it updated configuration
-          this.log.debug(`Passing updated config to master stream: ${key}`, {
+          this.logger.debug(`Passing updated config to master stream: ${key}`, {
             opts: opts
           });
           this.streams[key].configure(opts);
         } else {
-          this.log.debug(`Starting up master stream: ${key}`, {
+          this.logger.debug(`Starting up master stream: ${key}`, {
             opts: opts
           });
           this._startStream(key, mount, opts);
@@ -232,7 +231,7 @@ module.exports = Master = (function() {
         // part of a stream group?
         if (g = this.streams[key].opts.group) {
           // do we have a matching group?
-          sg = ((base = this.stream_groups)[g] || (base[g] = new Stream.StreamGroup(g, this.log.child({
+          sg = ((base = this.stream_groups)[g] || (base[g] = new Stream.StreamGroup(g, this.logger.child({
             stream_group: g
           }))));
           sg.addStream(this.streams[key]);
@@ -244,7 +243,7 @@ module.exports = Master = (function() {
       for (k in ref1) {
         obj = ref1[k];
         if (!all_keys[k]) {
-          this.log.debug(`Destroying source mount ${k}`);
+          this.logger.debug(`Destroying source mount ${k}`);
         }
       }
       return typeof cb === "function" ? cb(null, {
@@ -256,7 +255,7 @@ module.exports = Master = (function() {
     //----------
     _startSourceMount(key, opts) {
       var mount;
-      mount = new SourceMount(key, this.log.child({
+      mount = new SourceMount(key, this.logger.child({
         source_mount: key
       }), opts);
       if (mount) {
@@ -271,13 +270,13 @@ module.exports = Master = (function() {
     //----------
     _startStream(key, mount, opts) {
       var stream;
-      stream = new Stream(key, this.log.child({
+      stream = new Stream(key, this.logger.child({
         stream: key
       }), mount, _.extend(opts, {
-        hls: this.options.hls,
-        preroll: opts.preroll != null ? opts.preroll : this.options.preroll,
-        transcoder: opts.transcoder != null ? opts.transcoder : this.options.transcoder,
-        log_interval: opts.log_interval != null ? opts.log_interval : this.options.log_interval
+        hls: this.config.hls,
+        preroll: opts.preroll != null ? opts.preroll : this.config.preroll,
+        transcoder: opts.transcoder != null ? opts.transcoder : this.config.transcoder,
+        log_interval: opts.log_interval != null ? opts.log_interval : this.config.log_interval
       }));
       if (stream) {
         // attach a listener for configs
@@ -297,7 +296,7 @@ module.exports = Master = (function() {
     //----------
     createStream(opts, cb) {
       var mount_key, stream;
-      this.log.debug("createStream called with ", opts);
+      this.logger.debug("createStream called with ", opts);
       if (!opts.key) {
         if (typeof cb === "function") {
           cb("Cannot create stream without key.");
@@ -314,7 +313,7 @@ module.exports = Master = (function() {
       mount_key = opts.source || opts.key;
       if (!this.source_mounts[mount_key]) {
         // create a mount
-        this.log.debug(`Creating an unspecified source mount for ${mount_key} (via ${opts.key}).`);
+        this.logger.debug(`Creating an unspecified source mount for ${mount_key} (via ${opts.key}).`);
         this._startSourceMount(mount_key, _(opts).pick('source_password', 'format'));
       }
       // -- create the stream -- #
@@ -329,7 +328,7 @@ module.exports = Master = (function() {
 
     //----------
     updateStream(stream, opts, cb) {
-      this.log.info("updateStream called for ", {
+      this.logger.info("updateStream called for ", {
         key: stream.key,
         opts: opts
       });
@@ -358,7 +357,7 @@ module.exports = Master = (function() {
 
     //----------
     removeStream(stream, cb) {
-      this.log.info("removeStream called for ", {
+      this.logger.info("removeStream called for ", {
         key: stream.key
       });
       delete this.streams[stream.key];
@@ -371,7 +370,7 @@ module.exports = Master = (function() {
     //----------
     createMount(opts, cb) {
       var mount;
-      this.log.info(`createMount called for ${opts.key}`, {
+      this.logger.info(`createMount called for ${opts.key}`, {
         opts: opts
       });
       if (!opts.key) {
@@ -396,7 +395,7 @@ module.exports = Master = (function() {
 
     //----------
     updateMount(mount, opts, cb) {
-      this.log.info(`updateMount called for ${mount.key}`, {
+      this.logger.info(`updateMount called for ${mount.key}`, {
         opts: opts
       });
       // -- if they want to rename, the key must be unique -- #
@@ -421,7 +420,7 @@ module.exports = Master = (function() {
 
     //----------
     removeMount(mount, cb) {
-      this.log.info(`removeMount called for ${mount.key}`);
+      this.logger.info(`removeMount called for ${mount.key}`);
       // it's illegal to remove a mount that still has streams hooked up to it
       if (mount.listeners("data").length > 0) {
         cb(new Error("Cannot remove source mount until all streams are removed"));
@@ -544,13 +543,13 @@ module.exports = Master = (function() {
     sendHandoffData(rpc, cb) {
       var fFunc;
       fFunc = _.after(2, () => {
-        this.log.info("Rewind buffers and sources sent.");
+        this.logger.info("Rewind buffers and sources sent.");
         return cb(null);
       });
       // -- Source Mounts -- #
       rpc.once("sources", (msg, handle, cb) => {
         var _sendMount, mounts;
-        this.log.info("Received request for sources.");
+        this.logger.info("Received request for sources.");
         // iterate through each source mount, sending each of its sources
         mounts = _.values(this.source_mounts);
         _sendMount = () => {
@@ -567,7 +566,7 @@ module.exports = Master = (function() {
             if (!source) {
               return _sendMount();
             }
-            this.log.info(`Sending source ${mount.key}/${source.uuid}`);
+            this.logger.info(`Sending source ${mount.key}/${source.uuid}`);
             return rpc.request("source", {
               mount: mount.key,
               type: source.HANDOFF_TYPE,
@@ -579,7 +578,7 @@ module.exports = Master = (function() {
               }
             }, source.opts.sock, (err, reply) => {
               if (err) {
-                this.log.error(`Error sending source ${mount.key}/${source.uuid}: ${err}`);
+                this.logger.error(`Error sending source ${mount.key}/${source.uuid}: ${err}`);
               }
               return _sendSource();
             });
@@ -591,7 +590,7 @@ module.exports = Master = (function() {
       // -- Stream Rewind Buffers -- #
       return rpc.once("stream_rewinds", (msg, handle, cb) => {
         var _sendStream, streams;
-        this.log.info("Received request for rewind buffers.");
+        this.logger.info("Received request for rewind buffers.");
         streams = _(this.streams).values();
         _sendStream = () => {
           var _next, sock, spath, stream;
@@ -608,18 +607,18 @@ module.exports = Master = (function() {
             spath = temp.path({
               suffix: ".sock"
             });
-            this.log.info(`Asking to send rewind buffer for ${stream.key} over ${spath}.`);
+            this.logger.info(`Asking to send rewind buffer for ${stream.key} over ${spath}.`);
             sock = net.createServer();
             return sock.listen(spath, () => {
               sock.once("connection", (c) => {
                 return stream.getRewind((err, writer) => {
                   if (err) {
-                    this.log.error(`Failed to get rewind buffer for ${stream.key}`);
+                    this.logger.error(`Failed to get rewind buffer for ${stream.key}`);
                     _next();
                   }
                   writer.pipe(c);
                   return writer.once("end", () => {
-                    return this.log.info(`RewindBuffer for ${stream.key} written to socket.`);
+                    return this.logger.info(`RewindBuffer for ${stream.key} written to socket.`);
                   });
                 });
               });
@@ -630,14 +629,14 @@ module.exports = Master = (function() {
                 timeout: 10000
               }, (err) => {
                 if (err) {
-                  this.log.error(`Error sending rewind buffer for ${stream.key}: ${err}`);
+                  this.logger.error(`Error sending rewind buffer for ${stream.key}: ${err}`);
                 } else {
-                  this.log.info(`Rewind buffer sent and ACKed for ${stream.key}`);
+                  this.logger.info(`Rewind buffer sent and ACKed for ${stream.key}`);
                 }
                 // cleanup...
                 return sock.close(() => {
                   return fs.unlink(spath, (err) => {
-                    this.log.info("RewindBuffer socket unlinked.", {
+                    this.logger.info("RewindBuffer socket unlinked.", {
                       error: err
                     });
                     return _next();
@@ -666,15 +665,15 @@ module.exports = Master = (function() {
           logger: mount.log
         }));
         mount.addSource(source);
-        this.log.info(`Added mount source: ${mount.key}/${source.uuid}`);
+        this.logger.info(`Added mount source: ${mount.key}/${source.uuid}`);
         return cb(null);
       });
       rpc.on("stream_rewind", (msg, handle, cb) => {
         var sock, stream;
         stream = this.streams[msg.key];
-        this.log.info(`Stream Rewind will load over ${msg.path}.`);
+        this.logger.info(`Stream Rewind will load over ${msg.path}.`);
         return sock = net.connect(msg.path, (err) => {
-          this.log.info(`Reader socket connected for rewind buffer ${msg.key}`, {
+          this.logger.info(`Reader socket connected for rewind buffer ${msg.key}`, {
             error: err
           });
           if (err) {
@@ -682,7 +681,7 @@ module.exports = Master = (function() {
           }
           return stream.rewind.loadBuffer(sock, (err, stats) => {
             if (err) {
-              this.log.error(`Error loading rewind buffer: ${err}`);
+              this.logger.error(`Error loading rewind buffer: ${err}`);
               cb(err);
             }
             return cb(null);
@@ -697,9 +696,9 @@ module.exports = Master = (function() {
         timeout: 10000
       }, (err) => {
         if (err) {
-          this.log.error(`Failed to get sources from handoff initiator: ${err}`);
+          this.logger.error(`Failed to get sources from handoff initiator: ${err}`);
         } else {
-          this.log.info("Received sources from handoff initiator.");
+          this.logger.info("Received sources from handoff initiator.");
         }
         return af();
       });
@@ -708,9 +707,9 @@ module.exports = Master = (function() {
         timeout: 10000
       }, (err) => {
         if (err) {
-          this.log.error(`Failed to get stream rewinds from handoff initiator: ${err}`);
+          this.logger.error(`Failed to get stream rewinds from handoff initiator: ${err}`);
         } else {
-          this.log.info("Received stream rewinds from handoff initiator.");
+          this.logger.info("Received stream rewinds from handoff initiator.");
         }
         return af();
       });
@@ -718,7 +717,7 @@ module.exports = Master = (function() {
 
     //----------
     _attachIOProxy(stream) {
-      this.log.debug(`attachIOProxy call for ${stream.key}.`, {
+      this.logger.debug(`attachIOProxy call for ${stream.key}.`, {
         slaves: this.slaves != null,
         proxy: this.proxies[stream.key] != null
       });
@@ -729,7 +728,7 @@ module.exports = Master = (function() {
         return false;
       }
       // create a new proxy
-      this.log.debug(`Creating StreamProxy for ${stream.key}`);
+      this.logger.debug(`Creating StreamProxy for ${stream.key}`);
       this.proxies[stream.key] = new Master.StreamProxy({
         key: stream.key,
         stream: stream,

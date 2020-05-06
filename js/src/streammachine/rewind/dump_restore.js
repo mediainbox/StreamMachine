@@ -105,7 +105,7 @@ module.exports = RewindDumpRestore = (function() {
     //----------
     _triggerDumps(cb) {
       var d, k;
-      this.log.silly("Queuing Rewind dumps");
+      this.log.debug("Queuing Rewind dumps");
       this._queue.push(...((function() {
         var ref, results1;
         ref = this._streams;

@@ -12,7 +12,7 @@ debug = require("debug")("sm:modes:slave")
 
 #----------
 
-module.exports = class SlaveMode extends require("./base")
+module.exports = class SlaveMode extends require("./base_mode")
 
     MODE: "Slave"
     constructor: (@opts,cb) ->
@@ -129,7 +129,7 @@ module.exports = class SlaveMode extends require("./base")
 
             return
 
-        @log.silly "Distributing listener to worker #{w.id} (#{w.pid})"
+        @log.debug "Distributing listener to worker #{w.id} (#{w.pid})"
         w.rpc.request "connection", null, conn, (err) =>
             if err
                 @log.error "Failed to land incoming connection: #{err}"

@@ -1,4 +1,4 @@
-var FileSource, HLSSegmenter, ProxySource, Rewind, SourceMount, Stream, TranscodingSource, URL, _, uuid;
+var ProxySource, Rewind, Stream, URL, _, uuid;
 
 _ = require("underscore");
 
@@ -8,20 +8,12 @@ URL = require("url");
 
 Rewind = require('../rewind_buffer');
 
-FileSource = require("../sources/file");
-
-ProxySource = require('../sources/proxy');
-
-TranscodingSource = require("../sources/transcoding");
-
-HLSSegmenter = require("../rewind/hls_segmenter");
-
-SourceMount = require("./source_mount");
+ProxySource = require('../sources/url_source');
 
 module.exports = Stream = (function() {
   class Stream extends require('events').EventEmitter {
     constructor(key, log, mount, opts) {
-      var newsource, ref, uri;
+      var newsource, uri;
       super();
       this.key = key;
       this.log = log;
@@ -48,7 +40,7 @@ module.exports = Stream = (function() {
       this._vitals = null;
       this.emitDuration = 0;
       this.STATUS = "Initializing";
-      this.log.event("Stream is initializing.");
+      this.log.debug("Stream is initializing.");
       // -- Initialize Master Rewinder -- #
 
       // set up a rewind buffer, for use in bringing new slaves up to speed
@@ -60,8 +52,7 @@ module.exports = Stream = (function() {
         key: `master__${this.key}`,
         log: this.log.child({
           module: "rewind"
-        }),
-        hls: (ref = this.opts.hls) != null ? ref.segment_duration : void 0
+        })
       });
       // Rewind listens to us, not to our source
       this.rewind.emit("source", this);
@@ -69,12 +60,6 @@ module.exports = Stream = (function() {
       this.rewind.on("buffer", (c) => {
         return this.emit("buffer", c);
       });
-      // if we're doing HLS, pass along new segments
-      if (this.opts.hls != null) {
-        this.rewind.hls_segmenter.on("snapshot", (snap) => {
-          return this.emit("hls_snapshot", snap);
-        });
-      }
       // -- Set up data functions -- #
       this._meta = {
         StreamTitle: this.opts.metaTitle,
@@ -131,7 +116,7 @@ module.exports = Stream = (function() {
               if (err) {
                 return this.log.error("Connection to fallback source failed.");
               } else {
-                return this.log.event("Fallback source connected.");
+                return this.log.debug("Fallback source connected.");
               }
             });
           });
@@ -191,15 +176,6 @@ module.exports = Stream = (function() {
         return _vFunc(this._vitals);
       } else {
         return this.once("vitals", _vFunc);
-      }
-    }
-
-    //----------
-    getHLSSnapshot(cb) {
-      if (this.rewind.hls_segmenter) {
-        return this.rewind.hls_segmenter.snapshot(cb);
-      } else {
-        return cb("Stream does not support HLS");
       }
     }
 
@@ -367,17 +343,6 @@ module.exports = Stream = (function() {
         id: this.key,
         streams: sstatus
       };
-    }
-
-    //----------
-    hlsUpdateMinSegment(id) {
-      var prev;
-      if (!this.hls_min_id || id > this.hls_min_id) {
-        prev = this.hls_min_id;
-        this.hls_min_id = id;
-        this.emit("hls_update_min_segment", id);
-        return this.log.debug(`New HLS min segment id: ${id} (Previously: ${prev})`);
-      }
     }
 
   };

@@ -26,7 +26,7 @@ module.exports = ProxySource = class ProxySource extends require("./base") {
   // fallback: Should we set the isFallback flag? (default false)
   // logger:   Logger (optional)
   constructor(opts) {
-    super({
+    super(opts, {
       useHeartbeat: false
     });
     //----------
@@ -38,10 +38,11 @@ module.exports = ProxySource = class ProxySource extends require("./base") {
     //----------
     this.broadcastData = this.broadcastData.bind(this);
     //----------
+    this._logChunk = this._logChunk.bind(this);
+    //----------
     this.checkStatus = this.checkStatus.bind(this);
     //----------
     this.reconnect = this.reconnect.bind(this);
-    this.opts = opts;
     this.url = this.opts.url;
     debug(`ProxySource created for ${this.url}`);
     this.isFallback = this.opts.fallback || false;
@@ -51,6 +52,7 @@ module.exports = ProxySource = class ProxySource extends require("./base") {
     this.connected = false;
     this.framesPerSec = null;
     this.connected_at = null;
+    this.chunksCount = 0;
     this._in_disconnect = false;
     // connection drop handling
     // (FIXME: bouncing not yet implemented)
@@ -156,14 +158,21 @@ module.exports = ProxySource = class ProxySource extends require("./base") {
       return this.reconnect(true);
     });
     // outgoing -> Stream
-    return this.on("_chunk", this.broadcastData);
+    this.on("_chunk", this.broadcastData);
+    this.logChunk = _.throttle(this._logChunk.bind(this), 5000);
+    return this.on("_chunk", this.logChunk);
   }
 
   broadcastData(chunk) {
     boundMethodCheck(this, ProxySource);
-    debug(`Received chunk from parser (${chunk.ts})`);
+    this.chunksCount++;
     this.last_ts = chunk.ts;
     return this.emit("data", chunk);
+  }
+
+  _logChunk(chunk) {
+    boundMethodCheck(this, ProxySource);
+    return debug(`received chunk from parser (time: ${chunk.ts.toISOString().substr(11)}, total: ${this.chunksCount})`);
   }
 
   checkStatus() {
@@ -193,7 +202,9 @@ module.exports = ProxySource = class ProxySource extends require("./base") {
     debug(`Reconnect to Icecast source from ${this.url} in ${msWaitToConnect}ms`);
     this.connected = false;
     // Clean proxy listeners
+    this.chunksCount = 0;
     this.removeListener("_chunk", this.broadcastData);
+    this.removeListener("_chunk", this.logChunk);
     // Clean icecast
     if ((ref = this.ireq) != null) {
       ref.end();

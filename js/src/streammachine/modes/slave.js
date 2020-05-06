@@ -20,24 +20,18 @@ debug = require("debug")("sm:modes:slave");
 
 //----------
 module.exports = SlaveMode = (function() {
-  class SlaveMode extends require("./base") {
-    constructor(opts, cb) {
-      super();
-      this.opts = opts;
-      this.log = (new Logger(this.opts.log)).child({
-        mode: 'slave',
-        pid: process.pid
-      });
-      this.log.debug("Slave Instance initialized");
-      debug("Slave Mode init");
-      process.title = "StreamM:slave";
+  class SlaveMode extends require("./base_mode") {
+    constructor(config, cb) {
+      super(config);
+      process.title = "SM:SLAVE";
+      this.logger.debug("Slave mode starting");
       this._handle = null;
       this._haveHandle = false;
       this._shuttingDown = false;
       this._inHandoff = false;
       this._lastAddress = null;
       this._initFull = false;
-      this.slave = new Slave(_.extend({}, this.opts, {
+      this.slave = new Slave(_.extend({}, config, {
         logger: this.log
       }), this);
     }

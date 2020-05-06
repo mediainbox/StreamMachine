@@ -7,9 +7,9 @@ Throttle    = require "throttle"
 
 debug = require("debug")("sm:master:index")
 
-Redis       = require "../redis"
-RedisConfig = require "../redis_config"
-API         = require "./admin/api"
+Redis       = require "../stores/redis_store"
+MasterConfigRedisStore = require "./config/redis_config"
+MasterAPI         = require "./admin/api"
 Stream      = require "./stream"
 SourceIn    = require "./source_in"
 Alerts      = require "../alerts"
@@ -23,7 +23,7 @@ RewindDumpRestore   = require "../rewind/dump_restore"
 # A Master handles configuration, slaves, incoming sources, logging and the admin interface
 
 module.exports = class Master extends require("events").EventEmitter
-    constructor: (@options) ->
+    constructor: (@ctx) ->
         super()
 
         @_configured = false
@@ -33,45 +33,47 @@ module.exports = class Master extends require("events").EventEmitter
         @stream_groups  = {}
         @proxies        = {}
 
-        # -- set up logging -- #
+        @config = @ctx.config
+        @logger = @ctx.logger
+        @log = @ctx.logger # compatibility
+        @ctx.master = this
 
-        @log = @options.logger
 
-        if @options.redis?
+        if @config.redis?
             # -- load our streams configuration from redis -- #
 
             # we store streams and sources into Redis, but not our full
             # config object. Other stuff still loads from the config file
 
-            @log.debug "Initializing Redis connection"
-            @redis = new Redis @options.redis
-            @redis_config = new RedisConfig @redis
-            @redis_config.on "config", (config) =>
+            @logger.debug "Initializing Redis connection"
+            @ctx.providers.redis = new Redis @config.redis
+            @configStore = new MasterConfigRedisStore @ctx.providers.redis
+            @configStore.on "config", (config) =>
                 if config
                     # stash the configuration
-                    @options = _.defaults config, @options
+                    @config = _.defaults config, @config
 
                     # (re-)configure our master stream objects
-                    @configure @options
+                    @configure @config
 
             # Persist changed configuration to Redis
-            @log.debug "Registering config_update listener"
+            @logger.debug "Registering config_update listener"
             @on "config_update", =>
-                @redis_config._update @config(), (err) =>
-                    @log.info "Redis config update saved: #{err}"
+                @configStore._update @getStreamsAndSourceConfig(), (err) =>
+                    @logger.info "Redis config update saved: #{err}"
 
         else
             # -- look for hard-coded configuration -- #
 
             process.nextTick =>
-                @configure @options
+                @configure @config
 
         @once "streams", =>
             @_configured = true
 
         # -- create a server to provide the API -- #
 
-        @api = new API @, @options.admin?.require_auth
+        @api = new MasterAPI @ctx
 
         # -- create a backend server for stream requests -- #
 
@@ -79,37 +81,37 @@ module.exports = class Master extends require("events").EventEmitter
 
         # -- start the source listener -- #
 
-        @sourcein = new SourceIn core:@, port:@options.source_port, behind_proxy:@options.behind_proxy
+        @sourcein = new SourceIn @ctx
 
         # -- create an alerts object -- #
-
-        @alerts = new Alerts logger:@log.child(module:"alerts")
+        @alerts = new Alerts logger:@logger.child(module:"alerts")
 
         # -- create a listener for slaves -- #
 
-        if @options.master
-            @slaves = new SlaveIO @, @log.child(module:"master_io"), @options.master
+        if @config.master
+            @slaves = new SlaveIO @, @logger.child(module:"master_io"), @config.master
             @on "streams", =>
-                @slaves.updateConfig @config()
+                @slaves.updateConfig @getStreamsAndSourceConfig()
 
         # -- Analytics -- #
 
-        if @options.analytics?.es_uri
+        if @config.analytics?.es_uri
             @analytics = new Analytics
-                config: @options.analytics
-                log:    @log.child(module:"analytics")
+                config: @config.analytics
+                log:    @logger.child(module:"analytics")
                 redis:  @redis
 
             # add a log transport
-            @log.logger.add new Analytics.LogTransport(@analytics), {}, true
+            @logger.logger.add new Analytics.LogTransport(@analytics), {}, true
 
         # -- Rewind Dump and Restore -- #
 
-        @rewind_dr = new RewindDumpRestore @, @options.rewind_dump if @options.rewind_dump
+        if @config.rewind_dump
+            @rewind_dr = new RewindDumpRestore @, @config.rewind_dump
 
         # -- Set up our monitoring module -- #
 
-        @monitoring = new Monitoring @, @log.child(module:"monitoring")
+        @monitoring = new Monitoring @, @logger.child(module:"monitoring")
 
     #----------
 
@@ -127,7 +129,7 @@ module.exports = class Master extends require("events").EventEmitter
 
     #----------
 
-    config: ->
+    getStreamsAndSourceConfig: ->
         config = streams:{}, sources:{}
 
         config.streams[k] = s.config() for k,s of @streams
@@ -140,6 +142,8 @@ module.exports = class Master extends require("events").EventEmitter
     # configre can be called on a new core, or it can be called to
     # reconfigure an existing core.  we need to support either one.
     configure: (options,cb) ->
+        @logger.debug "configure master"
+
         all_keys = {}
 
         # -- Sources -- #
@@ -148,7 +152,7 @@ module.exports = class Master extends require("events").EventEmitter
 
         for k,opts of new_sources
             all_keys[ k ] = 1
-            @log.debug "Configuring Source Mapping #{k}"
+            @logger.debug "Configuring Source Mapping #{k}"
             if @source_mounts[k]
                 # existing...
                 @source_mounts[k].configure opts
@@ -162,14 +166,14 @@ module.exports = class Master extends require("events").EventEmitter
         new_streams = options?.streams || {}
         for k,obj of @streams
             if !new_streams?[k]
-                @log.debug "calling destroy on ", k
+                @logger.debug "calling destroy on ", k
                 obj.destroy()
                 delete @streams[ k ]
 
         # run through the streams we've been passed, initializing sources and
         # creating rewind buffers
         for key,opts of new_streams
-            @log.debug "Parsing stream for #{key}"
+            @logger.debug "Parsing stream for #{key}"
 
             # does this stream have a mount?
             mount_key = opts.source || key
@@ -177,7 +181,7 @@ module.exports = class Master extends require("events").EventEmitter
 
             if !@source_mounts[mount_key]
                 # create a mount
-                @log.debug "Creating an unspecified source mount for #{mount_key} (via #{key})."
+                @logger.debug "Creating an unspecified source mount for #{mount_key} (via #{key})."
                 @_startSourceMount mount_key, _(opts).pick('source_password','format','monitored')
 
             mount = @source_mounts[mount_key]
@@ -185,16 +189,16 @@ module.exports = class Master extends require("events").EventEmitter
             # do we need to create the stream?
             if @streams[key]
                 # existing stream...  pass it updated configuration
-                @log.debug "Passing updated config to master stream: #{key}", opts:opts
+                @logger.debug "Passing updated config to master stream: #{key}", opts:opts
                 @streams[key].configure opts
             else
-                @log.debug "Starting up master stream: #{key}", opts:opts
+                @logger.debug "Starting up master stream: #{key}", opts:opts
                 @_startStream key, mount, opts
 
             # part of a stream group?
             if g = @streams[key].opts.group
                 # do we have a matching group?
-                sg = ( @stream_groups[ g ] ||= new Stream.StreamGroup g, @log.child stream_group:g )
+                sg = ( @stream_groups[ g ] ||= new Stream.StreamGroup g, @logger.child stream_group:g )
                 sg.addStream @streams[key]
 
         @emit "streams", @streams
@@ -203,7 +207,7 @@ module.exports = class Master extends require("events").EventEmitter
 
         for k,obj of @source_mounts
             if !all_keys[k]
-                @log.debug "Destroying source mount #{k}"
+                @logger.debug "Destroying source mount #{k}"
                 # FIXME: Implement?
 
         cb? null, streams:@streams, sources:@source_mounts
@@ -211,7 +215,7 @@ module.exports = class Master extends require("events").EventEmitter
     #----------
 
     _startSourceMount: (key,opts) ->
-        mount = new SourceMount key, @log.child(source_mount:key), opts
+        mount = new SourceMount key, @logger.child(source_mount:key), opts
 
         if mount
             @source_mounts[ key ] = mount
@@ -223,11 +227,11 @@ module.exports = class Master extends require("events").EventEmitter
     #----------
 
     _startStream: (key,mount,opts) ->
-        stream = new Stream key, @log.child(stream:key), mount, _.extend opts,
-            hls:        @options.hls
-            preroll:    if opts.preroll? then opts.preroll else @options.preroll
-            transcoder: if opts.transcoder? then opts.transcoder else @options.transcoder
-            log_interval: if opts.log_interval? then opts.log_interval else @options.log_interval
+        stream = new Stream key, @logger.child(stream:key), mount, _.extend opts,
+            hls:        @config.hls
+            preroll:    if opts.preroll? then opts.preroll else @config.preroll
+            transcoder: if opts.transcoder? then opts.transcoder else @config.transcoder
+            log_interval: if opts.log_interval? then opts.log_interval else @config.log_interval
 
         if stream
             # attach a listener for configs
@@ -244,7 +248,7 @@ module.exports = class Master extends require("events").EventEmitter
     #----------
 
     createStream: (opts,cb) ->
-        @log.debug "createStream called with ", opts
+        @logger.debug "createStream called with ", opts
 
         # -- make sure the stream key is present and unique -- #
 
@@ -261,7 +265,7 @@ module.exports = class Master extends require("events").EventEmitter
         mount_key = opts.source || opts.key
         if !@source_mounts[mount_key]
             # create a mount
-            @log.debug "Creating an unspecified source mount for #{mount_key} (via #{opts.key})."
+            @logger.debug "Creating an unspecified source mount for #{mount_key} (via #{opts.key})."
             @_startSourceMount mount_key, _(opts).pick('source_password','format')
 
         # -- create the stream -- #
@@ -276,7 +280,7 @@ module.exports = class Master extends require("events").EventEmitter
     #----------
 
     updateStream: (stream,opts,cb) ->
-        @log.info "updateStream called for ", key:stream.key, opts:opts
+        @logger.info "updateStream called for ", key:stream.key, opts:opts
 
         # -- if they want to rename, the key must be unique -- #
 
@@ -301,7 +305,7 @@ module.exports = class Master extends require("events").EventEmitter
     #----------
 
     removeStream: (stream,cb) ->
-        @log.info "removeStream called for ", key:stream.key
+        @logger.info "removeStream called for ", key:stream.key
 
         delete @streams[ stream.key ]
         stream.destroy()
@@ -314,7 +318,7 @@ module.exports = class Master extends require("events").EventEmitter
     #----------
 
     createMount: (opts,cb) ->
-        @log.info "createMount called for #{opts.key}", opts:opts
+        @logger.info "createMount called for #{opts.key}", opts:opts
 
         # -- make sure the mount key is present and unique -- #
 
@@ -335,7 +339,7 @@ module.exports = class Master extends require("events").EventEmitter
     #----------
 
     updateMount: (mount,opts,cb) ->
-        @log.info "updateMount called for #{mount.key}", opts:opts
+        @logger.info "updateMount called for #{mount.key}", opts:opts
 
         # -- if they want to rename, the key must be unique -- #
 
@@ -356,7 +360,7 @@ module.exports = class Master extends require("events").EventEmitter
     #----------
 
     removeMount: (mount,cb) ->
-        @log.info "removeMount called for #{mount.key}"
+        @logger.info "removeMount called for #{mount.key}"
 
         # it's illegal to remove a mount that still has streams hooked up to it
         if mount.listeners("data").length > 0
@@ -428,13 +432,13 @@ module.exports = class Master extends require("events").EventEmitter
 
     sendHandoffData: (rpc,cb) ->
         fFunc = _.after 2, =>
-            @log.info "Rewind buffers and sources sent."
+            @logger.info "Rewind buffers and sources sent."
             cb null
 
         # -- Source Mounts -- #
 
         rpc.once "sources", (msg,handle,cb) =>
-            @log.info "Received request for sources."
+            @logger.info "Received request for sources."
 
             # iterate through each source mount, sending each of its sources
 
@@ -453,14 +457,14 @@ module.exports = class Master extends require("events").EventEmitter
                     source = sources.shift()
                     return _sendMount() if !source
 
-                    @log.info "Sending source #{mount.key}/#{source.uuid}"
+                    @logger.info "Sending source #{mount.key}/#{source.uuid}"
                     rpc.request "source",
                         mount:      mount.key
                         type:       source.HANDOFF_TYPE
                         opts:       format:source.opts.format, uuid:source.uuid, source_ip:source.opts.source_ip, connectedAt:source.connectedAt
                     , source.opts.sock
                     , (err,reply) =>
-                        @log.error "Error sending source #{mount.key}/#{source.uuid}: #{err}" if err
+                        @logger.error "Error sending source #{mount.key}/#{source.uuid}: #{err}" if err
                         _sendSource()
 
                 _sendSource()
@@ -470,7 +474,7 @@ module.exports = class Master extends require("events").EventEmitter
         # -- Stream Rewind Buffers -- #
 
         rpc.once "stream_rewinds", (msg,handle,cb) =>
-            @log.info "Received request for rewind buffers."
+            @logger.info "Received request for rewind buffers."
 
             streams = _(@streams).values()
 
@@ -488,7 +492,7 @@ module.exports = class Master extends require("events").EventEmitter
                     # set up a socket to accept the buffer on
                     spath = temp.path suffix:".sock"
 
-                    @log.info "Asking to send rewind buffer for #{stream.key} over #{spath}."
+                    @logger.info "Asking to send rewind buffer for #{stream.key} over #{spath}."
 
                     sock = net.createServer()
 
@@ -496,22 +500,22 @@ module.exports = class Master extends require("events").EventEmitter
                         sock.once "connection", (c) =>
                             stream.getRewind (err,writer) =>
                                 if err
-                                    @log.error "Failed to get rewind buffer for #{stream.key}"
+                                    @logger.error "Failed to get rewind buffer for #{stream.key}"
                                     _next()
 
                                 writer.pipe(c)
                                 writer.once "end", =>
-                                    @log.info "RewindBuffer for #{ stream.key } written to socket."
+                                    @logger.info "RewindBuffer for #{ stream.key } written to socket."
 
                         rpc.request "stream_rewind", key:stream.key,path:spath, null, timeout:10000, (err) =>
                             if err
-                                @log.error "Error sending rewind buffer for #{stream.key}: #{err}"
+                                @logger.error "Error sending rewind buffer for #{stream.key}: #{err}"
                             else
-                                @log.info "Rewind buffer sent and ACKed for #{stream.key}"
+                                @logger.info "Rewind buffer sent and ACKed for #{stream.key}"
 
                             # cleanup...
                             sock.close => fs.unlink spath, (err) =>
-                                @log.info "RewindBuffer socket unlinked.", error:err
+                                @logger.info "RewindBuffer socket unlinked.", error:err
                                 _next()
                 else
                     # no need to send a buffer for an empty stream
@@ -528,21 +532,21 @@ module.exports = class Master extends require("events").EventEmitter
             mount = @source_mounts[ msg.mount ]
             source = new (require "../sources/#{msg.type}") _.extend {}, msg.opts, sock:handle, logger:mount.log
             mount.addSource source
-            @log.info "Added mount source: #{mount.key}/#{source.uuid}"
+            @logger.info "Added mount source: #{mount.key}/#{source.uuid}"
             cb null
 
         rpc.on "stream_rewind", (msg,handle,cb) =>
             stream = @streams[msg.key]
 
-            @log.info "Stream Rewind will load over #{msg.path}."
+            @logger.info "Stream Rewind will load over #{msg.path}."
 
             sock = net.connect msg.path, (err) =>
-                @log.info "Reader socket connected for rewind buffer #{msg.key}", error:err
+                @logger.info "Reader socket connected for rewind buffer #{msg.key}", error:err
                 return cb err if err
 
                 stream.rewind.loadBuffer sock, (err,stats) =>
                     if err
-                        @log.error "Error loading rewind buffer: #{err}"
+                        @logger.error "Error loading rewind buffer: #{err}"
                         cb err
 
                     cb null
@@ -555,9 +559,9 @@ module.exports = class Master extends require("events").EventEmitter
 
         rpc.request "sources", {}, null, timeout:10000, (err) =>
             if err
-                @log.error "Failed to get sources from handoff initiator: #{err}"
+                @logger.error "Failed to get sources from handoff initiator: #{err}"
             else
-                @log.info "Received sources from handoff initiator."
+                @logger.info "Received sources from handoff initiator."
 
             af()
 
@@ -565,23 +569,23 @@ module.exports = class Master extends require("events").EventEmitter
 
         rpc.request "stream_rewinds", {}, null, timeout:10000, (err) =>
             if err
-                @log.error "Failed to get stream rewinds from handoff initiator: #{err}"
+                @logger.error "Failed to get stream rewinds from handoff initiator: #{err}"
             else
-                @log.info "Received stream rewinds from handoff initiator."
+                @logger.info "Received stream rewinds from handoff initiator."
 
             af()
 
     #----------
 
     _attachIOProxy: (stream) ->
-        @log.debug "attachIOProxy call for #{stream.key}.", slaves:@slaves?, proxy:@proxies[stream.key]?
+        @logger.debug "attachIOProxy call for #{stream.key}.", slaves:@slaves?, proxy:@proxies[stream.key]?
         return false if !@slaves
 
         if @proxies[ stream.key ]
             return false
 
         # create a new proxy
-        @log.debug "Creating StreamProxy for #{stream.key}"
+        @logger.debug "Creating StreamProxy for #{stream.key}"
         @proxies[ stream.key ] = new Master.StreamProxy key:stream.key, stream:stream, master:@
 
         # and attach a listener to destroy it if the stream is removed

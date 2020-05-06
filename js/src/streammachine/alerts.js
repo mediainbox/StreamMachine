@@ -116,7 +116,7 @@ module.exports = Alerts = (function() {
         triggered_at: obj.triggered_at,
         description: ALERT_TYPES[obj.code].description
       };
-      this.logger.alert(`Alert: ${obj.key} : ${alert.description}`, alert);
+      this.logger.warning(`Alert: ${obj.key} : ${alert.description}`, alert);
       this.emit("alert", alert);
       // mark our alert as sent
       return obj.alert_sent = true;
@@ -132,7 +132,7 @@ module.exports = Alerts = (function() {
         last_seen_at: obj.last_seen_at,
         description: ALERT_TYPES[obj.code].description
       };
-      this.logger.alert(`Alert Cleared: ${obj.key} : ${alert.description}`, alert);
+      this.logger.warning(`Alert Cleared: ${obj.key} : ${alert.description}`, alert);
       this.emit("alert_cleared", alert);
       // we need to delete the alert now that it has been cleared. If the
       // condition returns, it will be as a new event

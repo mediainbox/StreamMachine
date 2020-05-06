@@ -5,12 +5,12 @@ path = require "path"
 $file = (file) -> path.resolve(__dirname,"..",file)
 
 class PrerollServer
-    constructor: (@files,@on=true) ->
+    constructor: (@files,@_on=true) ->
         @app = express()
         @app.get "/:key/:streamkey", (req,res,next) =>
             console.log "Preroll request for #{ req.path }"
             if f = @files[ req.param("key") ]?[ req.param("streamkey") ]
-                if @on
+                if @_on
 
                     res.header "Content-Type", "audio/mpeg"
                     res.status 200
@@ -33,8 +33,8 @@ class PrerollServer
         @app.listen process.argv[2]
 
     toggle: ->
-        @on = !@on
-        console.log "Responses are #{ if @on then "on" else "off" }"
+        @_on = !@_on
+        console.log "Responses are #{ if @_on then "on" else "off" }"
 
 pre = new PrerollServer
     test:

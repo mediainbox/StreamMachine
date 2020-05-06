@@ -4,7 +4,6 @@ uuid    = require "node-uuid"
 
 Preroller   = require "./preroller"
 Rewind      = require "../rewind_buffer"
-HLSIndex    = require "../rewind/hls_index"
 
 debug = require("debug")("sm:slave:stream")
 
@@ -53,16 +52,6 @@ module.exports = class Stream extends require('../rewind_buffer')
         # now run configure...
         process.nextTick => @configure(@opts)
 
-        # -- Set up HLS Index -- #
-
-        if @opts.hls
-            @log.debug "Enabling HLS Index for stream."
-            @hls = new HLSIndex @, @opts.tz
-
-            @once "source", (source) =>
-                source.on "hls_snapshot", (snapshot) => @hls.loadSnapshot(snapshot)
-                source.getHLSSnapshot (err,snapshot) =>
-                    @hls.loadSnapshot(snapshot)
 
         # -- Wait to Load Rewind Buffer -- #
 
@@ -183,7 +172,7 @@ module.exports = class Stream extends require('../rewind_buffer')
                     @log.debug "Connection exceeded max buffer size.", client:l.obj.client, bufferSize:l.rewind._queuedBytes
                     l.obj.disconnect(true)
 
-            @log.silly "All buffers: #{all_buf}"
+            @log.debug "All buffers: #{all_buf}"
         , 60*1000
 
         # Update RewindBuffer settings
@@ -206,8 +195,6 @@ module.exports = class Stream extends require('../rewind_buffer')
         @source = null
 
         @metaFunc = @bufferFunc = ->
-
-        @hls?.disconnect()
 
         super()
 
@@ -300,7 +287,6 @@ module.exports = class Stream extends require('../rewind_buffer')
         constructor: (@key,@log) ->
             super()
             @streams    = {}
-            @hls_min_id = null
 
         #----------
 
@@ -319,15 +305,6 @@ module.exports = class Stream extends require('../rewind_buffer')
 
                 stream.on "config", =>
                     delFunc() if stream.opts.group != @key
-
-        #----------
-
-        hlsUpdateMinSegment: (id) ->
-            if !@hls_min_id || id > @hls_min_id
-                prev = @hls_min_id
-                @hls_min_id = id
-                @emit "hls_update_min_segment", id
-                @log.debug "New HLS min segment id: #{id} (Previously: #{prev})"
 
         #----------
 

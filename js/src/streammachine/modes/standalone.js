@@ -15,10 +15,10 @@ Slave = require("../slave");
 debug = require("debug")("sm:modes:standalone");
 
 module.exports = StandaloneMode = (function() {
-  class StandaloneMode extends require("./base") {
-    constructor(opts, cb) {
-      super();
-      this.opts = opts;
+  class StandaloneMode extends require("./base_mode") {
+    constructor(opts1, cb) {
+      super(opts);
+      this.opts = opts1;
       // -- Set up logging -- #
       this.log = (new Logger(this.opts.log)).child({
         pid: process.pid

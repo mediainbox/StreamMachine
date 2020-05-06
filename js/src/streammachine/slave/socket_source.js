@@ -66,11 +66,6 @@ module.exports = SocketSource = class SocketSource extends require("events").Eve
   }
 
   //----------
-  getHLSSnapshot(cb) {
-    return this.slave.io.hls_snapshot(this.stream.key, cb);
-  }
-
-  //----------
   getRewind(cb) {
     var gRT, req;
     // connect to the master's StreamTransport and ask for any rewind

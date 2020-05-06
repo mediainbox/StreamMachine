@@ -1,18 +1,36 @@
 winston = require "winston"
 WinstonCommon = require "winston/lib/winston/common"
-LoggingWinston = require('@google-cloud/logging-winston').LoggingWinston
 fs          = require "fs"
 path        = require "path"
 strftime    = require("prettydate").strftime
-Transport = require('winston-transport')
+Transport   = require('winston-transport')
+debug = require("debug")
 
-class DebugTransport extends winston.Transport
+class DebugTransport extends Transport
     name: "debug"
-    log: (level,msg,meta,callback) ->
-        debug "#{level}: #{msg}", meta
+
+    constructor: (opts) ->
+        super opts
+        @defaultFn = require("debug")("sm:log")
+        @debugFnByLabel = {}
+
+    getDebugFn: (label) ->
+        fn = @debugFnByLabel[label]
+
+        if (!fn)
+            fn = debug(label)
+            @debugFnByLabel[label] = fn
+
+        return fn
+
+    log: (info, callback) ->
+        fn = if info.component then @getDebugFn(info.component) else @defaultFn
+        fn ("[#{info.level.toUpperCase()}] #{info.message}")
         callback null, true
 
 #----------
+
+
 
 class ConsoleTransport extends winston.transports.Console
     constructor: (opts) ->
@@ -20,7 +38,7 @@ class ConsoleTransport extends winston.transports.Console
         @opts = opts
         @ignore_levels = (@opts.ignore||"").split(",")
 
-    log: (level, msg, meta, callback) ->
+    log: (info, callback) ->
         if @silent
             return callback null, true
 
@@ -30,16 +48,16 @@ class ConsoleTransport extends winston.transports.Console
         # extract prefix elements from meta
         prefixes = []
         for k in ['pid','mode','component']
-            if meta[k]
-                prefixes.push meta[k]
-                delete meta[k]
+            if info[k]
+                prefixes.push info[k]
+                delete info[k]
 
         output = WinstonCommon.log
             colorize:    this.colorize
             json:        this.json
             level:       level
             message:     msg
-            meta:        meta
+            meta:        info
             stringify:   this.stringify
             timestamp:   this.timestamp
             prettyPrint: this.prettyPrint

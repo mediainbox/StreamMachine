@@ -7,21 +7,21 @@ express = require("express");
 
 debug = require("debug")("sm:master:source_in");
 
-IcecastSource = require("../sources/icecast");
+IcecastSource = require("../sources/icecast_source");
 
 module.exports = SourceIn = (function() {
   class SourceIn extends require("events").EventEmitter {
-    constructor(opts) {
+    constructor(ctx) {
       super();
       this._connection = this._connection.bind(this);
       this._trySource = this._trySource.bind(this);
-      this.core = opts.core;
-      this.log = this.core.log.child({
-        mode: "sourcein"
+      this.ctx = ctx;
+      this.config = this.ctx.config;
+      this.port = this.ctx.config.port;
+      this.behind_proxy = this.ctx.config.behind_proxy;
+      this.logger = this.ctx.logger.child({
+        component: "sourcein"
       });
-      // grab our listening port
-      this.port = opts.port;
-      this.behind_proxy = opts.behind_proxy;
       // create our server
       this.server = net.createServer((c) => {
         return this._connection(c);
@@ -29,7 +29,7 @@ module.exports = SourceIn = (function() {
     }
 
     listen(spec = this.port) {
-      //@core.log.debug "SourceIn listening on ", spec:spec
+      //@ctx.master.log.debug "SourceIn listening on ", spec:spec
       debug(`SourceIn listening on ${spec}`);
       return this.server.listen(spec);
     }
@@ -111,9 +111,9 @@ module.exports = SourceIn = (function() {
         }
       };
       // -- source request... is the endpoint one that we recognize? -- #
-      if (Object.keys(this.core.source_mounts).length > 0 && (m = RegExp(`^/(${Object.keys(this.core.source_mounts).join("|")})`).exec(info.url))) {
+      if (Object.keys(this.ctx.master.source_mounts).length > 0 && (m = RegExp(`^/(${Object.keys(this.ctx.master.source_mounts).join("|")})`).exec(info.url))) {
         debug(`Incoming source matched mount: ${m[1]}`);
-        mount = this.core.source_mounts[m[1]];
+        mount = this.ctx.master.source_mounts[m[1]];
         return _authFunc(mount);
       } else {
         debug("Incoming source matched nothing. Disconnecting.");

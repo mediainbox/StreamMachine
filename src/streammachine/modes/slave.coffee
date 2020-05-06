@@ -12,18 +12,14 @@ debug = require("debug")("sm:modes:slave")
 
 #----------
 
-module.exports = class SlaveMode extends require("./base")
+module.exports = class SlaveMode extends require("./base_mode")
 
     MODE: "Slave"
-    constructor: (@opts,cb) ->
-        super()
+    constructor: (config,cb) ->
+        super(config)
 
-        @log = (new Logger @opts.log).child({mode:'slave',pid:process.pid})
-        @log.debug "Slave Instance initialized"
-
-        debug "Slave Mode init"
-
-        process.title = "StreamM:slave"
+        process.title = "SM:SLAVE"
+        @logger.debug "Slave mode starting"
 
         @_handle        = null
         @_haveHandle    = false
@@ -33,5 +29,4 @@ module.exports = class SlaveMode extends require("./base")
         @_lastAddress   = null
         @_initFull      = false
 
-
-        @slave = new Slave _.extend({}, @opts, logger:@log), @
+        @slave = new Slave _.extend({}, config, logger:@log), @

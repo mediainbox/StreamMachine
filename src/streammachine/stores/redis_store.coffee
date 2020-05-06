@@ -4,7 +4,7 @@ Url     = require "url"
 nconf   = require "nconf"
 debug   = require("debug")("sm:redis")
 
-module.exports = class RedisManager extends require('events').EventEmitter
+module.exports = class RedisStore extends require('events').EventEmitter
     DefaultOptions:
         server: "redis://localhost:6379"
         key:    "StreamMachine"

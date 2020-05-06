@@ -31,7 +31,7 @@ module.exports = class FileSource extends require("./base")
             @emit "connect"
 
         @parser.once "end", =>
-            # done parsing...
+# done parsing...
             @parser.removeAllListeners()
             @_current_chunk = null
             @emit "_loaded"
@@ -40,7 +40,7 @@ module.exports = class FileSource extends require("./base")
         @_file = fs.createReadStream @opts.filePath
         @_file.pipe(@parser)
 
-    #----------
+#----------
 
     start: ->
         return true if @_int
@@ -53,7 +53,7 @@ module.exports = class FileSource extends require("./base")
 
         true
 
-    #----------
+#----------
 
     stop: ->
         return true if !@_int
@@ -63,9 +63,9 @@ module.exports = class FileSource extends require("./base")
 
         true
 
-    #----------
+#----------
 
-    # emit a certain length of time. useful for filling a buffer
+# emit a certain length of time. useful for filling a buffer
     emitSeconds: (secs,wait,cb) ->
         if _.isFunction(wait)
             cb = wait
@@ -97,7 +97,7 @@ module.exports = class FileSource extends require("./base")
 
             _f()
 
-    #----------
+#----------
 
     _emitOnce: (ts=null) ->
         @_emit_pos = 0 if @_emit_pos >= @_chunks.length
@@ -120,14 +120,14 @@ module.exports = class FileSource extends require("./base")
         @_last_ts   = ts
         @_emit_pos  = @_emit_pos + 1
 
-    #----------
+#----------
 
     status: ->
         source:     @TYPE?() ? @TYPE
         uuid:       @uuid
         filePath:   @filePath
 
-    #----------
+#----------
 
     disconnect: ->
         if @connected

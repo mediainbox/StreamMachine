@@ -8,10 +8,10 @@ Slave   = require "../slave"
 
 debug = require("debug")("sm:modes:standalone")
 
-module.exports = class StandaloneMode extends require("./base")
+module.exports = class StandaloneMode extends require("./base_mode")
     MODE: "StandAlone"
     constructor: (@opts,cb) ->
-        super()
+        super(opts)
 
         # -- Set up logging -- #
 

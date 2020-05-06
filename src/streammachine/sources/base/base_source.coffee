@@ -1,14 +1,14 @@
-uuid = require "node-uuid"
+uuid = require "uuid"
 nconf = require "nconf"
 
 FrameChunker = require "./_frame_chunker"
-Debounce = require "../util/debounce"
+Debounce = require "../../util/debounce"
 
-module.exports = class Source extends require("events").EventEmitter
+module.exports = class BaseSource extends require("events").EventEmitter
 
     #----------
 
-    constructor: (source_opts={}) ->
+    constructor: (@opts, source_opts={}) ->
         super()
 
         @uuid = @opts.uuid || uuid.v4()
@@ -46,7 +46,7 @@ module.exports = class Source extends require("events").EventEmitter
                     @disconnect()
 
         if !source_opts.skipParser
-            @parserConstructor = require "../parsers/#{@opts.format}"
+            @parserConstructor = require "../../parsers/#{@opts.format}"
 
     #----------
     

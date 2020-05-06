@@ -1,4 +1,4 @@
-var HLSIndex, Preroller, Rewind, Stream, _, debug, uuid;
+var Preroller, Rewind, Stream, _, debug, uuid;
 
 _ = require("underscore");
 
@@ -7,8 +7,6 @@ uuid = require("node-uuid");
 Preroller = require("./preroller");
 
 Rewind = require("../rewind_buffer");
-
-HLSIndex = require("../rewind/hls_index");
 
 debug = require("debug")("sm:slave:stream");
 
@@ -59,19 +57,6 @@ module.exports = Stream = (function() {
       process.nextTick(() => {
         return this.configure(this.opts);
       });
-      // -- Set up HLS Index -- #
-      if (this.opts.hls) {
-        this.log.debug("Enabling HLS Index for stream.");
-        this.hls = new HLSIndex(this, this.opts.tz);
-        this.once("source", (source) => {
-          source.on("hls_snapshot", (snapshot) => {
-            return this.hls.loadSnapshot(snapshot);
-          });
-          return source.getHLSSnapshot((err, snapshot) => {
-            return this.hls.loadSnapshot(snapshot);
-          });
-        });
-      }
       // -- Wait to Load Rewind Buffer -- #
       this.emit("_source_waiting");
       this._sourceInitializing = true;
@@ -204,7 +189,7 @@ module.exports = Stream = (function() {
             l.obj.disconnect(true);
           }
         }
-        return this.log.silly(`All buffers: ${all_buf}`);
+        return this.log.debug(`All buffers: ${all_buf}`);
       }, 60 * 1000);
       // Update RewindBuffer settings
       this.setRewind(this.opts.seconds, this.opts.burst);
@@ -213,7 +198,7 @@ module.exports = Stream = (function() {
 
     //----------
     disconnect() {
-      var k, l, ref, ref1, ref2, ref3;
+      var k, l, ref, ref1, ref2;
       ref = this._lmeta;
       for (k in ref) {
         l = ref[k];
@@ -232,9 +217,6 @@ module.exports = Stream = (function() {
       }
       this.source = null;
       this.metaFunc = this.bufferFunc = function() {};
-      if ((ref3 = this.hls) != null) {
-        ref3.disconnect();
-      }
       super.disconnect();
       this.emit("disconnect");
       return this.removeAllListeners();
@@ -337,7 +319,6 @@ module.exports = Stream = (function() {
       this.key = key1;
       this.log = log;
       this.streams = {};
-      this.hls_min_id = null;
     }
 
     //----------
@@ -357,17 +338,6 @@ module.exports = Stream = (function() {
             return delFunc();
           }
         });
-      }
-    }
-
-    //----------
-    hlsUpdateMinSegment(id) {
-      var prev;
-      if (!this.hls_min_id || id > this.hls_min_id) {
-        prev = this.hls_min_id;
-        this.hls_min_id = id;
-        this.emit("hls_update_min_segment", id);
-        return this.log.debug(`New HLS min segment id: ${id} (Previously: ${prev})`);
       }
     }
 

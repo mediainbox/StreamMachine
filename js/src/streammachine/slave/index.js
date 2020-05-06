@@ -57,15 +57,15 @@ module.exports = Slave = (function() {
         }), this.options.slave);
         this.io.on("connected", () => {
           debug("IO is connected");
-          this.alerts.update("slave_disconnected", this.io.id, false);
-          return this.log.proxyToMaster(this.io);
+          return this.alerts.update("slave_disconnected", this.io.id, false);
         });
+        // TODO @log.proxyToMaster(@io)
         this.io.on("disconnected", () => {
           debug("IO is disconnected");
-          this.alerts.update("slave_disconnected", this.io.id, true);
-          return this.log.proxyToMaster();
+          return this.alerts.update("slave_disconnected", this.io.id, true);
         });
       }
+      // TODO @log.proxyToMaster()
       this.once("streams", () => {
         debug("Streams event received");
         return this._configured = true;

@@ -5,9 +5,7 @@ domain  = require "domain"
 moment  = require "moment"
 _       = require "underscore"
 
-debug   = require("debug")("sm:sources:proxy")
-
-module.exports = class ProxySource extends require("./base")
+module.exports = class UrlSource extends require("./base/base_source")
     TYPE: -> "Proxy (#{@url})"
 
     # opts should include:
@@ -15,12 +13,15 @@ module.exports = class ProxySource extends require("./base")
     # url:      URL for original stream
     # fallback: Should we set the isFallback flag? (default false)
     # logger:   Logger (optional)
-    constructor: (@opts) ->
-        super useHeartbeat:false
+    constructor: (opts) ->
+        super opts, useHeartbeat:false
 
         @url = @opts.url
 
-        debug "ProxySource created for #{@url}"
+        @logger = @opts.logger.child({
+            component: 'sm:sources:proxy'
+        })
+        @logger.debug "URL source created for #{@url}"
 
         @isFallback     = @opts.fallback or false
 
@@ -28,8 +29,8 @@ module.exports = class ProxySource extends require("./base")
 
         @connected      = false
         @framesPerSec   = null
-
         @connected_at   = null
+        @chunksCount = 0
 
         @_in_disconnect = false
 
@@ -53,7 +54,7 @@ module.exports = class ProxySource extends require("./base")
     #----------
 
     _niceError: (err) =>
-        debug "Caught error: #{err}", err.stack
+        @logger.debug "Caught error: #{err}", err.stack
         nice_err = switch err.syscall
             when "getaddrinfo"
                 "Unable to look up DNS for Icecast proxy"
@@ -82,7 +83,7 @@ module.exports = class ProxySource extends require("./base")
     connect: =>
         @createParser()
 
-        debug "Begin connection to Icecast from #{@url}"
+        @logger.debug "Begin connection to Icecast from #{@url}"
 
         url_opts = url.parse @url
         url_opts.headers = _.clone @defaultHeaders
@@ -91,7 +92,7 @@ module.exports = class ProxySource extends require("./base")
         @chunker.resetTime new Date()
 
         @ireq = Icy.get url_opts, (ice) =>
-            debug "Connected to Icecast from #{@url}"
+            @logger.debug "Connected to Icecast from #{@url}"
 
             if ice.statusCode == 302
                 @url = ice.headers.location
@@ -99,15 +100,15 @@ module.exports = class ProxySource extends require("./base")
             @icecast = ice
 
             @icecast.once "end", =>
-                debug "Received Icecast END event"
+                @logger.debug "Received Icecast END event"
                 @reconnect()
 
             @icecast.once "close", =>
-                debug "Received Icecast CLOSE event"
+                @logger.debug "Received Icecast CLOSE event"
                 @reconnect()
 
             @icecast.on "metadata", (data) =>
-                debug "Received Icecast METADATA event"
+                @logger.debug "Received Icecast METADATA event"
 
                 unless @_in_disconnect
                     meta = Icy.parse(data)
@@ -132,34 +133,43 @@ module.exports = class ProxySource extends require("./base")
             setTimeout @checkStatus, 30000
 
         @ireq.once "error", (err) =>
-            debug "Got icecast stream error #{err}, reconnecting"
+            @logger.debug "Got icecast stream error #{err}, reconnecting"
             @_niceError err
             @reconnect(true)
 
         # outgoing -> Stream
         @on "_chunk", @broadcastData
 
+        @logChunk = _.throttle(@_logChunk.bind(this), 5000)
+        @on "_chunk", @logChunk
+
     #----------
 
     broadcastData: (chunk) =>
-        debug "Received chunk from parser (#{chunk.ts})"
+        @chunksCount++
         @last_ts = chunk.ts
         @emit "data", chunk
 
     #----------
 
+    _logChunk: (chunk) =>
+        @logger.debug "received chunk from parser (time: #{chunk.ts.toISOString().substr(11)}, total: #{@chunksCount})"
+
+
+    #----------
+
     checkStatus: =>
         if not @connected
-            debug "Check status: not connected, skipping"
+            @logger.debug "status check: not connected, skipping"
             return
 
-        debug "Check status: last chunk timestamp is #{@last_ts}"
+        @logger.debug "status check: last chunk time is #{@last_ts.toISOString().substr(11)}"
 
         unless @last_ts
             return setTimeout @checkStatus, 5000
 
         if moment(@last_ts).isBefore(moment().subtract(1, "minutes"))
-            debug "Check status: last chunk timestamp is older than 1 minute ago, reconnecting"
+            @logger.debug "status check: last chunk timestamp is older than 1 minute ago, reconnecting"
             return @reconnect()
 
         setTimeout @checkStatus, 30000
@@ -172,12 +182,14 @@ module.exports = class ProxySource extends require("./base")
           return
 
         msWaitToConnect = 5000
-        debug "Reconnect to Icecast source from #{@url} in #{msWaitToConnect}ms"
+        @logger.debug "Reconnect to Icecast source from #{@url} in #{msWaitToConnect}ms"
 
         @connected = false
 
         # Clean proxy listeners
+        @chunksCount = 0
         @removeListener "_chunk", @broadcastData
+        @removeListener "_chunk", @logChunk
 
         # Clean icecast
         @ireq?.end()

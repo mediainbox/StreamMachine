@@ -6,8 +6,8 @@
     "index.coffee"
   ],
   "names": [],
-  "mappings": "AAAA,IAAA,aAAA,EAAA;;AAAA,aAAA,GAAgB,OAAA,CAAQ,kBAAR;;AAEhB,MAAM,CAAC,OAAP,GAAuB;EAAN,MAAA,cAAA,CAAA;;EACb,aAAC,CAAA,cAAD,GAAiB,OAAA,CAAQ,oBAAR;;EACjB,aAAC,CAAA,UAAD,GAAiB,OAAA,CAAQ,gBAAR;;EACjB,aAAC,CAAA,SAAD,GAAiB,OAAA,CAAQ,eAAR;;EACjB,aAAC,CAAA,QAAD,GAAW",
+  "mappings": "AAAA,IAAA;;AAAA,aAAA,GAAgB,OAAA,CAAQ,kBAAR;;AAEhB,MAAM,CAAC,OAAP,GACI;EAAA,KAAA,EACI;IAAA,cAAA,EAAgB,OAAA,CAAQ,oBAAR,CAAhB;IACA,UAAA,EAAgB,OAAA,CAAQ,gBAAR,CADhB;IAEA,SAAA,EAAgB,OAAA,CAAQ,eAAR;EAFhB,CADJ;EAIA,QAAA,EAAU;AAJV",
   "sourcesContent": [
-    "defaultConfig = require \"./default_config\"\r\n\r\nmodule.exports = class StreamMachine\r\n    @StandaloneMode: require \"./modes/standalone\"\r\n    @MasterMode:     require \"./modes/master\"\r\n    @SlaveMode:      require \"./modes/slave\"\r\n    @Defaults: defaultConfig\r\n"
+    "defaultConfig = require \"./default_config\"\r\n\r\nmodule.exports =\r\n    Modes:\r\n        StandaloneMode: require \"./modes/standalone\"\r\n        MasterMode:     require \"./modes/master\"\r\n        SlaveMode:      require \"./modes/slave\"\r\n    Defaults: defaultConfig\r\n"
   ]
 }

@@ -1,4 +1,4 @@
-var API, BasicStrategy, Throttle, Users, api, bodyParser, express, passport, path;
+var BasicStrategy, MasterAPI, Throttle, Users, api, bodyParser, express, passport, path;
 
 express = require("express");
 
@@ -16,17 +16,18 @@ Throttle = require("throttle");
 
 Users = require("./users");
 
-module.exports = API = class API {
-  constructor(master, require_auth = false) {
+module.exports = MasterAPI = class MasterAPI {
+  constructor(ctx) {
     var corsFunc;
-    this.master = master;
-    this.log = this.master.log.child({
-      component: "admin"
+    this.ctx = ctx;
+    this.logger = this.ctx.logger.child({
+      component: "api"
     });
+    this.master = this.ctx.master;
     this.app = express();
     // -- set up authentication -- #
-    this.users = new Users.Local(this);
-    if (require_auth) {
+    this.users = new Users.Local(this.ctx);
+    if (this.ctx.config.require_auth) {
       passport.use(new BasicStrategy((user, passwd, done) => {
         return this.users.validate(user, passwd, done);
       }));

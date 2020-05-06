@@ -259,7 +259,7 @@ module.exports = class Server extends require('events').EventEmitter
 
     _setupServer: (app) ->
         if process.env.NO_GREENLOCK
-            @logger.info "Setup http server on port " + @config.port
+            @logger.info "Setup http server on port " + @config.http_port
             server = http.createServer(app)
             server.listen @config.http_port || 80
         else

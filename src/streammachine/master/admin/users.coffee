@@ -23,18 +23,18 @@ module.exports = class Users
     #-----------
 
     class @Local extends Users
-        constructor: (@admin) ->
+        constructor: (@ctx) ->
             super()
 
-            if @admin.master.redis?
+            if @ctx.providers.redis?
                 # we're using redis for users
 
                 @_user_list = (cb) =>
-                    @admin.master.redis.once_connected (redis) =>
+                    @ctx.providers.redis.once_connected (redis) =>
                         redis.hkeys "users", cb
 
                 @_user_lookup = (user,password,cb) =>
-                    @admin.master.redis.once_connected (redis) =>
+                    @ctx.providers.redis.once_connected (redis) =>
                         redis.hget "users", user, (err,val) =>
                             if err
                                 cb? err
@@ -49,7 +49,7 @@ module.exports = class Users
                                 cb? null, false
 
                 @_user_store = (user,password,cb) =>
-                    @admin.master.redis.once_connected (redis) =>
+                    @ctx.providers.redis.once_connected (redis) =>
                         console.log "in user_store for ", user, password
                         if password
                             # store the user

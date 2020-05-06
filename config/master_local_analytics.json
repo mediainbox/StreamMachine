@@ -1,0 +1,45 @@
+{
+  "ping-standalone": 1,
+  "ping-slave": 1588038747915,
+  "ping-archiver": 1,
+  "client": "cadena3",
+  "ping-master": 1588779458203,
+  "options": {
+    "mode": "master",
+    "rewind_dump": {
+      "dir": "/srv/StreamMachine/rewind_dump",
+      "frequency": 300
+    },
+    "analytics": {
+      "es_prefix": "dev-streammachine",
+      "es_uri": "https://elastic:lErNzgdavkpQCodlNcG0L2Nj@790e7323745e40ffb8300cd203dad06e.us-central1.gcp.cloud.es.io:9243",
+      "es_api_version": "1.7",
+      "finalize_secs": "300"
+    },
+    "debug_incoming_requests": true,
+    "log": {
+      "stackdriver": {},
+      "stdout": {
+        "ignore": "interaction"
+      },
+      "json": {
+        "level": "event",
+        "file": "/tmp/streammachine-master.log"
+      },
+      "w3c": {
+        "level": "request",
+        "file": "/tmp/streammachine-w3c.log"
+      }
+    },
+    "source_port": 8080,
+    "enable-heapdump": true,
+    "redis": {
+      "server": "redis://localhost:6379"
+    },
+    "master": {
+      "port": 8020,
+      "password": "polkmn1!c3"
+    }
+  },
+  "name": "dev"
+}

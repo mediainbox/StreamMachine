@@ -1,4 +1,4 @@
-module.exports = class IcecastSource extends require("./base")
+module.exports = class IcecastSource extends require("./base/base_source")
     TYPE: -> "Icecast (#{[@opts.source_ip,@opts.sock.remotePort].join(":")})"
     HANDOFF_TYPE: "icecast"
 
@@ -8,8 +8,8 @@ module.exports = class IcecastSource extends require("./base")
     # headers:  Headers from the source request
     # uuid:     Source UUID, if this is a handoff source (optional)
     # logger:   Logger (optional)
-    constructor: (@opts) ->
-        super useHeartbeat:true
+    constructor: (opts) ->
+        super opts, useHeartbeat:true
 
         @_shouldHandoff = true
 
