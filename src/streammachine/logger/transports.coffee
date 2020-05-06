@@ -12,14 +12,14 @@ class DebugTransport extends Transport
     constructor: (opts) ->
         super opts
         @defaultFn = require("debug")("sm:log")
-        @debugFnByLabel = {}
+        @debugFnByComponent = {}
 
-    getDebugFn: (label) ->
-        fn = @debugFnByLabel[label]
+    getDebugFn: (component) ->
+        fn = @debugFnByComponent[component]
 
         if (!fn)
-            fn = debug(label)
-            @debugFnByLabel[label] = fn
+            fn = debug('sm:' + component)
+            @debugFnByComponent[component] = fn
 
         return fn
 

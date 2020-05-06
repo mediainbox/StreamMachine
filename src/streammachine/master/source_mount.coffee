@@ -87,7 +87,7 @@ module.exports = class SourceMount extends require("events").EventEmitter
                     @useSource @sources[0]
                     @emit "disconnect", active:true, count:@sources.length, source:@source
                 else
-                    @log.warning "Source disconnected. No sources remaining."
+                    @log.warn "Source disconnected. No sources remaining."
                     @_disconnectSource @source
                     @source = null
                     @emit "disconnect", active:true, count:0, source:null

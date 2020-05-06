@@ -1,19 +1,22 @@
-var MasterIO, _, debug;
+var SlaveServer, SocketIO, _;
 
 _ = require("underscore");
 
-debug = require("debug")("sm:master:master_io");
+SocketIO = require("socket.io");
 
-module.exports = MasterIO = (function() {
+module.exports = SlaveServer = (function() {
   var Slave;
 
-  class MasterIO extends require("events").EventEmitter {
-    constructor(master, log, opts) {
+  class SlaveServer extends require("events").EventEmitter {
+    constructor(ctx) {
       var cUpdate;
       super();
-      this.master = master;
-      this.log = log;
-      this.opts = opts;
+      this.ctx = ctx;
+      this.master = this.ctx.master;
+      this.config = this.ctx.config;
+      this.logger = this.ctx.logger.child({
+        component: "slave_server"
+      });
       this.io = null;
       this.slaves = {};
       this._config = null;
@@ -48,28 +51,27 @@ module.exports = MasterIO = (function() {
     //----------
     listen(server) {
       // fire up a socket listener on our slave port
-      this.io = require("socket.io").listen(server);
+      this.io = SocketIO.listen(server);
       this.logger.info("Master now listening for slave connections.");
       // add our authentication
       this.io.use((socket, next) => {
         var ref;
-        debug("Authenticating slave connection.");
-        if (this.opts.password === ((ref = socket.request._query) != null ? ref.password : void 0)) {
-          debug("Slave password is valid.");
+        this.logger.debug("Authenticating slave connection.");
+        if (this.config.master.password === ((ref = socket.request._query) != null ? ref.password : void 0)) {
+          this.logger.debug("Slave password is valid.");
           return next();
         } else {
-          this.logger.debug("Slave password is incorrect.");
-          debug("Slave password is incorrect.");
+          this.logger.warn("Slave password is incorrect.");
           return next(new Error("Invalid slave password."));
         }
       });
       // look for slave connections
       return this.io.on("connection", (sock) => {
-        debug("Master got connection");
+        this.logger.debug("Master got connection");
         // a slave may make multiple connections to test transports. we're
         // only interested in the one that gives us the OK
         return sock.once("ok", (cb) => {
-          debug(`Got OK from incoming slave connection at ${sock.id}`);
+          this.logger.debug(`Got OK from incoming slave connection at ${sock.id}`);
           // ping back to let the slave know we're here
           cb("OK");
           this.logger.debug(`slave connection is ${sock.id}`);
@@ -210,8 +212,8 @@ module.exports = MasterIO = (function() {
 
   };
 
-  return MasterIO;
+  return SlaveServer;
 
 }).call(this);
 
-//# sourceMappingURL=master_io.js.map
+//# sourceMappingURL=slave_server.js.map

@@ -13,9 +13,6 @@ module.exports = class SocketSource extends require("events").EventEmitter
         @slave.io.on "audio:#{@stream.key}", (chunk) =>
             @emit "data", chunk
 
-        @slave.io.on "hls_snapshot:#{@stream.key}", (snapshot) =>
-            @emit "hls_snapshot", snapshot
-
         @_streamKey = null
 
         getVitals = (retries=0) =>

@@ -19,15 +19,15 @@ DebugTransport = (function() {
     constructor(opts) {
       super(opts);
       this.defaultFn = require("debug")("sm:log");
-      this.debugFnByLabel = {};
+      this.debugFnByComponent = {};
     }
 
-    getDebugFn(label) {
+    getDebugFn(component) {
       var fn;
-      fn = this.debugFnByLabel[label];
+      fn = this.debugFnByComponent[component];
       if (!fn) {
-        fn = debug(label);
-        this.debugFnByLabel[label] = fn;
+        fn = debug('sm:' + component);
+        this.debugFnByComponent[component] = fn;
       }
       return fn;
     }

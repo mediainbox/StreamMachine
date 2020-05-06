@@ -120,30 +120,13 @@ module.exports = SlaveIO = class SlaveIO extends require("events").EventEmitter 
     this.io.on("should_shutdown", (cb) => {
       return this.slave._shutdown(cb);
     });
-    this.io.on("audio", (obj) => {
+    return this.io.on("audio", (obj) => {
       // our data gets converted into an ArrayBuffer to go over the
       // socket. convert it back before insertion
       obj.chunk.data = Buffer.from(obj.chunk.data);
       // convert timestamp back to a date object
       obj.chunk.ts = new Date(obj.chunk.ts);
       return this.emit(`audio:${obj.stream}`, obj.chunk);
-    });
-    return this.io.on("hls_snapshot", (obj) => {
-      var i, j, k, len, len1, ref, ref1, ref2, s;
-      ref1 = ((ref = obj.snapshot) != null ? ref.segments : void 0) || [];
-      // run through the snapshot and convert timestamps back into date
-      // objects
-      for (i = 0, len = ref1.length; i < len; i++) {
-        s = ref1[i];
-        ref2 = ['ts', 'end_ts', 'ts_actual', 'end_ts_actual'];
-        for (j = 0, len1 = ref2.length; j < len1; j++) {
-          k = ref2[j];
-          if (s[k]) {
-            s[k] = new Date(s[k]);
-          }
-        }
-      }
-      return this.emit(`hls_snapshot:${obj.stream}`, obj.snapshot);
     });
   }
 
@@ -164,24 +147,6 @@ module.exports = SlaveIO = class SlaveIO extends require("events").EventEmitter 
   //----------
   vitals(key, cb) {
     return this.io.emit("vitals", key, cb);
-  }
-
-  hls_snapshot(key, cb) {
-    return this.io.emit("hls_snapshot", key, (err, snapshot) => {
-      var i, j, k, len, len1, ref, ref1, s;
-      ref = (snapshot != null ? snapshot.segments : void 0) || [];
-      for (i = 0, len = ref.length; i < len; i++) {
-        s = ref[i];
-        ref1 = ['ts', 'end_ts', 'ts_actual', 'end_ts_actual'];
-        for (j = 0, len1 = ref1.length; j < len1; j++) {
-          k = ref1[j];
-          if (s[k]) {
-            s[k] = new Date(s[k]);
-          }
-        }
-      }
-      return cb(err, snapshot);
-    });
   }
 
   log(obj) {

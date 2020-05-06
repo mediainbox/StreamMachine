@@ -15,10 +15,14 @@ SourceIn    = require "./source_in"
 Alerts      = require "../alerts"
 Analytics   = require "../analytics"
 Monitoring  = require "./monitoring"
-SlaveIO     = require "./master_io"
+SlaveServer     = require "./slave_io/slave_server"
 SourceMount = require "./source_mount"
 
 RewindDumpRestore   = require "../rewind/dump_restore"
+
+
+Events = require('./events').MasterEvents
+
 
 # A Master handles configuration, slaves, incoming sources, logging and the admin interface
 
@@ -34,9 +38,12 @@ module.exports = class Master extends require("events").EventEmitter
         @proxies        = {}
 
         @config = @ctx.config
-        @logger = @ctx.logger
-        @log = @ctx.logger # compatibility
+        @logger = @ctx.logger.child({
+            component: "master"
+        })
         @ctx.master = this
+
+        @logger.debug "initialize Master"
 
 
         if @config.redis?
@@ -58,7 +65,7 @@ module.exports = class Master extends require("events").EventEmitter
 
             # Persist changed configuration to Redis
             @logger.debug "Registering config_update listener"
-            @on "config_update", =>
+            @on Events.CONFIG_UPDATE, =>
                 @configStore._update @getStreamsAndSourceConfig(), (err) =>
                     @logger.info "Redis config update saved: #{err}"
 
@@ -68,7 +75,7 @@ module.exports = class Master extends require("events").EventEmitter
             process.nextTick =>
                 @configure @config
 
-        @once "streams", =>
+        @once Events.STREAMS_UPDATE, =>
             @_configured = true
 
         # -- create a server to provide the API -- #
@@ -89,8 +96,8 @@ module.exports = class Master extends require("events").EventEmitter
         # -- create a listener for slaves -- #
 
         if @config.master
-            @slaves = new SlaveIO @, @logger.child(module:"master_io"), @config.master
-            @on "streams", =>
+            @slaves = new SlaveServer @ctx
+            @on Events.STREAMS_UPDATE, =>
                 @slaves.updateConfig @getStreamsAndSourceConfig()
 
         # -- Analytics -- #
@@ -119,12 +126,12 @@ module.exports = class Master extends require("events").EventEmitter
         if @_configured
             cb()
         else
-            @once "streams", => cb()
+            @once Events.STREAMS_UPDATE, => cb()
 
     #----------
 
     loadRewinds: (cb) ->
-        @once "streams", =>
+        @once Events.STREAMS_UPDATE, =>
             @rewind_dr?.load cb
 
     #----------
@@ -201,7 +208,7 @@ module.exports = class Master extends require("events").EventEmitter
                 sg = ( @stream_groups[ g ] ||= new Stream.StreamGroup g, @logger.child stream_group:g )
                 sg.addStream @streams[key]
 
-        @emit "streams", @streams
+        @emit Events.STREAMS_UPDATE, @streams
 
         # -- Remove Old Source Mounts -- #
 
@@ -235,7 +242,7 @@ module.exports = class Master extends require("events").EventEmitter
 
         if stream
             # attach a listener for configs
-            stream.on "config", => @emit "config_update"; @emit "streams", @streams
+            stream.on "config", => @emit Events.CONFIG_UPDATE; @emit Events.STREAMS_UPDATE, @streams
 
             @streams[ key ] = stream
             @_attachIOProxy stream
@@ -271,8 +278,8 @@ module.exports = class Master extends require("events").EventEmitter
         # -- create the stream -- #
 
         if stream = @_startStream opts.key, @source_mounts[mount_key], opts
-            @emit "config_update"
-            @emit "streams", @streams
+            @emit Events.CONFIG_UPDATE
+            @emit Events.STREAMS_UPDATE, @streams
             cb? null, stream.status()
         else
             cb? "Stream failed to start."
@@ -310,8 +317,8 @@ module.exports = class Master extends require("events").EventEmitter
         delete @streams[ stream.key ]
         stream.destroy()
 
-        @emit "config_update"
-        @emit "streams", @streams
+        @emit Events.CONFIG_UPDATE
+        @emit Events.STREAMS_UPDATE, @streams
 
         cb? null, "OK"
 
@@ -331,7 +338,7 @@ module.exports = class Master extends require("events").EventEmitter
             return false
 
         if mount = @_startSourceMount opts.key, opts
-            @emit "config_update"
+            @emit Events.CONFIG_UPDATE
             cb? null, mount.status()
         else
             cb? "Mount failed to start."
@@ -370,7 +377,7 @@ module.exports = class Master extends require("events").EventEmitter
         delete @source_mounts[ mount.key ]
         mount.destroy()
 
-        @emit "config_update"
+        @emit Events.CONFIG_UPDATE
 
         cb null, "OK"
 
@@ -618,18 +625,18 @@ module.exports = class Master extends require("events").EventEmitter
                     next()
 
                 else
-                    @master.log.debug "Rejecting StreamTransport request with missing or invalid socket ID.", sock_id:sock_id
+                    @master.logger.debug "Rejecting StreamTransport request with missing or invalid socket ID.", sock_id:sock_id
                     res.status(401).end "Missing or invalid socket ID.\n"
 
             # -- Routes -- #
 
             @app.get "/:stream/rewind", (req,res) =>
-                @master.log.debug "Rewind Buffer request from slave on #{req.stream.key}."
+                @master.logger.debug "Rewind Buffer request from slave on #{req.stream.key}."
                 res.status(200).write ''
                 req.stream.getRewind (err,writer) =>
                     writer.pipe( new Throttle 100*1024*1024 ).pipe(res)
                     res.on "end", =>
-                        @master.log.debug "Rewind dumpBuffer finished."
+                        @master.logger.debug "Rewind dumpBuffer finished."
 
     #----------
 
@@ -644,15 +651,10 @@ module.exports = class Master extends require("events").EventEmitter
             @dataFunc = (chunk) =>
                 @master.slaves.broadcastAudio @key, chunk
 
-            @hlsSnapFunc = (snapshot) =>
-                @master.slaves.broadcastHLSSnapshot @key, snapshot
-
             @stream.on "data", @dataFunc
-            @stream.on "hls_snapshot", @hlsSnapFunc
 
         destroy: ->
             @stream.removeListener "data", @dataFunc
-            @stream.removeListener "hls_snapshot", @hlsSnapFunc
             @stream = null
             @emit "destroy"
 

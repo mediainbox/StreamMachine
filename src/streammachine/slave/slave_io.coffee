@@ -124,15 +124,6 @@ module.exports = class SlaveIO extends require("events").EventEmitter
 
             @emit "audio:#{obj.stream}", obj.chunk
 
-        @io.on "hls_snapshot", (obj) =>
-            # run through the snapshot and convert timestamps back into date
-            # objects
-            for s in obj.snapshot?.segments||[]
-                for k in ['ts','end_ts','ts_actual','end_ts_actual']
-                    s[k] = new Date(s[k]) if s[k]
-
-            @emit "hls_snapshot:#{obj.stream}", obj.snapshot
-
     #----------
 
     isNecesaryReconnect: ->
@@ -150,14 +141,6 @@ module.exports = class SlaveIO extends require("events").EventEmitter
 
     vitals: (key,cb) ->
         @io.emit "vitals", key, cb
-
-    hls_snapshot: (key,cb) ->
-        @io.emit "hls_snapshot", key, (err,snapshot) =>
-            for s in snapshot?.segments||[]
-                for k in ['ts','end_ts','ts_actual','end_ts_actual']
-                    s[k] = new Date(s[k]) if s[k]
-
-            cb err,snapshot
 
     log: (obj) ->
         @io.emit "log", obj

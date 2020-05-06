@@ -77,12 +77,12 @@ module.exports = createLogger: (config) ->
     # create a winston logger for this instance
     logger = winston.createLogger
         level: 'debug'
-        levels: winston.config.syslog.levels
+        #levels: winston.config.syslog.levels
         transports: transports
         #levels:@CustomLevels
         #, rewriters:[@RequestRewriter]
 
-    winston.addColors(winston.config.syslog.levels)
+    winston.addColors(winston.config.npm.levels)
 
     return logger
 

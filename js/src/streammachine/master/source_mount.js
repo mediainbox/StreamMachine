@@ -103,7 +103,7 @@ module.exports = SourceMount = (function() {
               source: this.source
             });
           } else {
-            this.log.warning("Source disconnected. No sources remaining.");
+            this.log.warn("Source disconnected. No sources remaining.");
             this._disconnectSource(this.source);
             this.source = null;
             return this.emit("disconnect", {

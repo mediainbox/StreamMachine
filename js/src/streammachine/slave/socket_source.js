@@ -16,9 +16,6 @@ module.exports = SocketSource = class SocketSource extends require("events").Eve
     this.slave.io.on(`audio:${this.stream.key}`, (chunk) => {
       return this.emit("data", chunk);
     });
-    this.slave.io.on(`hls_snapshot:${this.stream.key}`, (snapshot) => {
-      return this.emit("hls_snapshot", snapshot);
-    });
     this._streamKey = null;
     getVitals = (retries = 0) => {
       return this.slave.io.vitals(this.stream.key, (err, obj) => {

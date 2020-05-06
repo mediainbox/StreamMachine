@@ -1,4 +1,4 @@
-var Alerts, Analytics, Master, MasterAPI, MasterConfigRedisStore, Monitoring, Redis, RewindDumpRestore, SlaveIO, SourceIn, SourceMount, Stream, Throttle, _, debug, express, fs, net, temp;
+var Alerts, Analytics, Events, Master, MasterAPI, MasterConfigRedisStore, Monitoring, Redis, RewindDumpRestore, SlaveServer, SourceIn, SourceMount, Stream, Throttle, _, debug, express, fs, net, temp;
 
 _ = require("underscore");
 
@@ -30,11 +30,13 @@ Analytics = require("../analytics");
 
 Monitoring = require("./monitoring");
 
-SlaveIO = require("./master_io");
+SlaveServer = require("./slave_io/slave_server");
 
 SourceMount = require("./source_mount");
 
 RewindDumpRestore = require("../rewind/dump_restore");
+
+Events = require('./events').MasterEvents;
 
 // A Master handles configuration, slaves, incoming sources, logging and the admin interface
 module.exports = Master = (function() {
@@ -49,9 +51,11 @@ module.exports = Master = (function() {
       this.stream_groups = {};
       this.proxies = {};
       this.config = this.ctx.config;
-      this.logger = this.ctx.logger;
-      this.log = this.ctx.logger; // compatibility
+      this.logger = this.ctx.logger.child({
+        component: "master"
+      });
       this.ctx.master = this;
+      this.logger.debug("initialize Master");
       if (this.config.redis != null) {
         // -- load our streams configuration from redis -- #
 
@@ -70,7 +74,7 @@ module.exports = Master = (function() {
         });
         // Persist changed configuration to Redis
         this.logger.debug("Registering config_update listener");
-        this.on("config_update", () => {
+        this.on(Events.CONFIG_UPDATE, () => {
           return this.configStore._update(this.getStreamsAndSourceConfig(), (err) => {
             return this.logger.info(`Redis config update saved: ${err}`);
           });
@@ -81,7 +85,7 @@ module.exports = Master = (function() {
           return this.configure(this.config);
         });
       }
-      this.once("streams", () => {
+      this.once(Events.STREAMS_UPDATE, () => {
         return this._configured = true;
       });
       // -- create a server to provide the API -- #
@@ -98,10 +102,8 @@ module.exports = Master = (function() {
       });
       // -- create a listener for slaves -- #
       if (this.config.master) {
-        this.slaves = new SlaveIO(this, this.logger.child({
-          module: "master_io"
-        }), this.config.master);
-        this.on("streams", () => {
+        this.slaves = new SlaveServer(this.ctx);
+        this.on(Events.STREAMS_UPDATE, () => {
           return this.slaves.updateConfig(this.getStreamsAndSourceConfig());
         });
       }
@@ -132,7 +134,7 @@ module.exports = Master = (function() {
       if (this._configured) {
         return cb();
       } else {
-        return this.once("streams", () => {
+        return this.once(Events.STREAMS_UPDATE, () => {
           return cb();
         });
       }
@@ -140,7 +142,7 @@ module.exports = Master = (function() {
 
     //----------
     loadRewinds(cb) {
-      return this.once("streams", () => {
+      return this.once(Events.STREAMS_UPDATE, () => {
         var ref;
         return (ref = this.rewind_dr) != null ? ref.load(cb) : void 0;
       });
@@ -237,7 +239,7 @@ module.exports = Master = (function() {
           sg.addStream(this.streams[key]);
         }
       }
-      this.emit("streams", this.streams);
+      this.emit(Events.STREAMS_UPDATE, this.streams);
       ref1 = this.source_mounts;
       // -- Remove Old Source Mounts -- #
       for (k in ref1) {
@@ -281,8 +283,8 @@ module.exports = Master = (function() {
       if (stream) {
         // attach a listener for configs
         stream.on("config", () => {
-          this.emit("config_update");
-          return this.emit("streams", this.streams);
+          this.emit(Events.CONFIG_UPDATE);
+          return this.emit(Events.STREAMS_UPDATE, this.streams);
         });
         this.streams[key] = stream;
         this._attachIOProxy(stream);
@@ -318,8 +320,8 @@ module.exports = Master = (function() {
       }
       // -- create the stream -- #
       if (stream = this._startStream(opts.key, this.source_mounts[mount_key], opts)) {
-        this.emit("config_update");
-        this.emit("streams", this.streams);
+        this.emit(Events.CONFIG_UPDATE);
+        this.emit(Events.STREAMS_UPDATE, this.streams);
         return typeof cb === "function" ? cb(null, stream.status()) : void 0;
       } else {
         return typeof cb === "function" ? cb("Stream failed to start.") : void 0;
@@ -362,8 +364,8 @@ module.exports = Master = (function() {
       });
       delete this.streams[stream.key];
       stream.destroy();
-      this.emit("config_update");
-      this.emit("streams", this.streams);
+      this.emit(Events.CONFIG_UPDATE);
+      this.emit(Events.STREAMS_UPDATE, this.streams);
       return typeof cb === "function" ? cb(null, "OK") : void 0;
     }
 
@@ -386,7 +388,7 @@ module.exports = Master = (function() {
         return false;
       }
       if (mount = this._startSourceMount(opts.key, opts)) {
-        this.emit("config_update");
+        this.emit(Events.CONFIG_UPDATE);
         return typeof cb === "function" ? cb(null, mount.status()) : void 0;
       } else {
         return typeof cb === "function" ? cb("Mount failed to start.") : void 0;
@@ -428,7 +430,7 @@ module.exports = Master = (function() {
       }
       delete this.source_mounts[mount.key];
       mount.destroy();
-      this.emit("config_update");
+      this.emit(Events.CONFIG_UPDATE);
       return cb(null, "OK");
     }
 
@@ -770,7 +772,7 @@ module.exports = Master = (function() {
           //req.slave_socket = @master.slaves[ sock_id ]
           return next();
         } else {
-          this.master.log.debug("Rejecting StreamTransport request with missing or invalid socket ID.", {
+          this.master.logger.debug("Rejecting StreamTransport request with missing or invalid socket ID.", {
             sock_id: sock_id
           });
           return res.status(401).end("Missing or invalid socket ID.\n");
@@ -778,12 +780,12 @@ module.exports = Master = (function() {
       });
       // -- Routes -- #
       this.app.get("/:stream/rewind", (req, res) => {
-        this.master.log.debug(`Rewind Buffer request from slave on ${req.stream.key}.`);
+        this.master.logger.debug(`Rewind Buffer request from slave on ${req.stream.key}.`);
         res.status(200).write('');
         return req.stream.getRewind((err, writer) => {
           writer.pipe(new Throttle(100 * 1024 * 1024)).pipe(res);
           return res.on("end", () => {
-            return this.master.log.debug("Rewind dumpBuffer finished.");
+            return this.master.logger.debug("Rewind dumpBuffer finished.");
           });
         });
       });
@@ -801,16 +803,11 @@ module.exports = Master = (function() {
       this.dataFunc = (chunk) => {
         return this.master.slaves.broadcastAudio(this.key, chunk);
       };
-      this.hlsSnapFunc = (snapshot) => {
-        return this.master.slaves.broadcastHLSSnapshot(this.key, snapshot);
-      };
       this.stream.on("data", this.dataFunc);
-      this.stream.on("hls_snapshot", this.hlsSnapFunc);
     }
 
     destroy() {
       this.stream.removeListener("data", this.dataFunc);
-      this.stream.removeListener("hls_snapshot", this.hlsSnapFunc);
       this.stream = null;
       this.emit("destroy");
       return this.removeAllListeners();
