@@ -1,44 +1,43 @@
-
+URL = require "url"
 elasticsearch = require "@elastic/elasticsearch"
+BatchedQueue    = require "../../util/batched_queue"
+EsIndexWriter   = require "./index_writer"
+ESTemplates     = require "./es_templates"
+tz      = require 'timezone'
+nconf   = require "nconf"
+_       = require "lodash"
 
-BatchedQueue    = require "../util/batched_queue"
-EsIndexWriter   = require "./store/idx_writer"
-ESTemplates     = require "./store/es_templates"
 
 module.exports = class AnalyticsEsStore
-    constructor: (@opts,cb) ->
-        @_uri = URL.parse @opts.config.es_uri
+    constructor: (@config, @ctx) ->
+        @_uri = URL.parse @config.es_uri
+        @logger = @ctx.logger.child(
+            component: 'analytics:store'
+        )
+        @_timeout_sec = Number(@config.finalize_secs)
 
-        @log = @opts.log
 
-        @_timeout_sec = Number(@opts.config.finalize_secs)
+        es_uri = @config.es_uri
+        @idx_prefix = @config.es_prefix
 
-        if @opts.redis
-
-            @redis = @opts.redis.client
-
-        es_uri = @opts.config.es_uri
-        @idx_prefix = @opts.config.es_prefix
-
-        @log.debug "Connecting to Elasticsearch at #{es_uri} with prefix of #{@idx_prefix}"
-        debug "Connecting to ES at #{es_uri}, prefix #{@idx_prefix}"
+        @logger.debug "Connecting to Elasticsearch at #{es_uri} with prefix of #{@idx_prefix}"
 
         apiVersion = '1.7'
-        if (typeof @opts.config.es_api_version != 'undefined')
-            apiVersion = @opts.config.es_api_version.toString()
+        if (typeof @config.es_api_version != 'undefined')
+            apiVersion = @config.es_api_version.toString()
 
         @es = new elasticsearch.Client
             node:           es_uri
             apiVersion:     apiVersion
-            requestTimeout: @opts.config.request_timeout || 30000
+            requestTimeout: @config.request_timeout || 30000
 
         @idx_batch  = new BatchedQueue
-            batch:      @opts.config.index_batch
-            latency:    @opts.config.index_latency
+            batch:      @config.index_batch
+            latency:    @config.index_latency
 
-        @idx_writer = new EsIndexWriter @es, @log.child(submodule:"idx_writer")
+        @idx_writer = new EsIndexWriter @es, @logger.child(submodule:"idx_writer")
         @idx_writer.on "error", (err) =>
-            @log.error err
+            @logger.error err
 
         @idx_batch.pipe(@idx_writer)
 
@@ -55,7 +54,7 @@ module.exports = class AnalyticsEsStore
                 cb? err
             else
     # do something...
-                debug "Hitting cb after loading templates"
+                @logger.debug "Hitting cb after loading templates"
                 cb? null, @
 
     #----------
@@ -255,22 +254,22 @@ module.exports = class AnalyticsEsStore
     _loadTemplates: (cb) ->
         errors = []
 
-        debug "Loading #{Object.keys(ESTemplates).length} ElasticSearch templates"
+        @logger.debug "Loading #{Object.keys(ESTemplates).length} ElasticSearch templates"
 
         _loaded = _.after Object.keys(ESTemplates).length, =>
             if errors.length > 0
-                debug "Failed to load one or more ElasticSearch templates: #{errors.join(" | ")}"
-                @log.info errors
+                @logger.debug "Failed to load one or more ElasticSearch templates: #{errors.join(" | ")}"
+                @logger.info errors
                 cb new Error "Failed to load index templates: #{ errors.join(" | ") }"
             else
-                debug "ES templates loaded successfully."
+                @logger.debug "ES templates loaded successfully."
                 cb null
 
         for t,obj of ESTemplates
-            debug "Loading ElasticSearch mapping for #{@idx_prefix}-#{t}"
-            #@log.info "Loading Elasticsearch mappings for #{@idx_prefix}-#{t}"
+            @logger.debug "Loading ElasticSearch mapping for #{@idx_prefix}-#{t}"
+            #@logger.info "Loading Elasticsearch mappings for #{@idx_prefix}-#{t}"
             tmplt = _.extend {}, obj, index_patterns:"#{@idx_prefix}-#{t}-*"
-            #@log.info tmplt
+            #@logger.info tmplt
             @es.indices.putTemplate name:"#{@idx_prefix}-#{t}-template", body:tmplt, (err) =>
                 errors.push err if err
                 _loaded()

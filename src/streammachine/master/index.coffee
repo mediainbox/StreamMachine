@@ -41,8 +41,8 @@ module.exports = class Master extends require("events").EventEmitter
         @ctx.events = new EventsHub
         @ctx.master = this
 
-        @logger.debug "initialize master"
 
+        @logger.debug "initialize master"
 
         if @config.redis?
             # -- load our streams configuration from redis -- #
@@ -94,9 +94,9 @@ module.exports = class Master extends require("events").EventEmitter
         # -- create a listener for slaves -- #
 
         if @config.master
-            @slaves = new SlaveServer @ctx
+            @slaveServer = new SlaveServer @ctx
             @on Events.Master.STREAMS_UPDATE, =>
-                @slaves.updateConfig @getStreamsAndSourceConfig()
+                @slaveServer.updateConfig @getStreamsAndSourceConfig()
 
         # -- Analytics -- #
 
@@ -104,7 +104,7 @@ module.exports = class Master extends require("events").EventEmitter
             @analytics = new Analytics @ctx
 
             # add a log transport
-            @logger.logger.add new Analytics.LogTransport(@analytics), {}, true
+            #@logger.logger.add new Analytics.LogTransport(@analytics), {}, true
 
         # -- Rewind Dump and Restore -- #
 
@@ -422,9 +422,9 @@ module.exports = class Master extends require("events").EventEmitter
     #----------
 
     slavesInfo: ->
-        if @slaves
-            slaveCount: Object.keys(@slaves.slaves).length
-            slaves:     ( { id:k, status:s.last_status||"WARMING UP" } for k,s of @slaves.slaves )
+        if @slaveServer
+            slaveCount: Object.keys(@slaveServer.slaveConnections).length
+            slaves:     ( { id:k, status:s.last_status||"WARMING UP" } for k,s of @slaveServer.slaveConnections )
             master:     @_rewindStatus()
         else
             slaveCount: 0
@@ -581,7 +581,7 @@ module.exports = class Master extends require("events").EventEmitter
     #----------
 
     _attachIOProxy: (stream) ->
-        if !@slaves
+        if !@slaveServer
             @logger.warning("no slaves found to attach stream broadcast for #{stream.key}")
             return false
 
@@ -618,8 +618,8 @@ module.exports = class Master extends require("events").EventEmitter
 
             @app.use (req,res,next) =>
                 sock_id = req.get 'stream-slave-id'
-                if sock_id && @master.slaves.slaves[ sock_id ]
-                    #req.slave_socket = @master.slaves[ sock_id ]
+                if sock_id && @master.slaveServer.slaveConnections[ sock_id ]
+                    #req.slave_socket = @master.slaveServer[ sock_id ]
                     next()
 
                 else

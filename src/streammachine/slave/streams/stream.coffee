@@ -261,8 +261,16 @@ module.exports = class Stream extends RewindBuffer
 
         if lmeta = @_lmeta[opts.id]
             nothing = 1
-            ###
-            @log.interaction "",
+            require('debug')('sm:dfsddsfds')(
+
+                client:         lmeta.obj.client
+                time:           new Date()
+                kbytes:         opts.kbytes
+                duration:       opts.seconds
+                offsetSeconds:  opts.offsetSeconds
+                contentTime:    opts.contentTime
+            )
+            @logger.error "listen",
                 type:           "listen"
                 client:         lmeta.obj.client
                 time:           new Date()
@@ -270,18 +278,15 @@ module.exports = class Stream extends RewindBuffer
                 duration:       opts.seconds
                 offsetSeconds:  opts.offsetSeconds
                 contentTime:    opts.contentTime
-            ###
 
     #----------
 
     startSession: (client,cb) ->
-        ###
-        @log.interaction "",
+        @logger.error "session_start",
             type:       "session_start"
             client:     client
             time:       new Date()
             session_id: client.session_id
-        ###
 
         cb null, client.session_id
 

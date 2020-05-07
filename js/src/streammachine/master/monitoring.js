@@ -64,14 +64,14 @@ module.exports = Monitoring = class Monitoring extends require("events").EventEm
         return results;
       }, 3000);
     };
-    this.master.slaves.on("disconnect", this._dFunc);
+    this.master.slaveServer.on("disconnect", this._dFunc);
     // -- poll for sync -- #
     return this._slaveInt = setInterval(() => {
       var mstatus;
       // -- what is master's status? -- #
       mstatus = this.master._rewindStatus();
       // -- Get slave status -- #
-      return this.master.slaves.pollForSync((err, statuses) => {
+      return this.master.slaveServer.pollForSync((err, statuses) => {
         var i, j, key, len, len1, mobj, mts, ref, results, sobj, stat, sts, ts, unsynced;
         results = [];
         for (i = 0, len = statuses.length; i < len; i++) {

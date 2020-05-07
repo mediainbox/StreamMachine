@@ -23,7 +23,6 @@ module.exports = class MasterMode extends require("./base_mode")
         process.title = "SM:MASTER"
         @logger.debug "master mode start"
 
-
         # create a master
         @master = new Master(@ctx)
 
@@ -72,7 +71,7 @@ module.exports = class MasterMode extends require("./base_mode")
 
         port = @ctx.config.master.port
         @handle = @server.listen port
-        @master.slaves.listen(@handle)
+        @master.slaveServer.listen(@handle)
         @master.sourcein.listen()
 
         @logger.info "master server listening on port #{port}"
@@ -182,7 +181,7 @@ module.exports = class MasterMode extends require("./base_mode")
                     @_rpc.once "master_handle", (msg,handle,cb) =>
                         @logger.info "Master socket is incoming."
                         @handle = @server.listen handle
-                        @master.slaves?.listen @handle
+                        @master.slaveServer?.listen @handle
                         cb null
                         aFunc()
 

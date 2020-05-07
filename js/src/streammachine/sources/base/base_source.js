@@ -71,7 +71,7 @@ module.exports = BaseSource = class BaseSource extends require("events").EventEm
         });
       }
       if ((ref2 = this.log) != null) {
-        ref2.debug("first header is ", header);
+        ref2.debug("first header received", header);
       }
       // -- send out our stream vitals -- #
       return this._setVitals({

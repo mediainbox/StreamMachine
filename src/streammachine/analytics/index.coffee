@@ -6,6 +6,8 @@ nconf   = require "nconf"
 
 debug = require("debug")("sm:analytics")
 
+AnalyticsEsStore = require "./store/es_store"
+
 # This module is responsible for:
 
 # * Listen for session_start and listen interactions
@@ -32,6 +34,8 @@ module.exports = class Analytics
         @local = tz(require "timezone/zones")(nconf.get("timezone")||"UTC")
 
 
+        @store = new AnalyticsEsStore(@config, @ctx)
+
         # -- are there any sessions that should be finalized? -- #
         # when was our last finalized session?
         #last_session = @influx.query "SELECT max(time) from sessions", (err,res) =>
@@ -44,7 +48,7 @@ module.exports = class Analytics
 
             setInterval =>
                 # look for sessions that should be written (score less than now)
-                @redis.zrangebyscore "session-timeouts", 0, Math.floor( Number(new Date) / 1000), (err,sessions) =>
+                @redis.client.zrangebyscore "session-timeouts", 0, Math.floor( Number(new Date) / 1000), (err,sessions) =>
                     return @logger.error "Error fetching sessions to finalize: #{err}" if err
 
                     _sFunc = =>
@@ -117,11 +121,11 @@ module.exports = class Analytics
         if @redis
             # use redis stash
             key = "duration-#{session}"
-            @redis.incrby key, Math.round(duration), (err,res) =>
+            @redis.client.incrby key, Math.round(duration), (err,res) =>
                 cb err, res
 
             # set a TTL on our key, so that it doesn't stay indefinitely
-            @redis.pexpire key, 5*60*1000, (err) =>
+            @redis.client.pexpire key, 5*60*1000, (err) =>
                 @logger.error "Failed to set Redis TTL for #{key}: #{err}" if err
 
         else
@@ -142,7 +146,7 @@ module.exports = class Analytics
             # already in the set
             timeout_at = (Number(new Date) / 1000) + @_timeout_sec
 
-            @redis.zadd "session-timeouts", timeout_at, session, (err) =>
+            @redis.client.zadd "session-timeouts", timeout_at, session, (err) =>
                 cb err
 
         else
@@ -160,10 +164,10 @@ module.exports = class Analytics
 
     _scrubSessionFor: (session,cb) ->
         if @redis
-            @redis.zrem "session-timeouts", session, (err) =>
+            @redis.client.zrem "session-timeouts", session, (err) =>
                 return cb err if err
 
-                @redis.del "duration-#{session}", (err) =>
+                @redis.client.del "duration-#{session}", (err) =>
                     cb err
 
         else
@@ -192,6 +196,11 @@ module.exports = class Analytics
                 if obj
                     @_storeSession obj, (err) =>
                         @logger.error "Error writing session: #{err}" if err
+
+    #----------
+
+    countListeners: (cb) ->
+        return @store.countListeners(cb)
 
     #----------
 

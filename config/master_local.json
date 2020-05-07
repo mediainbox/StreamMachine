@@ -10,6 +10,15 @@
       "dir": "/dev/stream-machine/dump",
       "frequency": 300
     },
+    "analytics": {
+      "es_prefix": "local-streammachine",
+      "es_uri": "http://localhost:9200",
+      "es_api_version": "1.7",
+      "finalize_secs": "30"
+    },
+    "redis": {
+      "server": "redis://localhost:6379"
+    },
     "debug_incoming_requests": true,
     "log": {
       "stdout": true

@@ -153,7 +153,7 @@ module.exports = class UrlSource extends require("./base/base_source")
     #----------
 
     _logChunk: (chunk) =>
-        @logger.debug "received chunk from parser (time: #{chunk.ts.toISOString().substr(11)}, total: #{@chunksCount})"
+        @logger.silly "received chunk from parser (time: #{chunk.ts.toISOString().substr(11)}, total: #{@chunksCount})"
 
 
     #----------

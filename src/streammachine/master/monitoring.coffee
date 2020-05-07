@@ -45,7 +45,7 @@ module.exports = class Monitoring extends require("events").EventEmitter
                     @master.alerts.update k, slave_id, false
             , 3000
 
-        @master.slaves.on "disconnect", @_dFunc
+        @master.slaveServer.on "disconnect", @_dFunc
 
         # -- poll for sync -- #
 
@@ -56,7 +56,7 @@ module.exports = class Monitoring extends require("events").EventEmitter
 
             # -- Get slave status -- #
 
-            @master.slaves.pollForSync (err,statuses) =>
+            @master.slaveServer.pollForSync (err,statuses) =>
 
                 for stat in statuses
                     # -- update slave responsiveness -- #

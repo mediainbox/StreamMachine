@@ -25,12 +25,10 @@ class @StreamGroup extends require("events").EventEmitter
 #----------
 
     startSession: (client,cb) ->
-        ###
-        @log.interaction "",
+        @logger.error "session_start",
             type:       "session_start"
             client:     client
             time:       new Date()
             id:         client.session_id
-        ###
 
         cb null, client.session_id

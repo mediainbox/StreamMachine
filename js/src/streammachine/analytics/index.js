@@ -1,4 +1,4 @@
-var Analytics, URL, _, debug, nconf, tz, winston;
+var Analytics, AnalyticsEsStore, URL, _, debug, nconf, tz, winston;
 
 _ = require("underscore");
 
@@ -11,6 +11,8 @@ tz = require("timezone");
 nconf = require("nconf");
 
 debug = require("debug")("sm:analytics");
+
+AnalyticsEsStore = require("./store/es_store");
 
 // This module is responsible for:
 
@@ -33,6 +35,7 @@ module.exports = Analytics = class Analytics {
     // track open sessions
     this.sessions = {};
     this.local = tz(require("timezone/zones"))(nconf.get("timezone") || "UTC");
+    this.store = new AnalyticsEsStore(this.config, this.ctx);
     // -- are there any sessions that should be finalized? -- #
     // when was our last finalized session?
     //last_session = @influx.query "SELECT max(time) from sessions", (err,res) =>
@@ -44,7 +47,7 @@ module.exports = Analytics = class Analytics {
       this.logger.info("Analytics setting up Redis session sweeper");
       setInterval(() => {
         // look for sessions that should be written (score less than now)
-        return this.redis.zrangebyscore("session-timeouts", 0, Math.floor(Number(new Date()) / 1000), (err, sessions) => {
+        return this.redis.client.zrangebyscore("session-timeouts", 0, Math.floor(Number(new Date()) / 1000), (err, sessions) => {
           var _sFunc;
           if (err) {
             return this.logger.error(`Error fetching sessions to finalize: ${err}`);
@@ -132,11 +135,11 @@ module.exports = Analytics = class Analytics {
     if (this.redis) {
       // use redis stash
       key = `duration-${session}`;
-      this.redis.incrby(key, Math.round(duration), (err, res) => {
+      this.redis.client.incrby(key, Math.round(duration), (err, res) => {
         return cb(err, res);
       });
       // set a TTL on our key, so that it doesn't stay indefinitely
-      return this.redis.pexpire(key, 5 * 60 * 1000, (err) => {
+      return this.redis.client.pexpire(key, 5 * 60 * 1000, (err) => {
         if (err) {
           return this.logger.error(`Failed to set Redis TTL for ${key}: ${err}`);
         }
@@ -160,7 +163,7 @@ module.exports = Analytics = class Analytics {
       // this will set the score, or update it if the session is
       // already in the set
       timeout_at = (Number(new Date()) / 1000) + this._timeout_sec;
-      return this.redis.zadd("session-timeouts", timeout_at, session, (err) => {
+      return this.redis.client.zadd("session-timeouts", timeout_at, session, (err) => {
         return cb(err);
       });
     } else {
@@ -179,11 +182,11 @@ module.exports = Analytics = class Analytics {
   _scrubSessionFor(session, cb) {
     var s;
     if (this.redis) {
-      return this.redis.zrem("session-timeouts", session, (err) => {
+      return this.redis.client.zrem("session-timeouts", session, (err) => {
         if (err) {
           return cb(err);
         }
-        return this.redis.del(`duration-${session}`, (err) => {
+        return this.redis.client.del(`duration-${session}`, (err) => {
           return cb(err);
         });
       });
@@ -226,6 +229,11 @@ module.exports = Analytics = class Analytics {
         }
       });
     });
+  }
+
+  //----------
+  countListeners(cb) {
+    return this.store.countListeners(cb);
   }
 
   //----------

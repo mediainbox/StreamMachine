@@ -9,7 +9,7 @@ module.exports = class StreamDataBroadcaster extends require("events").EventEmit
         @master = opts.master
 
         @dataFunc = (chunk) =>
-            @master.slaves.broadcastAudio @key, chunk
+            @master.slaveServer.broadcastAudio @key, chunk
 
         @stream.on "data", @dataFunc
 

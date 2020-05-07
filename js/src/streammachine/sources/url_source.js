@@ -173,7 +173,7 @@ module.exports = UrlSource = class UrlSource extends require("./base/base_source
 
   _logChunk(chunk) {
     boundMethodCheck(this, UrlSource);
-    return this.logger.debug(`received chunk from parser (time: ${chunk.ts.toISOString().substr(11)}, total: ${this.chunksCount})`);
+    return this.logger.silly(`received chunk from parser (time: ${chunk.ts.toISOString().substr(11)}, total: ${this.chunksCount})`);
   }
 
   checkStatus() {

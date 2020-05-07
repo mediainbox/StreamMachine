@@ -80,7 +80,7 @@ module.exports = MasterMode = (function() {
       this.master.loadRewinds();
       port = this.ctx.config.master.port;
       this.handle = this.server.listen(port);
-      this.master.slaves.listen(this.handle);
+      this.master.slaveServer.listen(this.handle);
       this.master.sourcein.listen();
       this.logger.info(`master server listening on port ${port}`);
       return typeof cb === "function" ? cb(null, this) : void 0;
@@ -185,7 +185,7 @@ module.exports = MasterMode = (function() {
               var ref;
               this.logger.info("Master socket is incoming.");
               this.handle = this.server.listen(handle);
-              if ((ref = this.master.slaves) != null) {
+              if ((ref = this.master.slaveServer) != null) {
                 ref.listen(this.handle);
               }
               cb(null);

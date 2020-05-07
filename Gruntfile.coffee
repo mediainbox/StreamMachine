@@ -36,4 +36,4 @@ module.exports = (grunt) ->
 
     grunt.registerTask 'default', ['coffee:default','copy']
     grunt.registerTask 'build:no-sourcemaps', ['coffee:no-sourcemaps','copy']
-    grunt.registerTask 'build:watch', ['watch']
+    grunt.registerTask 'build:watch', ['coffee:default', 'watch']

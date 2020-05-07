@@ -8,7 +8,7 @@ module.exports = StreamDataBroadcaster = class StreamDataBroadcaster extends req
     this.stream = opts.stream;
     this.master = opts.master;
     this.dataFunc = (chunk) => {
-      return this.master.slaves.broadcastAudio(this.key, chunk);
+      return this.master.slaveServer.broadcastAudio(this.key, chunk);
     };
     this.stream.on("data", this.dataFunc);
   }

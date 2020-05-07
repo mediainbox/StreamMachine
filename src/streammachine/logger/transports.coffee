@@ -2,6 +2,7 @@ fs          = require "fs"
 path        = require "path"
 Transport   = require('winston-transport')
 debug = require("debug")
+_ = require "lodash"
 
 class DebugTransport extends Transport
     name: "debug"
@@ -27,8 +28,12 @@ class DebugTransport extends Transport
         return fn
 
     log: (info, callback) ->
+        { level, message, component, workerId, meta... } = info
         fn = @getDebugFn(info)
-        fn ("[#{info.level}] #{info.message}")
+
+        metaToLog = _.pickBy(meta,(value, key) -> return typeof key != 'symbol')
+
+        fn("[#{level}] #{message}", metaToLog)
         callback null, true
 
 

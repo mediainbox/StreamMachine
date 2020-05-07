@@ -1,45 +1,52 @@
-var AnalyticsEsStore, BatchedQueue, ESTemplates, EsIndexWriter, elasticsearch;
+var AnalyticsEsStore, BatchedQueue, ESTemplates, EsIndexWriter, URL, _, elasticsearch, nconf, tz;
+
+URL = require("url");
 
 elasticsearch = require("@elastic/elasticsearch");
 
-BatchedQueue = require("../util/batched_queue");
+BatchedQueue = require("../../util/batched_queue");
 
-EsIndexWriter = require("./store/idx_writer");
+EsIndexWriter = require("./index_writer");
 
-ESTemplates = require("./store/es_templates");
+ESTemplates = require("./es_templates");
+
+tz = require('timezone');
+
+nconf = require("nconf");
+
+_ = require("lodash");
 
 module.exports = AnalyticsEsStore = class AnalyticsEsStore {
-  constructor(opts, cb) {
+  constructor(config, ctx) {
     var apiVersion, es_uri;
-    this.opts = opts;
-    this._uri = URL.parse(this.opts.config.es_uri);
-    this.log = this.opts.log;
-    this._timeout_sec = Number(this.opts.config.finalize_secs);
-    if (this.opts.redis) {
-      this.redis = this.opts.redis.client;
-    }
-    es_uri = this.opts.config.es_uri;
-    this.idx_prefix = this.opts.config.es_prefix;
-    this.log.debug(`Connecting to Elasticsearch at ${es_uri} with prefix of ${this.idx_prefix}`);
-    debug(`Connecting to ES at ${es_uri}, prefix ${this.idx_prefix}`);
+    this.config = config;
+    this.ctx = ctx;
+    this._uri = URL.parse(this.config.es_uri);
+    this.logger = this.ctx.logger.child({
+      component: 'analytics:store'
+    });
+    this._timeout_sec = Number(this.config.finalize_secs);
+    es_uri = this.config.es_uri;
+    this.idx_prefix = this.config.es_prefix;
+    this.logger.debug(`Connecting to Elasticsearch at ${es_uri} with prefix of ${this.idx_prefix}`);
     apiVersion = '1.7';
-    if (typeof this.opts.config.es_api_version !== 'undefined') {
-      apiVersion = this.opts.config.es_api_version.toString();
+    if (typeof this.config.es_api_version !== 'undefined') {
+      apiVersion = this.config.es_api_version.toString();
     }
     this.es = new elasticsearch.Client({
       node: es_uri,
       apiVersion: apiVersion,
-      requestTimeout: this.opts.config.request_timeout || 30000
+      requestTimeout: this.config.request_timeout || 30000
     });
     this.idx_batch = new BatchedQueue({
-      batch: this.opts.config.index_batch,
-      latency: this.opts.config.index_latency
+      batch: this.config.index_batch,
+      latency: this.config.index_latency
     });
-    this.idx_writer = new EsIndexWriter(this.es, this.log.child({
+    this.idx_writer = new EsIndexWriter(this.es, this.logger.child({
       submodule: "idx_writer"
     }));
     this.idx_writer.on("error", (err) => {
-      return this.log.error(err);
+      return this.logger.error(err);
     });
     this.idx_batch.pipe(this.idx_writer);
     // track open sessions
@@ -52,7 +59,7 @@ module.exports = AnalyticsEsStore = class AnalyticsEsStore {
         return typeof cb === "function" ? cb(err) : void 0;
       } else {
         // do something...
-        debug("Hitting cb after loading templates");
+        this.logger.debug("Hitting cb after loading templates");
         return typeof cb === "function" ? cb(null, this) : void 0;
       }
     });
@@ -357,26 +364,26 @@ module.exports = AnalyticsEsStore = class AnalyticsEsStore {
   _loadTemplates(cb) {
     var _loaded, errors, obj, results, t, tmplt;
     errors = [];
-    debug(`Loading ${Object.keys(ESTemplates).length} ElasticSearch templates`);
+    this.logger.debug(`Loading ${Object.keys(ESTemplates).length} ElasticSearch templates`);
     _loaded = _.after(Object.keys(ESTemplates).length, () => {
       if (errors.length > 0) {
-        debug(`Failed to load one or more ElasticSearch templates: ${errors.join(" | ")}`);
-        this.log.info(errors);
+        this.logger.debug(`Failed to load one or more ElasticSearch templates: ${errors.join(" | ")}`);
+        this.logger.info(errors);
         return cb(new Error(`Failed to load index templates: ${errors.join(" | ")}`));
       } else {
-        debug("ES templates loaded successfully.");
+        this.logger.debug("ES templates loaded successfully.");
         return cb(null);
       }
     });
     results = [];
     for (t in ESTemplates) {
       obj = ESTemplates[t];
-      debug(`Loading ElasticSearch mapping for ${this.idx_prefix}-${t}`);
-      //@log.info "Loading Elasticsearch mappings for #{@idx_prefix}-#{t}"
+      this.logger.debug(`Loading ElasticSearch mapping for ${this.idx_prefix}-${t}`);
+      //@logger.info "Loading Elasticsearch mappings for #{@idx_prefix}-#{t}"
       tmplt = _.extend({}, obj, {
         index_patterns: `${this.idx_prefix}-${t}-*`
       });
-      //@log.info tmplt
+      //@logger.info tmplt
       results.push(this.es.indices.putTemplate({
         name: `${this.idx_prefix}-${t}-template`,
         body: tmplt

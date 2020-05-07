@@ -1,4 +1,4 @@
-var DebugTransport, Transport, debug, fs, path;
+var DebugTransport, Transport, _, debug, fs, path;
 
 fs = require("fs");
 
@@ -7,6 +7,8 @@ path = require("path");
 Transport = require('winston-transport');
 
 debug = require("debug");
+
+_ = require("lodash");
 
 DebugTransport = (function() {
   class DebugTransport extends Transport {
@@ -32,9 +34,13 @@ DebugTransport = (function() {
     }
 
     log(info, callback) {
-      var fn;
+      var component, fn, level, message, meta, metaToLog, workerId;
+      ({level, message, component, workerId, ...meta} = info);
       fn = this.getDebugFn(info);
-      fn(`[${info.level}] ${info.message}`);
+      metaToLog = _.pickBy(meta, function(value, key) {
+        return typeof key !== 'symbol';
+      });
+      fn(`[${level}] ${message}`, metaToLog);
       return callback(null, true);
     }
 

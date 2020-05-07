@@ -105,17 +105,18 @@ module.exports = Master = (function() {
       });
       // -- create a listener for slaves -- #
       if (this.config.master) {
-        this.slaves = new SlaveServer(this.ctx);
+        this.slaveServer = new SlaveServer(this.ctx);
         this.on(Events.Master.STREAMS_UPDATE, () => {
-          return this.slaves.updateConfig(this.getStreamsAndSourceConfig());
+          return this.slaveServer.updateConfig(this.getStreamsAndSourceConfig());
         });
       }
       // -- Analytics -- #
       if ((ref = this.config.analytics) != null ? ref.es_uri : void 0) {
         this.analytics = new Analytics(this.ctx);
-        // add a log transport
-        this.logger.logger.add(new Analytics.LogTransport(this.analytics), {}, true);
       }
+      // add a log transport
+      //@logger.logger.add new Analytics.LogTransport(@analytics), {}, true
+
       // -- Rewind Dump and Restore -- #
       if (this.config.rewind_dump) {
         this.rewind_dr = new RewindDumpRestore(this, this.config.rewind_dump);
@@ -499,12 +500,12 @@ module.exports = Master = (function() {
     //----------
     slavesInfo() {
       var k, s;
-      if (this.slaves) {
+      if (this.slaveServer) {
         return {
-          slaveCount: Object.keys(this.slaves.slaves).length,
+          slaveCount: Object.keys(this.slaveServer.slaveConnections).length,
           slaves: (function() {
             var ref, results;
-            ref = this.slaves.slaves;
+            ref = this.slaveServer.slaveConnections;
             results = [];
             for (k in ref) {
               s = ref[k];
@@ -704,7 +705,7 @@ module.exports = Master = (function() {
 
     //----------
     _attachIOProxy(stream) {
-      if (!this.slaves) {
+      if (!this.slaveServer) {
         this.logger.warning(`no slaves found to attach stream broadcast for ${stream.key}`);
         return false;
       }
@@ -751,8 +752,8 @@ module.exports = Master = (function() {
       this.app.use((req, res, next) => {
         var sock_id;
         sock_id = req.get('stream-slave-id');
-        if (sock_id && this.master.slaves.slaves[sock_id]) {
-          //req.slave_socket = @master.slaves[ sock_id ]
+        if (sock_id && this.master.slaveServer.slaveConnections[sock_id]) {
+          //req.slave_socket = @master.slaveServer[ sock_id ]
           return next();
         } else {
           this.master.logger.debug("Rejecting StreamTransport request with missing or invalid socket ID.", {

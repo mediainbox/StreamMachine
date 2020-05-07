@@ -28,13 +28,12 @@ this.StreamGroup = class StreamGroup extends require("events").EventEmitter {
 
   //----------
   startSession(client, cb) {
-    /*
-    @log.interaction "",
-        type:       "session_start"
-        client:     client
-        time:       new Date()
-        id:         client.session_id
-    */
+    this.logger.error("session_start", {
+      type: "session_start",
+      client: client,
+      time: new Date(),
+      id: client.session_id
+    });
     return cb(null, client.session_id);
   }
 

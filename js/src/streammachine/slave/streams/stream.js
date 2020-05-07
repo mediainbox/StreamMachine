@@ -285,29 +285,35 @@ module.exports = Stream = class Stream extends RewindBuffer {
       this._totalKBytesSent += opts.kbytes;
     }
     if (lmeta = this._lmeta[opts.id]) {
-      return nothing = 1;
+      nothing = 1;
+      require('debug')('sm:dfsddsfds')({
+        client: lmeta.obj.client,
+        time: new Date(),
+        kbytes: opts.kbytes,
+        duration: opts.seconds,
+        offsetSeconds: opts.offsetSeconds,
+        contentTime: opts.contentTime
+      });
+      return this.logger.error("listen", {
+        type: "listen",
+        client: lmeta.obj.client,
+        time: new Date(),
+        kbytes: opts.kbytes,
+        duration: opts.seconds,
+        offsetSeconds: opts.offsetSeconds,
+        contentTime: opts.contentTime
+      });
     }
   }
 
-  /*
-  @log.interaction "",
-      type:           "listen"
-      client:         lmeta.obj.client
-      time:           new Date()
-      kbytes:         opts.kbytes
-      duration:       opts.seconds
-      offsetSeconds:  opts.offsetSeconds
-      contentTime:    opts.contentTime
-  */
   //----------
   startSession(client, cb) {
-    /*
-    @log.interaction "",
-        type:       "session_start"
-        client:     client
-        time:       new Date()
-        session_id: client.session_id
-    */
+    this.logger.error("session_start", {
+      type: "session_start",
+      client: client,
+      time: new Date(),
+      session_id: client.session_id
+    });
     return cb(null, client.session_id);
   }
 

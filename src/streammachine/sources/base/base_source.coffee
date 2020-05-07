@@ -65,7 +65,7 @@ module.exports = class BaseSource extends require("events").EventEmitter
             @streamKey      = header.stream_key
 
             @log?.debug "setting framesPerSec to ", frames:@framesPerSec
-            @log?.debug "first header is ", header
+            @log?.debug "first header received", header
 
             # -- send out our stream vitals -- #
 
