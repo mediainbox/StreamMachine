@@ -1,4 +1,6 @@
-var SlaveConnection;
+var Events, SlaveConnection;
+
+({Events} = require('../../events'));
 
 module.exports = SlaveConnection = class SlaveConnection extends require("events").EventEmitter {
   constructor(ctx, socket) {
@@ -20,7 +22,7 @@ module.exports = SlaveConnection = class SlaveConnection extends require("events
       return this.logger[obj.level || 'debug'].apply(this.logger, [obj.msg || "", obj.meta || {}]);
     });
     // -- RPC Handlers -- #
-    this.socket.on("vitals", (key, cb) => {
+    this.socket.on(Events.IO.SLAVE_VITALS, (key, cb) => {
       // respond with the stream's vitals
       return this.ctx.master.vitals(key, cb);
     });
@@ -32,7 +34,7 @@ module.exports = SlaveConnection = class SlaveConnection extends require("events
 
   //----------
   status(cb) {
-    return this.socket.emit("status", (err, status) => {
+    return this.socket.emit(Events.IO.SLAVE_STATUS, (err, status) => {
       this.last_status = status;
       this.last_err = err;
       return cb(err, status);
@@ -44,6 +46,7 @@ module.exports = SlaveConnection = class SlaveConnection extends require("events
     var connected;
     connected = Math.round((Number(new Date()) - Number(this.connected_at)) / 60000);
     this.logger.debug(`slave ${this.socket.id} disconnected (connection lasted ${connected} minutes)`);
+    // TODO: who handles this?
     return this.emit("disconnect");
   }
 

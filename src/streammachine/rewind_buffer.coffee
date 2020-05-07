@@ -28,6 +28,10 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
     constructor: (rewind_opts={}) ->
         super()
 
+        @logger = rewind_opts.logger.child({
+            component: "rewind_buffer:#{rewind_opts.station}"
+        })
+
         @_rsecs         = rewind_opts.seconds || 0
         @_rburstsecs    = rewind_opts.burst || 0
         @_rsecsPerChunk = Infinity
@@ -36,10 +40,6 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
         @_rkey          = rewind_opts.key
 
         @_risLoading    = false
-
-        # This could already be set if we've subclassed RewindBuffer, so
-        # only set it if it doesn't exist
-        @log            = rewind_opts.log if rewind_opts.log && !@log
 
         # each listener should be an object that defines obj._offset and
         # obj.writeFrame. We implement RewindBuffer.Listener, but other
@@ -102,12 +102,12 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
     #----------
 
     _rConnectSource: (newsource,cb) ->
-        @log.debug "RewindBuffer got source event"
+        @logger.debug "new source event"
         # -- disconnect from old source -- #
 
         if @_rsource
             @_rsource.removeListener "data", @_rdataFunc
-            @log.debug "removed old rewind data listener"
+            @logger.debug "removed old rewind data listener"
 
         # -- compute initial stats -- #
 
@@ -115,7 +115,7 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
             if @_rstreamKey && @_rstreamKey == vitals.streamKey
                 # reconnecting, but rate matches so we can keep using
                 # our existing buffer.
-                @log.debug "Rewind buffer validated new source.  Reusing buffer."
+                @logger.debug "Rewind buffer validated new source.  Reusing buffer."
 
             else
                 @_rChunkLength vitals
@@ -146,7 +146,7 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
             if @_rstreamKey
                 # we're reconnecting, but didn't match rate...  we
                 # should wipe out the old buffer
-                @log.debug "Invalid existing rewind buffer. Reset."
+                @logger.debug "Invalid existing rewind buffer. Reset."
                 @_rbuffer.reset()
 
             # compute new frame numbers
@@ -155,7 +155,7 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
 
             @_rUpdateMax()
 
-            @log.debug "Rewind's max buffer length is ", max:@_rmax, secsPerChunk:@_rsecsPerChunk, secs:vitals.emitDuration
+            @logger.debug "rewind's max buffer length is ???", max:@_rmax, secsPerChunk:@_rsecsPerChunk, secs:vitals.emitDuration
 
     #----------
 
@@ -164,7 +164,7 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
             @_rmax          = Math.round @_rsecs / @_rsecsPerChunk
             @_rbuffer.setMax @_rmax
             @_rburst        = Math.round @_rburstsecs / @_rsecsPerChunk
-        @log.debug "Rewind's max buffer length is ", max:@_rmax, seconds:@_rsecs
+        @logger.debug "rewind max buffer length is at #{@_rmax} chunks (#{@_rsecs} seconds) "
 
     #----------
 
@@ -252,7 +252,7 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
 
         parser.on "end", =>
             obj = seconds:@bufferedSecs(), length:@_rbuffer.length()
-            @log.info "RewindBuffer is now at ", obj
+            @logger.info "rewind buffer is now at #{obj.seconds} seconds and #{obj.length} bytes"
             @emit "rewind_loaded"
             @_risLoading = false
             cb? null, obj
@@ -287,14 +287,14 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
         bl = @_rbuffer.length()
 
         if offset < 0
-            @log.debug "offset is invalid! 0 for live."
+            @logger.debug "offset is invalid! 0 for live."
             return 0
 
         if bl >= offset
-            @log.debug "Granted. current buffer length is ", length:bl
+            @logger.debug "Granted. current buffer length is ", length:bl
             return offset
         else
-            @log.debug "Not available. Instead giving max buffer of ", length:bl - 1
+            @logger.debug "Not available. Instead giving max buffer of ", length:bl - 1
             return bl - 1
 
     #----------

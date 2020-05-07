@@ -1,16 +1,19 @@
-var Events, MasterEvents;
+var EventEmitter, EventTypes;
 
-MasterEvents = {
-  STREAMS_UPDATE: "streams",
-  CONFIG_UPDATE: "config_update",
-  NEW_SOURCE_MOUNT: "new_source_mount",
-  NEW_STREAM: "new_stream"
+({EventEmitter} = require("events"));
+
+EventTypes = {
+  Master: {
+    STREAMS_UPDATE: "streams",
+    CONFIG_UPDATE: "config_update",
+    NEW_SOURCE_MOUNT: "new_source_mount",
+    NEW_STREAM: "new_stream"
+  }
 };
 
-Events = {
-  MasterEvents: MasterEvents
+module.exports = {
+  EventsHub: EventEmitter,
+  EventTypes: EventTypes
 };
-
-module.exports = Events;
 
 //# sourceMappingURL=events.js.map

@@ -109,7 +109,7 @@ module.exports = StandaloneMode = (function() {
         });
         return this.slave.configureStreams(this.master.config().streams);
       });
-      this.log.debug(`Standalone is listening on port ${this.opts.port}`);
+      this.log.info(`Standalone is listening on port ${this.opts.port}`);
       // -- Handoff? -- #
       if (nconf.get("handoff")) {
         this._handoffStart(cb);

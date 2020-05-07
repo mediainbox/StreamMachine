@@ -10,13 +10,13 @@ module.exports = class SocketSource extends require("events").EventEmitter
 
         @log.debug "created SocketSource for #{@stream.key}"
 
-        @slave.io.on "audio:#{@stream.key}", (chunk) =>
+        @slave.masterConnection.on "audio:#{@stream.key}", (chunk) =>
             @emit "data", chunk
 
         @_streamKey = null
 
         getVitals = (retries=0) =>
-            @slave.io.vitals @stream.key, (err,obj) =>
+            @slave.masterConnection.vitals @stream.key, (err,obj) =>
                 if err
                     @log.error "Failed to get vitals (#{retries} retries remaining): #{err}"
 
@@ -68,13 +68,13 @@ module.exports = class SocketSource extends require("events").EventEmitter
         # connect to: @master.options.host:@master.options.port
 
         # GET request for rewind buffer
-        @log.debug "Making Rewind Buffer request for #{@stream.key}", sock_id:@slave.io.id
+        @log.debug "Making Rewind Buffer request for #{@stream.key}", sock_id:@slave.masterConnection.id
         req = http.request
-            hostname:   @slave.io.io.io.opts.host
-            port:       @slave.io.io.io.opts.port
+            hostname:   @slave.masterConnection.io.io.opts.host
+            port:       @slave.masterConnection.io.io.opts.port
             path:       "/s/#{@stream.key}/rewind"
             headers:
-                'stream-slave-id':    @slave.io.id
+                'stream-slave-id':    @slave.masterConnection.id
         , (res) =>
             clearTimeout gRT
 

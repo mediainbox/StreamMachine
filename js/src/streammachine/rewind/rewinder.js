@@ -204,7 +204,8 @@ module.exports = Rewinder = class Rewinder extends require("stream").Readable {
       this._queuedBytes -= next_buf.data.length;
       this._sentBytes += next_buf.data.length;
       this._sentDuration += next_buf.duration / 1000;
-      debug(`Sent duration is now ${this._sentDuration}`);
+      //debug "Sent duration is now #{ @_sentDuration }"
+
       // Not all chunks will contain metadata, but go ahead and send
       // ours out if it does
       if (next_buf.meta) {

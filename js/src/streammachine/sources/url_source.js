@@ -43,9 +43,9 @@ module.exports = UrlSource = class UrlSource extends require("./base/base_source
     this.reconnect = this.reconnect.bind(this);
     this.url = this.opts.url;
     this.logger = this.opts.logger.child({
-      component: 'sm:sources:proxy'
+      component: `source_url:${opts.key}`
     });
-    this.logger.debug(`URL source created for ${this.url}`);
+    this.logger.debug(`url source created for ${this.url}`);
     this.isFallback = this.opts.fallback || false;
     this.defaultHeaders = this.opts.headers || {
       "user-agent": "StreamMachine 0.1.0"
@@ -107,13 +107,13 @@ module.exports = UrlSource = class UrlSource extends require("./base/base_source
     var url_opts;
     boundMethodCheck(this, UrlSource);
     this.createParser();
-    this.logger.debug(`Begin connection to Icecast from ${this.url}`);
+    this.logger.debug(`connect to Icecast on ${this.url}`);
     url_opts = url.parse(this.url);
     url_opts.headers = _.clone(this.defaultHeaders);
     this.last_ts = null;
     this.chunker.resetTime(new Date());
     this.ireq = Icy.get(url_opts, (ice) => {
-      this.logger.debug(`Connected to Icecast from ${this.url}`);
+      this.logger.debug(`connected to Icecast at ${this.url}`);
       if (ice.statusCode === 302) {
         this.url = ice.headers.location;
       }
@@ -160,7 +160,7 @@ module.exports = UrlSource = class UrlSource extends require("./base/base_source
     });
     // outgoing -> Stream
     this.on("_chunk", this.broadcastData);
-    this.logChunk = _.throttle(this._logChunk.bind(this), 10000);
+    this.logChunk = _.throttle(this._logChunk.bind(this), 30000);
     return this.on("_chunk", this.logChunk);
   }
 

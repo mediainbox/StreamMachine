@@ -1,8 +1,8 @@
-var SlaveIO, Socket;
+var MasterConnection, Socket;
 
 Socket = require("socket.io-client");
 
-module.exports = SlaveIO = class SlaveIO extends require("events").EventEmitter {
+module.exports = MasterConnection = class MasterConnection extends require("events").EventEmitter {
   constructor(slave, _log, opts) {
     super();
     this.slave = slave;

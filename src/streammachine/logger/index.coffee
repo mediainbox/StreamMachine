@@ -1,9 +1,10 @@
 _ = require "underscore"
 StackdriverLogging = require('@google-cloud/logging-winston').LoggingWinston
-customTransports = require "./transports";
+CustomTransports = require "./transports";
+cluster = require('cluster');
 
 winston = require "winston"
-{ combine, timestamp, label, prettyPrint } = winston.format;
+{ combine, timestamp, label, prettyPrint, json } = winston.format;
 
 debug = require("debug")("sm:logger")
 
@@ -25,25 +26,19 @@ module.exports = createLogger: (config) ->
 
     # -- debug -- #
 
-    transports.push new customTransports.DebugTransport
+    transports.push new CustomTransports.DebugTransport
 
     # -- stdout -- #
 
-    if config.stdout
+    if false and config.log.stdout
         debug "adding console transport"
-        transports.push new winston.transports.Console(
-            colorize: true,
-            prettyPrint: true,
-            timestamp: true
-        )
-
-    ###
-    transports.push new customTransports.ConsoleTransport
+        transports.push new winston.transports.Console()
+        ###
         level:      config.stdout?.level        || "debug"
         colorize:   config.stdout?.colorize     || false
         timestamp:  config.stdout?.timestamp    || false
         ignore:     config.stdout?.ignore       || ""
-    ###
+        ###
 
     # -- JSON -- #
 
@@ -61,7 +56,7 @@ module.exports = createLogger: (config) ->
 
     # -- Stackdriver -- #
 
-    if config.stackdriver? || 1
+    if config.stackdriver?
         debug "adding stackdriver transport"
         transports.push new StackdriverLogging(
             name: "stackdriver"
@@ -69,48 +64,25 @@ module.exports = createLogger: (config) ->
             logName: 'stream_machine'
             prefix: config.mode
             labels:
-                    mode: config.mode,
+                    mode: config.mode
                     env: config.env
         )
 
 
+    addMetadata = winston.format((info) ->
+        info.workerId = cluster.isWorker && cluster.worker.id
+        return info
+    )
+
     # create a winston logger for this instance
     logger = winston.createLogger
-        level: 'debug'
-        #levels: winston.config.syslog.levels
+        format: combine(
+            addMetadata(),
+            json()
+        )
+        level: 'debug' # TODO
         transports: transports
-        #levels:@CustomLevels
-        #, rewriters:[@RequestRewriter]
 
     winston.addColors(winston.config.npm.levels)
 
     return logger
-
-    #----------
-
-    # connect to our events and proxy interaction and request events through
-    # to a master server over WebSockets
-    proxyToMaster: (sock) ->
-        @logger.remove(@logger.transports['socket']) if @logger.transports['socket']
-        @logger.add (new Logger.SocketLogger sock, level:"interaction"), {}, true if sock
-
-    #----------
-
-    class @Child
-        constructor: (@parent,@opts) ->
-            _(['log', 'profile', 'startTimer'].concat(Object.keys(@parent.logger.levels))).each (k) =>
-                @[k] = (args...) =>
-                    if _.isObject(args[args.length-1])
-                        args[args.length-1] = _.extend {}, args[args.length-1], @opts
-                    else
-                        args.push _.clone(@opts)
-
-                    @parent[k].apply @, args
-
-            @logger = @parent.logger
-            @child = (opts={}) -> new Logger.Child(@parent,_.extend({},@opts,opts))
-
-        proxyToMaster: (sock) ->
-            @parent.proxyToMaster(sock)
-
-    #----------

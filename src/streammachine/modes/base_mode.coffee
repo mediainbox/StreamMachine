@@ -19,10 +19,10 @@ module.exports = class BaseMode extends require("events").EventEmitter
 
 
         # see runner for restart trigger based on SIGUSR2
-        @logger.debug "Attaching listener for SIGUSR2 restarts."
+        @logger.debug "attach listener for SIGUSR2 restarts."
 
         if process.listeners("SIGUSR2").length > 0
-            @logger.info "Skipping SIGUSR2 registration for handoffs since another listener is registered."
+            @logger.info "skipping SIGUSR2 registration for handoffs since another listener is registered."
         else
             # Support a handoff trigger via USR2
             process.on "SIGUSR2", =>

@@ -24,8 +24,8 @@ module.exports = RewindDumpRestore = (function() {
       this._queue = [];
       this._working = false;
       this._shouldLoad = false;
-      this.log = this.master.logger.child({
-        module: "rewind_dump_restore"
+      this.logger = this.master.logger.child({
+        component: "rewind_dump_restore"
       });
       // -- make sure directory is valid -- #
       this._path = fs.realpathSync(path.resolve(process.cwd(), this.settings.dir));
@@ -33,7 +33,7 @@ module.exports = RewindDumpRestore = (function() {
 
       } else {
         // good
-        this.log.error(`RewindDumpRestore path (${this._path}) is invalid.`);
+        this.logger.error(`RewindDumpRestore path (${this._path}) is invalid.`);
         return false;
       }
       ref1 = this.master.streams;
@@ -47,12 +47,12 @@ module.exports = RewindDumpRestore = (function() {
       }
       // watch for new streams
       this.master.on("new_stream", (stream) => {
-        this.log.debug(`RewindDumpRestore got new stream: ${stream.key}`);
+        this.logger.debug(`dump restore received new stream ${stream.key}`);
         return this._streams[stream.key] = new Dumper(stream.key, stream.rewind, this._path);
       });
       // -- set our interval -- #
       if ((this.settings.frequency || -1) > 0) {
-        this.log.debug(`RewindDumpRestore initialized with interval of ${this.settings.frequency} seconds.`);
+        this.logger.debug(`dump restore initialized with ${this.settings.frequency} seconds interval`);
         this._int = setInterval(() => {
           return this._triggerDumps();
         }, this.settings.frequency * 1000);
@@ -81,18 +81,19 @@ module.exports = RewindDumpRestore = (function() {
         if (d = load_q.shift()) {
           return d._tryLoad((err, stats) => {
             if (err) {
-              this.log.error(`Load for ${d.key} errored: ${err}`, {
+              this.logger.error(`Load for ${d.key} errored: ${err}`, {
                 stream: d.key
               });
               results.errors += 1;
             } else {
+              this.logger.info(`dump restored for ${d.key}`);
               results.success += 1;
             }
             return _load();
           });
         } else {
           // done
-          this.log.info("RewindDumpRestore load complete.", {
+          this.logger.info("dump restore load complete", {
             success: results.success,
             errors: results.errors
           });
@@ -105,7 +106,7 @@ module.exports = RewindDumpRestore = (function() {
     //----------
     _triggerDumps(cb) {
       var d, k;
-      this.log.debug("Queuing Rewind dumps");
+      this.logger.debug("Queuing Rewind dumps");
       this._queue.push(...((function() {
         var ref, results1;
         ref = this._streams;
@@ -129,11 +130,11 @@ module.exports = RewindDumpRestore = (function() {
         return d._dump((err, file, timing) => {
           if (err) {
             if (d.stream) {
-              this.log.error(`Dump for ${d.key} errored: ${err}`, {
+              this.logger.error(`Dump for ${d.key} errored: ${err}`, {
                 stream: d.stream.key
               });
             } else {
-              this.log.error(`Dump for ${d.key} errored (with no stream): ${err}`);
+              this.logger.error(`Dump for ${d.key} errored (with no stream): ${err}`);
             }
           }
           // for tests...

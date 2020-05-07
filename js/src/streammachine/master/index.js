@@ -1,4 +1,4 @@
-var Alerts, Analytics, Events, Master, MasterAPI, MasterConfigRedisStore, Monitoring, Redis, RewindDumpRestore, SlaveServer, SourceIn, SourceMount, Stream, StreamDataBroadcaster, Throttle, _, debug, express, fs, net, temp;
+var Alerts, Analytics, Events, EventsHub, Master, MasterAPI, MasterConfigRedisStore, Monitoring, Redis, RewindDumpRestore, SlaveServer, SourceIn, SourceMount, Stream, StreamDataBroadcaster, Throttle, _, debug, express, fs, net, temp;
 
 _ = require("underscore");
 
@@ -20,9 +20,9 @@ MasterConfigRedisStore = require("./config/redis_config");
 
 MasterAPI = require("./admin/api");
 
-Stream = require("./stream");
+Stream = require("./streams/stream");
 
-SourceIn = require("./source_in");
+SourceIn = require("./sources/source_in");
 
 Alerts = require("../alerts");
 
@@ -32,13 +32,13 @@ Monitoring = require("./monitoring");
 
 SlaveServer = require("./slave_io/slave_server");
 
-SourceMount = require("./source_mount");
+SourceMount = require("./sources/source_mount");
 
 RewindDumpRestore = require("../rewind/dump_restore");
 
-Events = require('./events').MasterEvents;
+({Events, EventsHub} = require('../events'));
 
-StreamDataBroadcaster = require('./stream_data_broadcaster');
+StreamDataBroadcaster = require('./streams/stream_data_broadcaster');
 
 // A Master handles configuration, slaves, incoming sources, logging and the admin interface
 module.exports = Master = (function() {
@@ -56,14 +56,15 @@ module.exports = Master = (function() {
       this.logger = this.ctx.logger.child({
         component: "master"
       });
+      this.ctx.events = new EventsHub();
       this.ctx.master = this;
-      this.logger.debug("initialize Master");
+      this.logger.debug("initialize master");
       if (this.config.redis != null) {
         // -- load our streams configuration from redis -- #
 
         // we store streams and sources into Redis, but not our full
         // config object. Other stuff still loads from the config file
-        this.logger.debug("Initializing Redis connection");
+        this.logger.debug("initialize Redis connection");
         this.ctx.providers.redis = new Redis(this.config.redis);
         this.configStore = new MasterConfigRedisStore(this.ctx.providers.redis);
         this.configStore.on("config", (config) => {
@@ -75,8 +76,8 @@ module.exports = Master = (function() {
           }
         });
         // Persist changed configuration to Redis
-        this.logger.debug("Registering config_update listener");
-        this.on(Events.CONFIG_UPDATE, () => {
+        this.logger.debug("registering config_update listener");
+        this.on(Events.Master.CONFIG_UPDATE, () => {
           return this.configStore._update(this.getStreamsAndSourceConfig(), (err) => {
             return this.logger.info(`Redis config update saved: ${err}`);
           });
@@ -87,7 +88,7 @@ module.exports = Master = (function() {
           return this.configure(this.config);
         });
       }
-      this.once(Events.STREAMS_UPDATE, () => {
+      this.once(Events.Master.STREAMS_UPDATE, () => {
         return this._configured = true;
       });
       // -- create a server to provide the API -- #
@@ -105,19 +106,13 @@ module.exports = Master = (function() {
       // -- create a listener for slaves -- #
       if (this.config.master) {
         this.slaves = new SlaveServer(this.ctx);
-        this.on(Events.STREAMS_UPDATE, () => {
+        this.on(Events.Master.STREAMS_UPDATE, () => {
           return this.slaves.updateConfig(this.getStreamsAndSourceConfig());
         });
       }
       // -- Analytics -- #
       if ((ref = this.config.analytics) != null ? ref.es_uri : void 0) {
-        this.analytics = new Analytics({
-          config: this.config.analytics,
-          log: this.logger.child({
-            module: "analytics"
-          }),
-          redis: this.redis
-        });
+        this.analytics = new Analytics(this.ctx);
         // add a log transport
         this.logger.logger.add(new Analytics.LogTransport(this.analytics), {}, true);
       }
@@ -126,9 +121,7 @@ module.exports = Master = (function() {
         this.rewind_dr = new RewindDumpRestore(this, this.config.rewind_dump);
       }
       // -- Set up our monitoring module -- #
-      this.monitoring = new Monitoring(this, this.logger.child({
-        module: "monitoring"
-      }));
+      this.monitoring = new Monitoring(this.ctx);
     }
 
     //----------
@@ -136,7 +129,7 @@ module.exports = Master = (function() {
       if (this._configured) {
         return cb();
       } else {
-        return this.once(Events.STREAMS_UPDATE, () => {
+        return this.once(Events.Master.STREAMS_UPDATE, () => {
           return cb();
         });
       }
@@ -144,7 +137,7 @@ module.exports = Master = (function() {
 
     //----------
     loadRewinds(cb) {
-      return this.once(Events.STREAMS_UPDATE, () => {
+      return this.once(Events.Master.STREAMS_UPDATE, () => {
         var ref;
         return (ref = this.rewind_dr) != null ? ref.load(cb) : void 0;
       });
@@ -160,12 +153,12 @@ module.exports = Master = (function() {
       ref = this.streams;
       for (k in ref) {
         s = ref[k];
-        config.streams[k] = s.config();
+        config.streams[k] = s.getConfig();
       }
       ref1 = this.source_mounts;
       for (k in ref1) {
         s = ref1[k];
-        config.sources[k] = s.config();
+        config.sources[k] = s.getConfig();
       }
       return config;
     }
@@ -175,15 +168,15 @@ module.exports = Master = (function() {
       // configre can be called on a new core, or it can be called to
     // reconfigure an existing core.  we need to support either one.
     configure(options, cb) {
-      var all_keys, base, g, k, key, mount, mount_key, new_sources, new_streams, obj, opts, ref, ref1, sg;
-      this.logger.debug("configure master");
+      var all_keys, k, key, mount, mount_key, new_sources, new_streams, obj, opts, ref, ref1;
+      this.logger.debug("configure sources and streams");
       all_keys = {};
       // -- Sources -- #
       new_sources = (options != null ? options.sources : void 0) || {};
       for (k in new_sources) {
         opts = new_sources[k];
         all_keys[k] = 1;
-        this.logger.debug(`Configuring Source Mapping ${k}`);
+        this.logger.debug(`configure source ${k}`);
         if (this.source_mounts[k]) {
           // existing...
           this.source_mounts[k].configure(opts);
@@ -209,7 +202,7 @@ module.exports = Master = (function() {
 // creating rewind buffers
       for (key in new_streams) {
         opts = new_streams[key];
-        this.logger.debug(`Parsing stream for ${key}`);
+        this.logger.debug(`parsing stream for ${key}`);
         // does this stream have a mount?
         mount_key = opts.source || key;
         all_keys[mount_key] = 1;
@@ -222,26 +215,15 @@ module.exports = Master = (function() {
         // do we need to create the stream?
         if (this.streams[key]) {
           // existing stream...  pass it updated configuration
-          this.logger.debug(`Passing updated config to master stream: ${key}`, {
+          this.logger.debug(`passing updated config to stream handler ${key}`, {
             opts: opts
           });
           this.streams[key].configure(opts);
         } else {
-          this.logger.debug(`Starting up master stream: ${key}`, {
-            opts: opts
-          });
           this._startStream(key, mount, opts);
         }
-        // part of a stream group?
-        if (g = this.streams[key].opts.group) {
-          // do we have a matching group?
-          sg = ((base = this.stream_groups)[g] || (base[g] = new Stream.StreamGroup(g, this.logger.child({
-            stream_group: g
-          }))));
-          sg.addStream(this.streams[key]);
-        }
       }
-      this.emit(Events.STREAMS_UPDATE, this.streams);
+      this.emit(Events.Master.STREAMS_UPDATE, this.streams);
       ref1 = this.source_mounts;
       // -- Remove Old Source Mounts -- #
       for (k in ref1) {
@@ -259,12 +241,10 @@ module.exports = Master = (function() {
     //----------
     _startSourceMount(key, opts) {
       var mount;
-      mount = new SourceMount(key, this.logger.child({
-        source_mount: key
-      }), opts);
+      mount = new SourceMount(key, this.logger, opts);
       if (mount) {
         this.source_mounts[key] = mount;
-        this.emit(Events.NEW_SOURCE_MOUNT, mount);
+        this.emit(Events.Master.NEW_SOURCE_MOUNT, mount);
         return mount;
       } else {
         return false;
@@ -273,24 +253,27 @@ module.exports = Master = (function() {
 
     //----------
     _startStream(key, mount, opts) {
-      var stream;
-      stream = new Stream(key, this.logger.child({
-        stream: key
-      }), mount, _.extend(opts, {
-        hls: this.config.hls,
+      var stream, streamArgs, streamConfig;
+      streamConfig = _.extend(opts, {
         preroll: opts.preroll != null ? opts.preroll : this.config.preroll,
-        transcoder: opts.transcoder != null ? opts.transcoder : this.config.transcoder,
+        //transcoder: if opts.transcoder? then opts.transcoder else @config.transcoder
         log_interval: opts.log_interval != null ? opts.log_interval : this.config.log_interval
-      }));
+      });
+      streamArgs = {
+        key: key,
+        mount: mount,
+        config: streamConfig
+      };
+      stream = new Stream(this.ctx, streamArgs);
       if (stream) {
         // attach a listener for configs
         stream.on("config", () => {
-          this.emit(Events.CONFIG_UPDATE);
-          return this.emit(Events.STREAMS_UPDATE, this.streams);
+          this.emit(Events.Master.CONFIG_UPDATE);
+          return this.emit(Events.Master.STREAMS_UPDATE, this.streams);
         });
         this.streams[key] = stream;
         this._attachIOProxy(stream);
-        this.emit(Events.NEW_STREAM, stream);
+        this.emit(Events.Master.NEW_STREAM, stream);
         return stream;
       } else {
         return false;
@@ -322,8 +305,8 @@ module.exports = Master = (function() {
       }
       // -- create the stream -- #
       if (stream = this._startStream(opts.key, this.source_mounts[mount_key], opts)) {
-        this.emit(Events.CONFIG_UPDATE);
-        this.emit(Events.STREAMS_UPDATE, this.streams);
+        this.emit(Events.Master.CONFIG_UPDATE);
+        this.emit(Events.Master.STREAMS_UPDATE, this.streams);
         return typeof cb === "function" ? cb(null, stream.status()) : void 0;
       } else {
         return typeof cb === "function" ? cb("Stream failed to start.") : void 0;
@@ -366,8 +349,8 @@ module.exports = Master = (function() {
       });
       delete this.streams[stream.key];
       stream.destroy();
-      this.emit(Events.CONFIG_UPDATE);
-      this.emit(Events.STREAMS_UPDATE, this.streams);
+      this.emit(Events.Master.CONFIG_UPDATE);
+      this.emit(Events.Master.STREAMS_UPDATE, this.streams);
       return typeof cb === "function" ? cb(null, "OK") : void 0;
     }
 
@@ -390,7 +373,7 @@ module.exports = Master = (function() {
         return false;
       }
       if (mount = this._startSourceMount(opts.key, opts)) {
-        this.emit(Events.CONFIG_UPDATE);
+        this.emit(Events.Master.CONFIG_UPDATE);
         return typeof cb === "function" ? cb(null, mount.status()) : void 0;
       } else {
         return typeof cb === "function" ? cb("Mount failed to start.") : void 0;
@@ -432,7 +415,7 @@ module.exports = Master = (function() {
       }
       delete this.source_mounts[mount.key];
       mount.destroy();
-      this.emit(Events.CONFIG_UPDATE);
+      this.emit(Events.Master.CONFIG_UPDATE);
       return cb(null, "OK");
     }
 
@@ -721,18 +704,16 @@ module.exports = Master = (function() {
 
     //----------
     _attachIOProxy(stream) {
-      this.logger.debug(`attachIOProxy call for ${stream.key}.`, {
-        slaves: this.slaves != null,
-        proxy: this.dataBroadcasters[stream.key] != null
-      });
       if (!this.slaves) {
+        this.logger.warning(`no slaves found to attach stream broadcast for ${stream.key}`);
         return false;
       }
       if (this.dataBroadcasters[stream.key]) {
+        this.logger.info(`existing broadcaster found for ${stream.key}`);
         return false;
       }
       // create a new proxy
-      this.logger.debug(`Creating StreamDataBroadcaster for ${stream.key}`);
+      this.logger.debug(`create stream broadcaster for ${stream.key}`);
       this.dataBroadcasters[stream.key] = new StreamDataBroadcaster({
         key: stream.key,
         stream: stream,

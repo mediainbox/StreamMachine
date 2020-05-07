@@ -10,21 +10,16 @@ debug = require("debug")("sm:master:index")
 Redis       = require "../stores/redis_store"
 MasterConfigRedisStore = require "./config/redis_config"
 MasterAPI         = require "./admin/api"
-Stream      = require "./stream"
-SourceIn    = require "./source_in"
+Stream      = require "./streams/stream"
+SourceIn    = require "./sources/source_in"
 Alerts      = require "../alerts"
 Analytics   = require "../analytics"
 Monitoring  = require "./monitoring"
 SlaveServer     = require "./slave_io/slave_server"
-SourceMount = require "./source_mount"
-
+SourceMount = require "./sources/source_mount"
 RewindDumpRestore   = require "../rewind/dump_restore"
-
-
-Events = require('./events').MasterEvents
-
-
-StreamDataBroadcaster = require('./stream_data_broadcaster')
+{ Events, EventsHub } = require('../events')
+StreamDataBroadcaster = require './streams/stream_data_broadcaster'
 
 # A Master handles configuration, slaves, incoming sources, logging and the admin interface
 
@@ -43,9 +38,10 @@ module.exports = class Master extends require("events").EventEmitter
         @logger = @ctx.logger.child({
             component: "master"
         })
+        @ctx.events = new EventsHub
         @ctx.master = this
 
-        @logger.debug "initialize Master"
+        @logger.debug "initialize master"
 
 
         if @config.redis?
@@ -54,7 +50,7 @@ module.exports = class Master extends require("events").EventEmitter
             # we store streams and sources into Redis, but not our full
             # config object. Other stuff still loads from the config file
 
-            @logger.debug "Initializing Redis connection"
+            @logger.debug "initialize Redis connection"
             @ctx.providers.redis = new Redis @config.redis
             @configStore = new MasterConfigRedisStore @ctx.providers.redis
             @configStore.on "config", (config) =>
@@ -66,8 +62,8 @@ module.exports = class Master extends require("events").EventEmitter
                     @configure @config
 
             # Persist changed configuration to Redis
-            @logger.debug "Registering config_update listener"
-            @on Events.CONFIG_UPDATE, =>
+            @logger.debug "registering config_update listener"
+            @on Events.Master.CONFIG_UPDATE, =>
                 @configStore._update @getStreamsAndSourceConfig(), (err) =>
                     @logger.info "Redis config update saved: #{err}"
 
@@ -77,7 +73,7 @@ module.exports = class Master extends require("events").EventEmitter
             process.nextTick =>
                 @configure @config
 
-        @once Events.STREAMS_UPDATE, =>
+        @once Events.Master.STREAMS_UPDATE, =>
             @_configured = true
 
         # -- create a server to provide the API -- #
@@ -99,16 +95,13 @@ module.exports = class Master extends require("events").EventEmitter
 
         if @config.master
             @slaves = new SlaveServer @ctx
-            @on Events.STREAMS_UPDATE, =>
+            @on Events.Master.STREAMS_UPDATE, =>
                 @slaves.updateConfig @getStreamsAndSourceConfig()
 
         # -- Analytics -- #
 
         if @config.analytics?.es_uri
-            @analytics = new Analytics
-                config: @config.analytics
-                log:    @logger.child(module:"analytics")
-                redis:  @redis
+            @analytics = new Analytics @ctx
 
             # add a log transport
             @logger.logger.add new Analytics.LogTransport(@analytics), {}, true
@@ -120,7 +113,7 @@ module.exports = class Master extends require("events").EventEmitter
 
         # -- Set up our monitoring module -- #
 
-        @monitoring = new Monitoring @, @logger.child(module:"monitoring")
+        @monitoring = new Monitoring @ctx
 
     #----------
 
@@ -128,12 +121,12 @@ module.exports = class Master extends require("events").EventEmitter
         if @_configured
             cb()
         else
-            @once Events.STREAMS_UPDATE, => cb()
+            @once Events.Master.STREAMS_UPDATE, => cb()
 
     #----------
 
     loadRewinds: (cb) ->
-        @once Events.STREAMS_UPDATE, =>
+        @once Events.Master.STREAMS_UPDATE, =>
             @rewind_dr?.load cb
 
     #----------
@@ -141,8 +134,8 @@ module.exports = class Master extends require("events").EventEmitter
     getStreamsAndSourceConfig: ->
         config = streams:{}, sources:{}
 
-        config.streams[k] = s.config() for k,s of @streams
-        config.sources[k] = s.config() for k,s of @source_mounts
+        config.streams[k] = s.getConfig() for k,s of @streams
+        config.sources[k] = s.getConfig() for k,s of @source_mounts
 
         return config
 
@@ -151,7 +144,7 @@ module.exports = class Master extends require("events").EventEmitter
     # configre can be called on a new core, or it can be called to
     # reconfigure an existing core.  we need to support either one.
     configure: (options,cb) ->
-        @logger.debug "configure master"
+        @logger.debug "configure sources and streams"
 
         all_keys = {}
 
@@ -161,7 +154,7 @@ module.exports = class Master extends require("events").EventEmitter
 
         for k,opts of new_sources
             all_keys[ k ] = 1
-            @logger.debug "Configuring Source Mapping #{k}"
+            @logger.debug "configure source #{k}"
             if @source_mounts[k]
                 # existing...
                 @source_mounts[k].configure opts
@@ -182,12 +175,13 @@ module.exports = class Master extends require("events").EventEmitter
         # run through the streams we've been passed, initializing sources and
         # creating rewind buffers
         for key,opts of new_streams
-            @logger.debug "Parsing stream for #{key}"
+            @logger.debug "parsing stream for #{key}"
 
             # does this stream have a mount?
             mount_key = opts.source || key
             all_keys[mount_key] = 1
 
+            # TODO: clean, no needed
             if !@source_mounts[mount_key]
                 # create a mount
                 @logger.debug "Creating an unspecified source mount for #{mount_key} (via #{key})."
@@ -198,19 +192,12 @@ module.exports = class Master extends require("events").EventEmitter
             # do we need to create the stream?
             if @streams[key]
                 # existing stream...  pass it updated configuration
-                @logger.debug "Passing updated config to master stream: #{key}", opts:opts
+                @logger.debug "passing updated config to stream handler #{key}", opts:opts
                 @streams[key].configure opts
             else
-                @logger.debug "Starting up master stream: #{key}", opts:opts
                 @_startStream key, mount, opts
 
-            # part of a stream group?
-            if g = @streams[key].opts.group
-                # do we have a matching group?
-                sg = ( @stream_groups[ g ] ||= new Stream.StreamGroup g, @logger.child stream_group:g )
-                sg.addStream @streams[key]
-
-        @emit Events.STREAMS_UPDATE, @streams
+        @emit Events.Master.STREAMS_UPDATE, @streams
 
         # -- Remove Old Source Mounts -- #
 
@@ -224,11 +211,11 @@ module.exports = class Master extends require("events").EventEmitter
     #----------
 
     _startSourceMount: (key,opts) ->
-        mount = new SourceMount key, @logger.child(source_mount:key), opts
+        mount = new SourceMount key, @logger, opts
 
         if mount
             @source_mounts[ key ] = mount
-            @emit Events.NEW_SOURCE_MOUNT, mount
+            @emit Events.Master.NEW_SOURCE_MOUNT, mount
             return mount
         else
             return false
@@ -236,20 +223,27 @@ module.exports = class Master extends require("events").EventEmitter
     #----------
 
     _startStream: (key,mount,opts) ->
-        stream = new Stream key, @logger.child(stream:key), mount, _.extend opts,
-            hls:        @config.hls
-            preroll:    if opts.preroll? then opts.preroll else @config.preroll
-            transcoder: if opts.transcoder? then opts.transcoder else @config.transcoder
-            log_interval: if opts.log_interval? then opts.log_interval else @config.log_interval
+        streamConfig =
+            _.extend opts,
+                preroll:    if opts.preroll? then opts.preroll else @config.preroll
+                #transcoder: if opts.transcoder? then opts.transcoder else @config.transcoder
+                log_interval: if opts.log_interval? then opts.log_interval else @config.log_interval
+
+        streamArgs =
+            key: key
+            mount: mount
+            config: streamConfig
+
+        stream = new Stream @ctx, streamArgs
 
         if stream
             # attach a listener for configs
-            stream.on "config", => @emit Events.CONFIG_UPDATE; @emit Events.STREAMS_UPDATE, @streams
+            stream.on "config", => @emit Events.Master.CONFIG_UPDATE; @emit Events.Master.STREAMS_UPDATE, @streams
 
             @streams[ key ] = stream
             @_attachIOProxy stream
 
-            @emit Events.NEW_STREAM, stream
+            @emit Events.Master.NEW_STREAM, stream
             return stream
         else
             return false
@@ -280,8 +274,8 @@ module.exports = class Master extends require("events").EventEmitter
         # -- create the stream -- #
 
         if stream = @_startStream opts.key, @source_mounts[mount_key], opts
-            @emit Events.CONFIG_UPDATE
-            @emit Events.STREAMS_UPDATE, @streams
+            @emit Events.Master.CONFIG_UPDATE
+            @emit Events.Master.STREAMS_UPDATE, @streams
             cb? null, stream.status()
         else
             cb? "Stream failed to start."
@@ -319,8 +313,8 @@ module.exports = class Master extends require("events").EventEmitter
         delete @streams[ stream.key ]
         stream.destroy()
 
-        @emit Events.CONFIG_UPDATE
-        @emit Events.STREAMS_UPDATE, @streams
+        @emit Events.Master.CONFIG_UPDATE
+        @emit Events.Master.STREAMS_UPDATE, @streams
 
         cb? null, "OK"
 
@@ -340,7 +334,7 @@ module.exports = class Master extends require("events").EventEmitter
             return false
 
         if mount = @_startSourceMount opts.key, opts
-            @emit Events.CONFIG_UPDATE
+            @emit Events.Master.CONFIG_UPDATE
             cb? null, mount.status()
         else
             cb? "Mount failed to start."
@@ -379,7 +373,7 @@ module.exports = class Master extends require("events").EventEmitter
         delete @source_mounts[ mount.key ]
         mount.destroy()
 
-        @emit Events.CONFIG_UPDATE
+        @emit Events.Master.CONFIG_UPDATE
 
         cb null, "OK"
 
@@ -587,14 +581,16 @@ module.exports = class Master extends require("events").EventEmitter
     #----------
 
     _attachIOProxy: (stream) ->
-        @logger.debug "attachIOProxy call for #{stream.key}.", slaves:@slaves?, proxy:@dataBroadcasters[stream.key]?
-        return false if !@slaves
+        if !@slaves
+            @logger.warning("no slaves found to attach stream broadcast for #{stream.key}")
+            return false
 
         if @dataBroadcasters[ stream.key ]
+            @logger.info("existing broadcaster found for #{stream.key}")
             return false
 
         # create a new proxy
-        @logger.debug "Creating StreamDataBroadcaster for #{stream.key}"
+        @logger.debug "create stream broadcaster for #{stream.key}"
         @dataBroadcasters[ stream.key ] = new StreamDataBroadcaster key:stream.key, stream:stream, master:@
 
         # and attach a listener to destroy it if the stream is removed

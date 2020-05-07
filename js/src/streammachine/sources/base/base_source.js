@@ -54,7 +54,7 @@ module.exports = BaseSource = class BaseSource extends require("events").EventEm
   createParser() {
     var ref;
     if ((ref = this.log) != null) {
-      ref.debug(`Creating ${this.opts.format} frames parser`);
+      ref.debug(`create frames parser for format ${this.opts.format}`);
     }
     // -- Turns data frames into chunks -- #
     this.chunker = new FrameChunker(this.emitDuration * 1000);

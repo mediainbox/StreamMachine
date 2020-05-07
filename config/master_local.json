@@ -8,10 +8,11 @@
     "mode": "master",
     "rewind_dump": {
       "dir": "/dev/stream-machine/dump",
-      "frequency": 10
+      "frequency": 300
     },
     "debug_incoming_requests": true,
     "log": {
+      "stdout": true
     },
     "source_port": 8080,
     "enable-heapdump": true,

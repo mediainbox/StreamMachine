@@ -1,0 +1,13 @@
+{
+  "version": 3,
+  "file": "events.js",
+  "sourceRoot": "../../../../src/streammachine/slave/",
+  "sources": [
+    "events.coffee"
+  ],
+  "names": [],
+  "mappings": "AAAA,IAAA,YAAA,EAAA;;AAAA,CAAA,CAAE,YAAF,CAAA,GAAmB,OAAA,CAAQ,QAAR,CAAnB;;AAEA,UAAA,GACE;EAAA,KAAA,EAAO,CAAA;AAAP;;AAEF,MAAM,CAAC,OAAP,GACE;EAAA,SAAA,EAAW,YAAX;EACA,UAAA,EAAY;AADZ",
+  "sourcesContent": [
+    "{ EventEmitter } = require(\"events\")\r\n\r\nEventTypes =\r\n  Slave: {}\r\n\r\nmodule.exports =\r\n  EventsHub: EventEmitter\r\n  EventTypes: EventTypes\r\n"
+  ]
+}

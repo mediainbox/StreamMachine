@@ -1,12 +1,12 @@
-var Preroller, Rewind, Stream, _, debug, uuid;
+var Preroller, RewindBuffer, Stream, _, debug, uuid;
 
 _ = require("underscore");
 
 uuid = require("node-uuid");
 
-Preroller = require("./preroller");
+Preroller = require("./ads/preroller");
 
-Rewind = require("../rewind_buffer");
+RewindBuffer = require("../rewind_buffer");
 
 debug = require("debug")("sm:slave:stream");
 
@@ -17,14 +17,16 @@ debug = require("debug")("sm:slave:stream");
 // Rewind buffer info available on the master.
 module.exports = Stream = (function() {
   class Stream extends require('../rewind_buffer') {
-    constructor(core, key1, log, opts) {
+    constructor(core, key, log, opts) {
       super({
         seconds: opts.seconds,
-        burst: opts.burst
+        burst: opts.burst,
+        logger: log,
+        station: key
       });
       this.core = core;
-      this.key = key1;
       this.log = log;
+      this.key = key;
       this.opts = opts;
       this.STATUS = "Initializing";
       this.StreamTitle = this.opts.metaTitle;
@@ -317,10 +319,10 @@ module.exports = Stream = (function() {
 
   //----------
   Stream.StreamGroup = class StreamGroup extends require("events").EventEmitter {
-    constructor(key1, log) {
+    constructor(key1, log1) {
       super();
       this.key = key1;
-      this.log = log;
+      this.log = log1;
       this.streams = {};
     }
 

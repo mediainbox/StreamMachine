@@ -32,6 +32,9 @@ module.exports = RewindBuffer = (function() {
   class RewindBuffer extends require("events").EventEmitter {
     constructor(rewind_opts = {}) {
       super();
+      this.logger = rewind_opts.logger.child({
+        component: `rewind_buffer:${rewind_opts.station}`
+      });
       this._rsecs = rewind_opts.seconds || 0;
       this._rburstsecs = rewind_opts.burst || 0;
       this._rsecsPerChunk = 2e308;
@@ -39,11 +42,6 @@ module.exports = RewindBuffer = (function() {
       this._rburst = null;
       this._rkey = rewind_opts.key;
       this._risLoading = false;
-      if (rewind_opts.log && !this.log) {
-        // This could already be set if we've subclassed RewindBuffer, so
-        // only set it if it doesn't exist
-        this.log = rewind_opts.log;
-      }
       // each listener should be an object that defines obj._offset and
       // obj.writeFrame. We implement RewindBuffer.Listener, but other
       // classes can work with those pieces
@@ -111,18 +109,18 @@ module.exports = RewindBuffer = (function() {
 
     //----------
     _rConnectSource(newsource, cb) {
-      this.log.debug("RewindBuffer got source event");
+      this.logger.debug("new source event");
       // -- disconnect from old source -- #
       if (this._rsource) {
         this._rsource.removeListener("data", this._rdataFunc);
-        this.log.debug("removed old rewind data listener");
+        this.logger.debug("removed old rewind data listener");
       }
       // -- compute initial stats -- #
       return newsource.vitals((err, vitals) => {
         if (this._rstreamKey && this._rstreamKey === vitals.streamKey) {
           // reconnecting, but rate matches so we can keep using
           // our existing buffer.
-          this.log.debug("Rewind buffer validated new source.  Reusing buffer.");
+          this.logger.debug("Rewind buffer validated new source.  Reusing buffer.");
         } else {
           this._rChunkLength(vitals);
         }
@@ -153,14 +151,14 @@ module.exports = RewindBuffer = (function() {
         if (this._rstreamKey) {
           // we're reconnecting, but didn't match rate...  we
           // should wipe out the old buffer
-          this.log.debug("Invalid existing rewind buffer. Reset.");
+          this.logger.debug("Invalid existing rewind buffer. Reset.");
           this._rbuffer.reset();
         }
         // compute new frame numbers
         this._rsecsPerChunk = vitals.emitDuration;
         this._rstreamKey = vitals.streamKey;
         this._rUpdateMax();
-        return this.log.debug("Rewind's max buffer length is ", {
+        return this.logger.debug("rewind's max buffer length is ???", {
           max: this._rmax,
           secsPerChunk: this._rsecsPerChunk,
           secs: vitals.emitDuration
@@ -175,10 +173,7 @@ module.exports = RewindBuffer = (function() {
         this._rbuffer.setMax(this._rmax);
         this._rburst = Math.round(this._rburstsecs / this._rsecsPerChunk);
       }
-      return this.log.debug("Rewind's max buffer length is ", {
-        max: this._rmax,
-        seconds: this._rsecs
-      });
+      return this.logger.debug(`rewind max buffer length is at ${this._rmax} chunks (${this._rsecs} seconds) `);
     }
 
     //----------
@@ -281,7 +276,7 @@ module.exports = RewindBuffer = (function() {
           seconds: this.bufferedSecs(),
           length: this._rbuffer.length()
         };
-        this.log.info("RewindBuffer is now at ", obj);
+        this.logger.info(`rewind buffer is now at ${obj.seconds} seconds and ${obj.length} bytes`);
         this.emit("rewind_loaded");
         this._risLoading = false;
         return typeof cb === "function" ? cb(null, obj) : void 0;
@@ -319,16 +314,16 @@ module.exports = RewindBuffer = (function() {
       var bl;
       bl = this._rbuffer.length();
       if (offset < 0) {
-        this.log.debug("offset is invalid! 0 for live.");
+        this.logger.debug("offset is invalid! 0 for live.");
         return 0;
       }
       if (bl >= offset) {
-        this.log.debug("Granted. current buffer length is ", {
+        this.logger.debug("Granted. current buffer length is ", {
           length: bl
         });
         return offset;
       } else {
-        this.log.debug("Not available. Instead giving max buffer of ", {
+        this.logger.debug("Not available. Instead giving max buffer of ", {
           length: bl - 1
         });
         return bl - 1;

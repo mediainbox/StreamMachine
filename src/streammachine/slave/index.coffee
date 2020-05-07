@@ -3,28 +3,21 @@ _ = require "underscore"
 Stream  = require "./stream"
 Server  = require "./server"
 Alerts  = require "../alerts"
-IO      = require "./slave_io"
+MasterConnection      = require "./master_io/master_connection"
 SocketSource = require "./socket_source"
-
-URL     = require "url"
-HTTP    = require "http"
+{ EventTypes, EventsHub } = require('./events')
 tz      = require 'timezone'
-
-debug = require("debug")("sm:slave:slave")
 
 module.exports = class Slave extends require("events").EventEmitter
     Outputs:
         pumper:         require "../outputs/pumper"
         shoutcast:      require "../outputs/shoutcast"
         raw:            require "../outputs/raw_audio"
-        live_streaming: require "../outputs/live_streaming"
 
-    constructor: (@options,@_worker) ->
+    constructor: (@ctx) ->
         super()
 
         @_configured = false
-
-        debug "Init for Slave"
 
         @master = null
 
@@ -45,35 +38,40 @@ module.exports = class Slave extends require("events").EventEmitter
 
         # -- Set up logging -- #
 
-        @log = @options.logger
+        @ctx.events = new EventsHub
+        @ctx.slave = @
+        @config = @ctx.config
+        @logger = @ctx.logger.child({
+            component: "slave"
+        })
+        @logger.debug "initialize slave"
 
         # -- create an alerts object -- #
 
-        @alerts = new Alerts logger:@log.child(module:"alerts")
+        @alerts = new Alerts logger:@logger.child(module:"alerts")
 
         # -- Make sure we have the proper slave config options -- #
 
-        if @options.slave?.master
-            debug "Connecting IO to master"
-            @io = new IO @, @log.child(module:"slave_io"), @options.slave
+        if @config.slave?.master
+            @masterConnection = new MasterConnection @ctx
 
-            @io.on "connected", =>
-                debug "IO is connected"
-                @alerts.update "slave_disconnected", @io.id, false
-                # TODO @log.proxyToMaster(@io)
+            @masterConnection.on "connected", =>
+                @logger.debug "IO is connected"
+                @alerts.update "slave_disconnected", @masterConnection.id, false
+                # TODO @logger.proxyToMaster(@masterConnection)
 
-            @io.on "disconnected", =>
-                debug "IO is disconnected"
-                @alerts.update "slave_disconnected", @io.id, true
-                # TODO @log.proxyToMaster()
+            @masterConnection.on "disconnected", =>
+                @logger.debug "IO is disconnected"
+                @alerts.update "slave_disconnected", @masterConnection.id, true
+                # TODO @logger.proxyToMaster()
 
         @once "streams", =>
-            debug "Streams event received"
+            @logger.debug "Streams event received"
             @_configured = true
 
         # -- set up our stream server -- #
 
-        @server = new Server core:@, logger:@log.child(subcomponent:"server"), config:@options
+        @server = new Server core:@, logger:@logger.child(subcomponent:"server"), config:@config
 
     #----------
 
@@ -85,9 +83,9 @@ module.exports = class Slave extends require("events").EventEmitter
 
     once_rewinds_loaded: (cb) ->
         @once_configured =>
-            @log.debug "Looking for sources to load in #{ Object.keys(@streams).length } streams."
+            @logger.debug "Looking for sources to load in #{ Object.keys(@streams).length } streams."
             aFunc = _.after Object.keys(@streams).length, =>
-                @log.debug "All sources are loaded."
+                @logger.debug "All sources are loaded."
                 cb()
 
             # watch for each configured stream to have its rewind buffer loaded.
@@ -119,51 +117,40 @@ module.exports = class Slave extends require("events").EventEmitter
     #----------
 
     configureStreams: (options) ->
-        debug "In configureStreams"
-        @log.debug "In slave configureStreams with ", options:options
+        @logger.debug "In configureStreams"
+        @logger.debug "In slave configureStreams with ", options:options
 
         # are any of our current streams missing from the new options? if so,
         # disconnect them
         for k,obj of @streams
             if !options?[k]
-                debug "configureStreams: Disconnecting stream #{k}"
-                @log.info "configureStreams: Calling disconnect on #{k}"
+                @logger.debug "configureStreams: Disconnecting stream #{k}"
+                @logger.info "configureStreams: Calling disconnect on #{k}"
                 obj.disconnect()
                 delete @streams[k]
 
         # run through the streams we've been passed, initializing sources and
         # creating rewind buffers
 
-        debug "configureStreams: New options start"
+        @logger.debug "configureStreams: New options start"
         for key,opts of options
-            debug "configureStreams: Configuring #{key}"
+            @logger.debug "configureStreams: Configuring #{key}"
             if @streams[key]
                 # existing stream...  pass it updated configuration
-                @log.debug "Passing updated config to stream: #{key}", opts:opts
+                @logger.debug "Passing updated config to stream: #{key}", opts:opts
                 @streams[key].configure opts
             else
-                @log.debug "Starting up stream: #{key}", opts:opts
-
-                # HLS support?
-                opts.hls = true if @options.hls
+                @logger.debug "Starting up stream: #{key}", opts:opts
 
                 # FIXME: Eventually it would make sense to allow a per-stream
                 # value here
-                opts.tz = tz(require "timezone/zones")(@options.timezone||"UTC")
+                opts.tz = tz(require "timezone/zones")(@config.timezone||"UTC")
 
-                stream = @streams[key] = new Stream @, key, @log.child(stream:key), opts
+                stream = @streams[key] = new Stream @, key, @logger.child(stream:key), opts
 
-                if @io
+                if @masterConnection
                     source = @socketSource stream
                     stream.useSource source
-
-            # part of a stream group?
-            if g = @streams[key].opts.group
-                # do we have a matching group?
-                sg = ( @stream_groups[ g ] ||= new Stream.StreamGroup g, @log.child stream_group:g )
-                sg.addStream @streams[key]
-
-                #@streams[key].hls_segmenter?.syncToGroup sg
 
             # should this stream accept requests to /?
             if opts.root_route
@@ -171,7 +158,7 @@ module.exports = class Slave extends require("events").EventEmitter
 
         # emit a streams event for any components under us that might
         # need to know
-        debug "Done with configureStreams"
+        @logger.debug "Done with configureStreams"
         @emit "streams", @streams
 
     #----------
@@ -202,14 +189,14 @@ module.exports = class Slave extends require("events").EventEmitter
     ejectListeners: (lFunc,cb) ->
         # transfer listeners, one at a time
 
-        @log.info "Preparing to eject listeners from slave."
+        @logger.info "Preparing to eject listeners from slave."
 
         @_enqueued = []
 
         # -- prep our listeners -- #
 
         for k,s of @streams
-            @log.info "Preparing #{ Object.keys(s._lmeta).length } listeners for #{ s.key }"
+            @logger.info "Preparing #{ Object.keys(s._lmeta).length } listeners for #{ s.key }"
             @_enqueued.push [s,obj] for id,obj of s._lmeta
 
         # -- short-circuit if there are no listeners -- #
@@ -222,7 +209,7 @@ module.exports = class Slave extends require("events").EventEmitter
             sl = @_enqueued.shift()
 
             if !sl
-                @log.info "All listeners have been ejected."
+                @logger.info "All listeners have been ejected."
                 return cb null
 
             [stream,l] = sl
@@ -232,7 +219,7 @@ module.exports = class Slave extends require("events").EventEmitter
             d = require("domain").create()
             d.on "error", (err) =>
                 console.error "Handoff error: #{err}"
-                @log.error "Eject listener for #{l.id} hit error: #{err}"
+                @logger.error "Eject listener for #{l.id} hit error: #{err}"
                 d.exit()
                 sFunc()
 
@@ -256,13 +243,13 @@ module.exports = class Slave extends require("events").EventEmitter
                     if socket && !socket.destroyed
                         lFunc lopts, socket, (err) =>
                             if err
-                                @log.error "Failed to send listener #{lopts.id}: #{err}"
+                                @logger.error "Failed to send listener #{lopts.id}: #{err}"
 
                             # move on to the next one...
                             sFunc()
 
                     else
-                        @log.info "Listener #{lopts.id} perished in the queue. Moving on."
+                        @logger.info "Listener #{lopts.id} perished in the queue. Moving on."
                         sFunc()
 
         sFunc()

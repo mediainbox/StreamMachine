@@ -69,7 +69,6 @@
     "temp": "^0.9.1",
     "throttle": "~1.0.0",
     "timezone": "0.0.34",
-    "underscore": "~1.7.0",
     "ursa": "^0.9.4",
     "uuid": "^8.0.0",
     "watch-for-path": "~0.0.1",

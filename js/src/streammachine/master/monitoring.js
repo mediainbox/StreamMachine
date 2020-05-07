@@ -2,12 +2,18 @@ var Monitoring, _;
 
 _ = require("underscore");
 
+// Monitoring component
+// - checks if a stream has no active sources
+// - checks if a slave is responsive/unresponsive
+// - checks if a slave buffer is out of sync with masters'
 module.exports = Monitoring = class Monitoring extends require("events").EventEmitter {
-  constructor(master, log, opts) {
+  constructor(ctx) {
     super();
-    this.master = master;
-    this.log = log;
-    this.opts = opts;
+    this.ctx = ctx;
+    this.master = this.ctx.master;
+    this.logger = this.ctx.logger.child({
+      component: "monitoring"
+    });
     // -- check monitored source mounts for sources -- #
     this._streamInt = setInterval(() => {
       var k, ref, results, sm;
@@ -15,7 +21,7 @@ module.exports = Monitoring = class Monitoring extends require("events").EventEm
       results = [];
       for (k in ref) {
         sm = ref[k];
-        if (sm.opts.monitored) {
+        if (sm.config.monitored) {
           results.push(this.master.alerts.update("sourceless", sm.key, sm.source == null));
         } else {
           results.push(void 0);
@@ -94,7 +100,7 @@ module.exports = Monitoring = class Monitoring extends require("events").EventEm
 
                 } else {
                   // ok
-                  this.log.info(`Slave ${stat.id} sync unhealthy on ${key}:${ts}`, sts, mts);
+                  this.logger.info(`Slave ${stat.id} sync unhealthy on ${key}:${ts}`, sts, mts);
                   unsynced = true;
                 }
               }

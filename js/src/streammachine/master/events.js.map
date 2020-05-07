@@ -6,8 +6,8 @@
     "events.coffee"
   ],
   "names": [],
-  "mappings": "AAAA,IAAA,MAAA,EAAA;;AAAA,YAAA,GACE;EAAA,cAAA,EAAgB,SAAhB;EACA,aAAA,EAAe,eADf;EAEA,gBAAA,EAAkB,kBAFlB;EAGA,UAAA,EAAY;AAHZ;;AAKF,MAAA,GACE;EAAA,YAAA,EAAc;AAAd;;AAEF,MAAM,CAAC,OAAP,GAAiB",
+  "mappings": "AAAA,IAAA,YAAA,EAAA;;AAAA,CAAA,CAAE,YAAF,CAAA,GAAmB,OAAA,CAAQ,QAAR,CAAnB;;AAEA,UAAA,GACE;EAAA,MAAA,EACE;IAAA,cAAA,EAAgB,SAAhB;IACA,aAAA,EAAe,eADf;IAEA,gBAAA,EAAkB,kBAFlB;IAGA,UAAA,EAAY;EAHZ;AADF;;AAMF,MAAM,CAAC,OAAP,GACE;EAAA,SAAA,EAAW,YAAX;EACA,UAAA,EAAY;AADZ",
   "sourcesContent": [
-    "MasterEvents =\r\n  STREAMS_UPDATE: \"streams\"\r\n  CONFIG_UPDATE: \"config_update\"\r\n  NEW_SOURCE_MOUNT: \"new_source_mount\"\r\n  NEW_STREAM: \"new_stream\"\r\n\r\nEvents =\r\n  MasterEvents: MasterEvents\r\n\r\nmodule.exports = Events\r\n"
+    "{ EventEmitter } = require(\"events\")\r\n\r\nEventTypes =\r\n  Master:\r\n    STREAMS_UPDATE: \"streams\"\r\n    CONFIG_UPDATE: \"config_update\"\r\n    NEW_SOURCE_MOUNT: \"new_source_mount\"\r\n    NEW_STREAM: \"new_stream\"\r\n\r\nmodule.exports =\r\n  EventsHub: EventEmitter\r\n  EventTypes: EventTypes\r\n"
   ]
 }

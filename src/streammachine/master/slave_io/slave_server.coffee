@@ -1,6 +1,16 @@
 _ = require "underscore"
 SocketIO = require("socket.io")
 SlaveConnection = require('./slave_connection')
+{Events} = require('../../events')
+
+# Socket.IO server that listens for Slave connections
+# Will create a SlaveConnection for each connected Slave
+# See also slave/MasterConnection for the counterpart on the slave
+# Emits:
+# - Events.IO.CONFIG
+# - Events.IO.AUDIO
+
+CONFIG_UPDATE_DEBOUNCE = 200
 
 module.exports = class SlaveServer extends require("events").EventEmitter
     constructor: (@ctx) ->
@@ -13,25 +23,25 @@ module.exports = class SlaveServer extends require("events").EventEmitter
         })
 
         @io         = null
-        @slaves     = {}
+        @slaveConnections     = {}
         @_config    = null
 
         cUpdate = _.debounce =>
             config = @master.config()
-            for id, s of @slaves
+            for id, s of @slaveConnections
                 @logger.debug "emit config to slave #{ id }"
-                s.socket.emit "config", config
-        , 200
+                s.socket.emit Events.IO.CONFIG, config
+        , CONFIG_UPDATE_DEBOUNCE
 
-        @master.on "config_update", cUpdate
+        @master.on Events.Master.CONFIG_UPDATE, cUpdate
 
     #----------
 
     updateConfig: (config) ->
         @_config = config
 
-        for id,s of @slaves
-            s.socket.emit "config", config
+        for id,s of @slaveConnections
+            s.socket.emit Events.IO.CONFIG, config
 
     #----------
 
@@ -39,7 +49,7 @@ module.exports = class SlaveServer extends require("events").EventEmitter
         # fire up a socket listener on our slave port
         @io = SocketIO.listen server
 
-        @logger.info "Master now listening for slave connections."
+        @logger.info "master now listening for ws slave connections"
 
         # add our authentication
         @io.use (socket,next) =>
@@ -52,11 +62,11 @@ module.exports = class SlaveServer extends require("events").EventEmitter
                 next new Error "Invalid slave password."
 
         # look for slave connections
-        @io.on "connection", (sock) =>
+        @io.on "connect", (sock) =>
             @logger.debug "Master got connection"
             # a slave may make multiple connections to test transports. we're
             # only interested in the one that gives us the OK
-            sock.once "ok", (cb) =>
+            sock.once Events.IO.CONNECTION_OK, (cb) =>
                 @logger.debug "Got OK from incoming slave connection at #{sock.id}"
 
                 # ping back to let the slave know we're here
@@ -64,19 +74,19 @@ module.exports = class SlaveServer extends require("events").EventEmitter
 
                 @logger.debug "slave connection is #{sock.id}"
 
-                sock.emit "config", @_config if @_config
+                sock.emit Events.IO.CONFIG, @_config if @_config
 
-                @slaves[sock.id] = new SlaveConnection @ctx, sock
+                @slaveConnections[sock.id] = new SlaveConnection @ctx, sock
 
-                @slaves[sock.id].on "disconnect", =>
-                    delete @slaves[ sock.id ]
+                @slaveConnections[sock.id].on Events.IO.DISCONNECT, =>
+                    delete @slaveConnections[ sock.id ]
                     @emit "disconnect", sock.id
 
     #----------
 
     broadcastAudio: (k,chunk) ->
-        for id,s of @slaves
-            s.socket.emit "audio", {stream:k,chunk:chunk}
+        for id,s of @slaveConnections
+            s.socket.emit Events.IO.AUDIO, {stream:k,chunk:chunk}
 
     #----------
 
@@ -85,12 +95,12 @@ module.exports = class SlaveServer extends require("events").EventEmitter
 
         cb = _.once cb
 
-        af = _.after Object.keys(@slaves).length, =>
+        af = _.after Object.keys(@slaveConnections).length, =>
             cb null, statuses
 
         # -- now check the slaves -- #
 
-        for s,obj of @slaves
+        for s,obj of @slaveConnections
             do (s,obj) =>
                 saf = _.once af
 

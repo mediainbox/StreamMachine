@@ -1,14 +1,24 @@
 _ = require "underscore"
 
+# Monitoring component
+# - checks if a stream has no active sources
+# - checks if a slave is responsive/unresponsive
+# - checks if a slave buffer is out of sync with masters'
+
 module.exports = class Monitoring extends require("events").EventEmitter
-    constructor: (@master,@log,@opts) ->
+    constructor: (@ctx) ->
         super()
+
+        @master = @ctx.master
+        @logger = @ctx.logger.child({
+            component: "monitoring"
+        })
 
         # -- check monitored source mounts for sources -- #
 
         @_streamInt = setInterval =>
             for k,sm of @master.source_mounts
-                @master.alerts.update "sourceless", sm.key, !sm.source? if sm.opts.monitored
+                @master.alerts.update "sourceless", sm.key, !sm.source? if sm.config.monitored
         , 5*1000
 
         # -- Monitor Slave Status -- #
@@ -74,7 +84,7 @@ module.exports = class Monitoring extends require("events").EventEmitter
                                 if ( _.isNaN(sts) && _.isNaN(mts) ) || (mts - 10*1000) < sts < (mts + 10*1000)
                                     # ok
                                 else
-                                    @log.info "Slave #{stat.id} sync unhealthy on #{key}:#{ts}", sts, mts
+                                    @logger.info "Slave #{stat.id} sync unhealthy on #{key}:#{ts}", sts, mts
                                     unsynced = true
 
                         else

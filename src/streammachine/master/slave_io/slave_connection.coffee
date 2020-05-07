@@ -1,4 +1,4 @@
-
+{Events} = require('../../events')
 
 module.exports = class SlaveConnection extends require("events").EventEmitter
     constructor: (@ctx, @socket) ->
@@ -22,7 +22,7 @@ module.exports = class SlaveConnection extends require("events").EventEmitter
 
         # -- RPC Handlers -- #
 
-        @socket.on "vitals", (key, cb) =>
+        @socket.on Events.IO.SLAVE_VITALS, (key, cb) =>
 # respond with the stream's vitals
             @ctx.master.vitals key, cb
 
@@ -33,7 +33,7 @@ module.exports = class SlaveConnection extends require("events").EventEmitter
 #----------
 
     status: (cb) ->
-        @socket.emit "status", (err,status) =>
+        @socket.emit Events.IO.SLAVE_STATUS, (err,status) =>
             @last_status    = status
             @last_err       = err
 
@@ -45,4 +45,5 @@ module.exports = class SlaveConnection extends require("events").EventEmitter
         connected = Math.round( (Number(new Date()) - Number(@connected_at)) / 60000 )
         @logger.debug "slave #{@socket.id} disconnected (connection lasted #{connected} minutes)"
 
+        # TODO: who handles this?
         @emit "disconnect"

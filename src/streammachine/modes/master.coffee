@@ -21,7 +21,7 @@ module.exports = class MasterMode extends require("./base_mode")
         super(config)
 
         process.title = "SM:MASTER"
-        @logger.debug "Master mode starting"
+        @logger.debug "master mode start"
 
 
         # create a master
@@ -70,11 +70,12 @@ module.exports = class MasterMode extends require("./base_mode")
         # load any rewind buffers from disk
         @master.loadRewinds()
 
-        @handle = @server.listen @ctx.config.master.port
+        port = @ctx.config.master.port
+        @handle = @server.listen port
         @master.slaves.listen(@handle)
         @master.sourcein.listen()
 
-        @logger.info "Listening."
+        @logger.info "master server listening on port #{port}"
 
         cb? null, @
 

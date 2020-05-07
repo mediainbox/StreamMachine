@@ -19,9 +19,9 @@ module.exports = class UrlSource extends require("./base/base_source")
         @url = @opts.url
 
         @logger = @opts.logger.child({
-            component: 'sm:sources:proxy'
+            component: "source_url:#{opts.key}"
         })
-        @logger.debug "URL source created for #{@url}"
+        @logger.debug "url source created for #{@url}"
 
         @isFallback     = @opts.fallback or false
 
@@ -83,7 +83,7 @@ module.exports = class UrlSource extends require("./base/base_source")
     connect: =>
         @createParser()
 
-        @logger.debug "Begin connection to Icecast from #{@url}"
+        @logger.debug "connect to Icecast on #{@url}"
 
         url_opts = url.parse @url
         url_opts.headers = _.clone @defaultHeaders
@@ -92,7 +92,7 @@ module.exports = class UrlSource extends require("./base/base_source")
         @chunker.resetTime new Date()
 
         @ireq = Icy.get url_opts, (ice) =>
-            @logger.debug "Connected to Icecast from #{@url}"
+            @logger.debug "connected to Icecast at #{@url}"
 
             if ice.statusCode == 302
                 @url = ice.headers.location
@@ -140,7 +140,7 @@ module.exports = class UrlSource extends require("./base/base_source")
         # outgoing -> Stream
         @on "_chunk", @broadcastData
 
-        @logChunk = _.throttle(@_logChunk.bind(this), 10000)
+        @logChunk = _.throttle(@_logChunk.bind(this), 30000)
         @on "_chunk", @logChunk
 
     #----------

@@ -87,7 +87,7 @@ module.exports = class StandaloneMode extends require("./base_mode")
 
             @slave.configureStreams @master.config().streams
 
-        @log.debug "Standalone is listening on port #{@opts.port}"
+        @log.info "Standalone is listening on port #{@opts.port}"
 
         # -- Handoff? -- #
 

@@ -24,7 +24,7 @@ module.exports = MasterMode = (function() {
     constructor(config, cb) {
       super(config);
       process.title = "SM:MASTER";
-      this.logger.debug("Master mode starting");
+      this.logger.debug("master mode start");
       // create a master
       this.master = new Master(this.ctx);
       // Set up a server for our admin
@@ -75,12 +75,14 @@ module.exports = MasterMode = (function() {
 
     //----------
     _normalStart(cb) {
+      var port;
       // load any rewind buffers from disk
       this.master.loadRewinds();
-      this.handle = this.server.listen(this.ctx.config.master.port);
+      port = this.ctx.config.master.port;
+      this.handle = this.server.listen(port);
       this.master.slaves.listen(this.handle);
       this.master.sourcein.listen();
-      this.logger.info("Listening.");
+      this.logger.info(`master server listening on port ${port}`);
       return typeof cb === "function" ? cb(null, this) : void 0;
     }
 

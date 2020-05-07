@@ -51,7 +51,7 @@ module.exports = class BaseSource extends require("events").EventEmitter
     #----------
     
     createParser: ->
-        @log?.debug "Creating #{@opts.format} frames parser"
+        @log?.debug "create frames parser for format #{@opts.format}"
 
         # -- Turns data frames into chunks -- #
         @chunker = new FrameChunker @emitDuration * 1000

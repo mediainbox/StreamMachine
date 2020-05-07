@@ -1,4 +1,4 @@
-var CP, Logger, RPC, Slave, SlaveMode, _, debug, nconf, net, path;
+var RPC, Slave, SlaveMode, _, nconf, path;
 
 _ = require("underscore");
 
@@ -8,15 +8,7 @@ path = require("path");
 
 RPC = require("ipc-rpc");
 
-net = require("net");
-
-CP = require("child_process");
-
-Logger = require("../logger");
-
 Slave = require("../slave");
-
-debug = require("debug")("sm:modes:slave");
 
 //----------
 module.exports = SlaveMode = (function() {
@@ -24,16 +16,14 @@ module.exports = SlaveMode = (function() {
     constructor(config, cb) {
       super(config);
       process.title = "SM:SLAVE";
-      this.logger.debug("Slave mode starting");
+      this.logger.debug("slave mode start");
       this._handle = null;
       this._haveHandle = false;
       this._shuttingDown = false;
       this._inHandoff = false;
       this._lastAddress = null;
       this._initFull = false;
-      this.slave = new Slave(_.extend({}, config, {
-        logger: this.log
-      }), this);
+      this.slave = new Slave(this.ctx);
     }
 
   };

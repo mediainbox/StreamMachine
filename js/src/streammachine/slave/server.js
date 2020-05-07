@@ -24,7 +24,7 @@ greenlock = require("greenlock-express");
 
 module.exports = Server = class Server extends require('events').EventEmitter {
   constructor(opts1) {
-    var banned, idx_match, origin, ref, ref1, ref2, ref3, ref4, ref5;
+    var banned, origin, ref, ref1, ref2, ref3, ref4;
     super();
     this.opts = opts1;
     this.core = this.opts.core;
@@ -50,7 +50,7 @@ module.exports = Server = class Server extends require('events').EventEmitter {
     }
     // -- are we behind a proxy? -- #
     if (this.config.behind_proxy) {
-      this.logger.info("Enabling 'trust proxy' for Express.js");
+      this.logger.debug("enable 'trust proxy' for express");
       this.app.set("trust proxy", true);
     }
     // -- Set up sessions -- #
@@ -114,28 +114,13 @@ module.exports = Server = class Server extends require('events').EventEmitter {
         return next();
       }
     });
-    // -- HLS Full Index Test -- #
-    if ((ref5 = this.config.hls) != null ? ref5.limit_full_index : void 0) {
-      idx_match = RegExp(`${this.config.hls.limit_full_index}`);
-      this.app.use((req, res, next) => {
-        var ref6, ua;
-        ua = _.compact([req.query.ua, (ref6 = req.headers) != null ? ref6['user-agent'] : void 0]).join(" | ");
-        if (idx_match.test(ua)) {
-
-        } else {
-          // do nothing...
-          req.hls_limit = true;
-        }
-        return next();
-      });
-    }
     // -- Debug Logger -- #
     if (this.config.debug_incoming_requests) {
       this.app.use((req, res, next) => {
-        var ref6;
+        var ref5;
         this.logger.debug(`Request: ${req.url}`, {
           ip: req.ip,
-          ua: (ref6 = req.headers) != null ? ref6['user-agent'] : void 0
+          ua: (ref5 = req.headers) != null ? ref5['user-agent'] : void 0
         });
         return next();
       });
@@ -144,8 +129,8 @@ module.exports = Server = class Server extends require('events').EventEmitter {
     if (this.config.ua_skip) {
       banned = RegExp(`${this.config.ua_skip.join("|")}`);
       this.app.use((req, res, next) => {
-        var ref6;
-        if (!(((ref6 = req.headers) != null ? ref6['user-agent'] : void 0) && banned.test(req.headers["user-agent"]))) {
+        var ref5;
+        if (!(((ref5 = req.headers) != null ? ref5['user-agent'] : void 0) && banned.test(req.headers["user-agent"]))) {
           return next();
         }
         // request from banned agent...
@@ -180,35 +165,11 @@ module.exports = Server = class Server extends require('events').EventEmitter {
 
     // playlist file
     this.app.get("/:stream.pls", (req, res) => {
-      var host, ref6;
+      var host, ref5;
       res.set("content-type", "audio/x-scpls");
       res.set("connection", "close");
-      host = ((ref6 = req.headers) != null ? ref6.host : void 0) || req.stream.options.host;
+      host = ((ref5 = req.headers) != null ? ref5.host : void 0) || req.stream.options.host;
       return res.status(200).end(`[playlist]\nNumberOfEntries=1\nFile1=http://${host}/${req.stream.key}/\n`);
-    });
-    // -- HTTP Live Streaming -- #
-    this.app.get("/sg/:group.m3u8", (req, res) => {
-      return new this.core.Outputs.live_streaming.GroupIndex(req.group, {
-        req: req,
-        res: res
-      });
-    });
-    this.app.get("/:stream.m3u8", compression({
-      filter: function() {
-        return true;
-      }
-    }), (req, res) => {
-      return new this.core.Outputs.live_streaming.Index(req.stream, {
-        req: req,
-        res: res
-      });
-    });
-    this.app.get("/:stream/ts/:seg.(:format)", (req, res) => {
-      return new this.core.Outputs.live_streaming(req.stream, {
-        req: req,
-        res: res,
-        format: req.params.format
-      });
     });
     // head request
     this.app.head("/:stream", (req, res) => {
@@ -293,13 +254,14 @@ module.exports = Server = class Server extends require('events').EventEmitter {
 
   //----------
   _setupServer(app) {
-    var packageRoot, server;
+    var config, packageRoot, server;
+    config = this.config;
     if (process.env.NO_GREENLOCK) {
-      this.logger.info("Setup http server on port " + this.config.http_port);
+      this.logger.info("Setup http server on port " + config.http_port);
       server = http.createServer(app);
-      return server.listen(this.config.http_port || 80);
+      return server.listen(config.http_port || 80);
     } else {
-      this.logger.info("Setup Greenlock http/https servers");
+      this.logger.debug("setup Greenlock http/https servers");
       packageRoot = path.resolve(__dirname, '../../../..');
       return greenlock.init({
         packageRoot,
@@ -307,16 +269,16 @@ module.exports = Server = class Server extends require('events').EventEmitter {
         cluster: true,
         workers: 4,
         maintainerEmail: "contact@mediainbox.io"
-      }).ready((glx) => {
+      }).ready(function(glx) {
         var plainAddr, plainPort, plainServer;
         plainServer = glx.httpServer(app);
-        plainAddr = this.config.http_ip || '0.0.0.0';
-        plainPort = this.config.http_port || 80;
+        plainAddr = config.http_ip || '0.0.0.0';
+        plainPort = config.http_port || 80;
         return plainServer.listen(plainPort, plainAddr, function() {
           var secureAddr, securePort, secureServer;
           secureServer = glx.httpsServer(null, app);
-          secureAddr = this.config.https_ip || '0.0.0.0';
-          securePort = this.config.https_port || 443;
+          secureAddr = config.https_ip || '0.0.0.0';
+          securePort = config.https_port || 443;
           return secureServer.listen(securePort, secureAddr, function() {
             plainServer.removeAllListeners('error');
             secureServer.removeAllListeners('error');

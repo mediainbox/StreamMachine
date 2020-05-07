@@ -21,9 +21,9 @@ module.exports = BaseMode = class BaseMode extends require("events").EventEmitte
     this.log = this.logger; // compatibility
     
     // see runner for restart trigger based on SIGUSR2
-    this.logger.debug("Attaching listener for SIGUSR2 restarts.");
+    this.logger.debug("attach listener for SIGUSR2 restarts.");
     if (process.listeners("SIGUSR2").length > 0) {
-      this.logger.info("Skipping SIGUSR2 registration for handoffs since another listener is registered.");
+      this.logger.info("skipping SIGUSR2 registration for handoffs since another listener is registered.");
     } else {
       // Support a handoff trigger via USR2
       process.on("SIGUSR2", () => {

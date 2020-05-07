@@ -15,13 +15,16 @@ debug = require("debug")("sm:analytics")
 # * Answer questions about current number of listeners at any given time
 
 module.exports = class Analytics
-    constructor: (@opts,cb) ->
-        @log = @opts.log
+    constructor: (@ctx) ->
+        @logger = @ctx.logger.child(
+            component: "analytics"
+        )
 
-        @_timeout_sec = Number(@opts.config.finalize_secs)
+        @config = @ctx.config.analytics
+        @_timeout_sec = Number(@config.finalize_secs)
 
-        if @opts.redis
-            @redis = @opts.redis.client
+        if @ctx.providers.redis
+            @redis = @ctx.providers.redis
 
         # track open sessions
         @sessions = {}
@@ -36,14 +39,13 @@ module.exports = class Analytics
         # what sessions have we seen since then?
 
         # -- Redis Session Sweep -- #
-
         if @redis
-            @log.info "Analytics setting up Redis session sweeper"
+            @logger.info "Analytics setting up Redis session sweeper"
 
             setInterval =>
                 # look for sessions that should be written (score less than now)
                 @redis.zrangebyscore "session-timeouts", 0, Math.floor( Number(new Date) / 1000), (err,sessions) =>
-                    return @log.error "Error fetching sessions to finalize: #{err}" if err
+                    return @logger.error "Error fetching sessions to finalize: #{err}" if err
 
                     _sFunc = =>
                         if s = sessions.shift()
@@ -120,7 +122,7 @@ module.exports = class Analytics
 
             # set a TTL on our key, so that it doesn't stay indefinitely
             @redis.pexpire key, 5*60*1000, (err) =>
-                @log.error "Failed to set Redis TTL for #{key}: #{err}" if err
+                @logger.error "Failed to set Redis TTL for #{key}: #{err}" if err
 
         else
             # use memory stash
@@ -182,19 +184,19 @@ module.exports = class Analytics
 
     _triggerSession: (session) ->
         @_scrubSessionFor session, (err) =>
-            return @log.error "Error cleaning session cache: #{err}" if err
+            return @logger.error "Error cleaning session cache: #{err}" if err
 
             @_finalizeSession session, (err,obj) =>
-                return @log.error "Error assembling session: #{err}" if err
+                return @logger.error "Error assembling session: #{err}" if err
 
                 if obj
                     @_storeSession obj, (err) =>
-                        @log.error "Error writing session: #{err}" if err
+                        @logger.error "Error writing session: #{err}" if err
 
     #----------
 
     _finalizeSession: (id,cb) ->
-        @log.debug "Finalizing session for #{ id }"
+        @logger.debug "Finalizing session for #{ id }"
 
         # This is a little ugly. We need to take several steps:
         # 1) Have we ever finalized this session id?
@@ -208,21 +210,21 @@ module.exports = class Analytics
 
         @_selectPreviousSession id, (err,ts) =>
             if err
-                @log.error err
+                @logger.error err
                 return cb? err
 
             @_selectSessionStart id, (err,start) =>
                 if err
-                    @log.error err
+                    @logger.error err
                     return cb err
 
                 if !start
-                    @log.debug "Attempt to finalize invalid session. No start event for #{id}."
+                    @logger.debug "Attempt to finalize invalid session. No start event for #{id}."
                     return cb null, false
 
                 @_selectListenTotals id, ts, (err,totals) =>
                     if err
-                        @log.error err
+                        @logger.error err
                         return cb? err
 
                     if !totals
@@ -243,18 +245,3 @@ module.exports = class Analytics
                         connected:  ( Number(totals.last_listen) - Number(ts||start.time) ) / 1000
 
                     cb null, session
-
-    #----------
-
-    class @LogTransport extends winston.Transport
-        name: "analytics"
-
-        constructor: (@a) ->
-            super level:"interaction"
-
-        log: (level,msg,meta,cb) ->
-            if level == "interaction"
-                @a._log meta
-                cb?()
-
-    #----------

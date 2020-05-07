@@ -1,0 +1,28 @@
+{
+  "ping-standalone": 1,
+  "ping-slave": 1588038709015,
+  "ping-archiver": 1,
+  "client": "cadena3",
+  "ping-master": 1588038541791,
+  "options": {
+    "mode": "slave",
+    "slave": {
+      "master": [
+        "ws://localhost:8020?password=polkmn1!c3"
+      ]
+    },
+    "cluster": 1,
+    "port": 9001,
+    "log": {
+      "stdout": {
+        "ignore": "request,interaction"
+      }
+    },
+    "behind_proxy": true,
+    "geolock": {
+      "config_file": "./config/GeoLite2-Country.mmdb",
+      "enabled": false
+    }
+  },
+  "name": "dev"
+}

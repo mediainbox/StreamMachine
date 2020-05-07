@@ -1,10 +1,20 @@
-var SlaveConnection, SlaveServer, SocketIO, _;
+var CONFIG_UPDATE_DEBOUNCE, Events, SlaveConnection, SlaveServer, SocketIO, _;
 
 _ = require("underscore");
 
 SocketIO = require("socket.io");
 
 SlaveConnection = require('./slave_connection');
+
+({Events} = require('../../events'));
+
+// Socket.IO server that listens for Slave connections
+// Will create a SlaveConnection for each connected Slave
+// See also slave/MasterConnection for the counterpart on the slave
+// Emits:
+// - Events.IO.CONFIG
+// - Events.IO.AUDIO
+CONFIG_UPDATE_DEBOUNCE = 200;
 
 module.exports = SlaveServer = class SlaveServer extends require("events").EventEmitter {
   constructor(ctx) {
@@ -17,32 +27,32 @@ module.exports = SlaveServer = class SlaveServer extends require("events").Event
       component: "slave_server"
     });
     this.io = null;
-    this.slaves = {};
+    this.slaveConnections = {};
     this._config = null;
     cUpdate = _.debounce(() => {
       var config, id, ref, results, s;
       config = this.master.config();
-      ref = this.slaves;
+      ref = this.slaveConnections;
       results = [];
       for (id in ref) {
         s = ref[id];
         this.logger.debug(`emit config to slave ${id}`);
-        results.push(s.socket.emit("config", config));
+        results.push(s.socket.emit(Events.IO.CONFIG, config));
       }
       return results;
-    }, 200);
-    this.master.on("config_update", cUpdate);
+    }, CONFIG_UPDATE_DEBOUNCE);
+    this.master.on(Events.Master.CONFIG_UPDATE, cUpdate);
   }
 
   //----------
   updateConfig(config) {
     var id, ref, results, s;
     this._config = config;
-    ref = this.slaves;
+    ref = this.slaveConnections;
     results = [];
     for (id in ref) {
       s = ref[id];
-      results.push(s.socket.emit("config", config));
+      results.push(s.socket.emit(Events.IO.CONFIG, config));
     }
     return results;
   }
@@ -51,7 +61,7 @@ module.exports = SlaveServer = class SlaveServer extends require("events").Event
   listen(server) {
     // fire up a socket listener on our slave port
     this.io = SocketIO.listen(server);
-    this.logger.info("Master now listening for slave connections.");
+    this.logger.info("master now listening for ws slave connections");
     // add our authentication
     this.io.use((socket, next) => {
       var ref;
@@ -65,21 +75,21 @@ module.exports = SlaveServer = class SlaveServer extends require("events").Event
       }
     });
     // look for slave connections
-    return this.io.on("connection", (sock) => {
+    return this.io.on("connect", (sock) => {
       this.logger.debug("Master got connection");
       // a slave may make multiple connections to test transports. we're
       // only interested in the one that gives us the OK
-      return sock.once("ok", (cb) => {
+      return sock.once(Events.IO.CONNECTION_OK, (cb) => {
         this.logger.debug(`Got OK from incoming slave connection at ${sock.id}`);
         // ping back to let the slave know we're here
         cb("OK");
         this.logger.debug(`slave connection is ${sock.id}`);
         if (this._config) {
-          sock.emit("config", this._config);
+          sock.emit(Events.IO.CONFIG, this._config);
         }
-        this.slaves[sock.id] = new SlaveConnection(this.ctx, sock);
-        return this.slaves[sock.id].on("disconnect", () => {
-          delete this.slaves[sock.id];
+        this.slaveConnections[sock.id] = new SlaveConnection(this.ctx, sock);
+        return this.slaveConnections[sock.id].on(Events.IO.DISCONNECT, () => {
+          delete this.slaveConnections[sock.id];
           return this.emit("disconnect", sock.id);
         });
       });
@@ -89,11 +99,11 @@ module.exports = SlaveServer = class SlaveServer extends require("events").Event
   //----------
   broadcastAudio(k, chunk) {
     var id, ref, results, s;
-    ref = this.slaves;
+    ref = this.slaveConnections;
     results = [];
     for (id in ref) {
       s = ref[id];
-      results.push(s.socket.emit("audio", {
+      results.push(s.socket.emit(Events.IO.AUDIO, {
         stream: k,
         chunk: chunk
       }));
@@ -106,10 +116,10 @@ module.exports = SlaveServer = class SlaveServer extends require("events").Event
     var af, obj, ref, results, s, statuses;
     statuses = [];
     cb = _.once(cb);
-    af = _.after(Object.keys(this.slaves).length, () => {
+    af = _.after(Object.keys(this.slaveConnections).length, () => {
       return cb(null, statuses);
     });
-    ref = this.slaves;
+    ref = this.slaveConnections;
     // -- now check the slaves -- #
     results = [];
     for (s in ref) {

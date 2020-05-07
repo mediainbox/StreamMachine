@@ -13,12 +13,12 @@ module.exports = SocketSource = class SocketSource extends require("events").Eve
       subcomponent: "socket_source"
     });
     this.log.debug(`created SocketSource for ${this.stream.key}`);
-    this.slave.io.on(`audio:${this.stream.key}`, (chunk) => {
+    this.slave.masterConnection.on(`audio:${this.stream.key}`, (chunk) => {
       return this.emit("data", chunk);
     });
     this._streamKey = null;
     getVitals = (retries = 0) => {
-      return this.slave.io.vitals(this.stream.key, (err, obj) => {
+      return this.slave.masterConnection.vitals(this.stream.key, (err, obj) => {
         if (err) {
           this.log.error(`Failed to get vitals (${retries} retries remaining): ${err}`);
           if (retries > 0) {
@@ -75,14 +75,14 @@ module.exports = SocketSource = class SocketSource extends require("events").Eve
 
     // GET request for rewind buffer
     this.log.debug(`Making Rewind Buffer request for ${this.stream.key}`, {
-      sock_id: this.slave.io.id
+      sock_id: this.slave.masterConnection.id
     });
     req = http.request({
-      hostname: this.slave.io.io.io.opts.host,
-      port: this.slave.io.io.io.opts.port,
+      hostname: this.slave.masterConnection.io.io.opts.host,
+      port: this.slave.masterConnection.io.io.opts.port,
       path: `/s/${this.stream.key}/rewind`,
       headers: {
-        'stream-slave-id': this.slave.io.id
+        'stream-slave-id': this.slave.masterConnection.id
       }
     }, (res) => {
       clearTimeout(gRT);

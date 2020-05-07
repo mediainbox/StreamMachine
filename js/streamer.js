@@ -1,33 +1,27 @@
+/*
+require('@google-cloud/trace-agent').start
+    projectId: process.env.GCLOUD_PROJECT
+    keyFilename: process.env.GCLOUD_KEY_FILENAME
+*/
 var StreamMachine, Streamer, _, debug, heapdump, nconf, request, streamer;
-
-debug = require('debug')('integrations');
 
 process.env.NEW_RELIC_NO_CONFIG_FILE = 'true';
 
-_ = require("lodash");
-
-if (!process.env.NEW_RELIC_APP_NAME || !process.env.NEW_RELIC_LICENSE_KEY) {
-  debug('[integrations] skipping NewRelic, missing NEW_RELIC_APP_NAME or NEW_RELIC_LICENSE_KEY env vars');
-} else {
-  debug('[integrations] loading NewRelic');
+if (process.env.NEW_RELIC_APP_NAME && process.env.NEW_RELIC_LICENSE_KEY) {
+  console.log('[integrations] loading NewRelic');
   require('newrelic');
 }
-
-require('@google-cloud/trace-agent').start({
-  projectId: process.env.GCLOUD_PROJECT,
-  keyFilename: process.env.GCLOUD_KEY_FILENAME
-});
 
 //require('@google-cloud/debug-agent').start
 //    projectId: process.env.GCLOUD_PROJECT
 //    keyFilename: process.env.GCLOUD_KEY_FILENAME
-_ = require("underscore");
+_ = require("lodash");
 
 nconf = require("nconf");
 
 request = require("request");
 
-debug = require("debug")("sm:master:streamer");
+debug = require("debug")("sm:streamer");
 
 StreamMachine = require("./src/streammachine");
 
@@ -47,14 +41,14 @@ Streamer = class Streamer {
   //----------
   readConfig(callback) {
     if (this.config.client) {
-      debug(`Using local config: ${this.config.config}`);
+      debug(`using local config: ${this.config.config}`);
       callback(this.config);
       return;
     }
     if (!this.config.uri) {
       throw new Error('No remote config URL supplied in config file');
     }
-    debug(`Fetch remove config from ${this.config.uri}`);
+    debug(`fetch remove config from ${this.config.uri}`);
     return request.get(this.config.uri, {
       json: true,
       qs: {
