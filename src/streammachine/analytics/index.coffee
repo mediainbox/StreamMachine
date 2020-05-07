@@ -352,8 +352,11 @@ module.exports = class Analytics
             @es.search body:body, index:indices, ignoreUnavailable:true, (err,res) =>
                 return cb new Error "Error querying session start for #{id}: #{err}" if err
 
-                if res.body.hits && res.body.hits.total.value > 0
-                    cb null, _.extend {}, res.body.hits.hits[0]._source, time:new Date(res.body.hits.hits[0]._source.time)
+                try
+                    if res.body.hits && res.body.hits.total.value > 0
+                        cb null, _.extend {}, res.body.hits.hits[0]._source, time:new Date(res.body.hits.hits[0]._source.time)
+                catch error
+                    @log.error error
     #----------
 
     _selectPreviousSession: (id,cb) ->

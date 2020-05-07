@@ -387,13 +387,19 @@ module.exports = Analytics = (function() {
           index: indices,
           ignoreUnavailable: true
         }, function(err, res) {
+          var error;
           if (err) {
             return cb(new Error("Error querying session start for " + id + ": " + err));
           }
-          if (res.body.hits && res.body.hits.total.value > 0) {
-            return cb(null, _.extend({}, res.body.hits.hits[0]._source, {
-              time: new Date(res.body.hits.hits[0]._source.time)
-            }));
+          try {
+            if (res.body.hits && res.body.hits.total.value > 0) {
+              return cb(null, _.extend({}, res.body.hits.hits[0]._source, {
+                time: new Date(res.body.hits.hits[0]._source.time)
+              }));
+            }
+          } catch (_error) {
+            error = _error;
+            return _this.log.error(error);
           }
         });
       };

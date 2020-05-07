@@ -290,7 +290,8 @@ module.exports = Server = (function(_super) {
   };
 
   Server.prototype._setupServer = function(app) {
-    var packageRoot, server;
+    var config, packageRoot, server;
+    config = this.config;
     if (process.env.NO_GREENLOCK) {
       this.logger.info("Setup http server on port " + this.config.port);
       server = http.createServer(app);
@@ -308,13 +309,13 @@ module.exports = Server = (function(_super) {
         return function(glx) {
           var plainAddr, plainPort, plainServer;
           plainServer = glx.httpServer(app);
-          plainAddr = _this.config.http_ip || '0.0.0.0';
-          plainPort = _this.config.http_port || 80;
+          plainAddr = config.http_ip || '0.0.0.0';
+          plainPort = config.http_port || 80;
           return plainServer.listen(plainPort, plainAddr, function() {
             var secureAddr, securePort, secureServer;
             secureServer = glx.httpsServer(null, app);
-            secureAddr = this.config.https_ip || '0.0.0.0';
-            securePort = this.config.https_port || 443;
+            secureAddr = config.https_ip || '0.0.0.0';
+            securePort = config.https_port || 443;
             return secureServer.listen(securePort, secureAddr, function() {
               plainServer.removeAllListeners('error');
               secureServer.removeAllListeners('error');
