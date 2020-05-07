@@ -1,0 +1,13 @@
+{
+  "version": 3,
+  "file": "parse_aac_headers.js",
+  "sourceRoot": "../../util/",
+  "sources": [
+    "parse_aac_headers.coffee"
+  ],
+  "names": [],
+  "mappings": "AAAA,IAAA,GAAA,EAAA,CAAA,EAAA,GAAA,EAAA,GAAA,EAAA,SAAA,EAAA,WAAA,EAAA;;AAAA,GAAA,GAAM,OAAA,CAAQ,qCAAR;;AACN,CAAA,GAAI,OAAA,CAAQ,YAAR;;AAEJ,GAAA,GAAM,IAAI,GAAJ,CAAA;;AAEN,WAAA,GAAc;;AACd,WAAA,GAAc;;AAEd,SAAA,GAAY,CAAA,GAAI,CAAC,EAAA,GAAG,CAAJ;;AAChB,GAAA,GAAM;;AAEN,GAAG,CAAC,EAAJ,CAAO,OAAP,EAAgB,CAAC,GAAD,EAAK,MAAL,CAAA,GAAA;AAChB,MAAA;EAAI,WAAA,IAAe;EAEf,OAAA,GAAU,MAAM,CAAC,YAAP,GAAsB,MAAM,CAAC,QAA7B,GAAwC,IAAxC,GAA+C;EAEzD,QAAA,MAAQ;EACR,GAAA,GAAM,SAAA,GAAY,OAAZ,GAAsB,CAAC,CAAA,GAAE,SAAH,CAAA,GAAgB;EAE5C,OAAO,CAAC,GAAR,CAAY,CAAA,OAAA,CAAA,CAAU,WAAV,CAAA,EAAA,CAAA,CAA0B,OAA1B,CAAA,EAAA,CAAA,CAAsC,IAAI,CAAC,KAAL,CAAW,GAAA,GAAM,IAAjB,CAAtC,CAAA,CAAA,CAAZ;AAEA,SAAO;EACP,IAAG,WAAH;IACI,IAAG,CAAC,CAAC,OAAF,CAAU,WAAV,EAAsB,GAAtB,CAAH;AAAA;KAAA,MAAA;;aAGI,OAAO,CAAC,GAAR,CAAY,CAAA,OAAA,CAAA,CAAU,WAAV,CAAA,EAAA,CAAZ,EAAuC,GAAvC,EAHJ;KADJ;GAAA,MAAA;IAOI,WAAA,GAAc;WACd,OAAO,CAAC,GAAR,CAAY,gBAAZ,EAA8B,GAA9B,EARJ;;AAXY,CAAhB;;AAqBA,OAAO,CAAC,KAAK,CAAC,IAAd,CAAmB,GAAnB",
+  "sourcesContent": [
+    "AAC = require \"../coffee/streammachine/parsers/aac\"\r\n_ = require \"underscore\"\r\n\r\naac = new AAC\r\n\r\nfirstHeader = null\r\nheaderCount = 0\r\n\r\nema_alpha = 2 / (40+1)\r\nema = null\r\n\r\naac.on \"frame\", (buf,header) =>\r\n    headerCount += 1\r\n\r\n    bitrate = header.frame_length / header.duration * 1000 * 8\r\n\r\n    ema ||= bitrate\r\n    ema = ema_alpha * bitrate + (1-ema_alpha) * ema\r\n\r\n    console.log \"header #{headerCount}: #{bitrate} (#{Math.round(ema / 1000)})\"\r\n\r\n    return true\r\n    if firstHeader\r\n        if _.isEqual(firstHeader,obj)\r\n            # do nothing\r\n        else\r\n            console.log \"Header #{headerCount}: \", obj\r\n\r\n    else\r\n        firstHeader = obj\r\n        console.log \"First header: \", obj\r\n\r\nprocess.stdin.pipe aac\r\n"
+  ]
+}
