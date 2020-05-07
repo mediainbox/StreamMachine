@@ -1,7 +1,7 @@
 path = require "path"
 fs = require "fs"
 
-FakeAdServer = require "../src/streammachine/util/fake_ad_server"
+FakeAdServer = require "../coffee/streammachine/util/fake_ad_server"
 
 @args = require("yargs")
     .usage("Usage: $0 --template ./test/files/ads/vast.xml --port 8002")

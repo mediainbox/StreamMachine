@@ -1,5 +1,5 @@
-RewindBuffer    = require "../src/streammachine/rewind_buffer"
-Logger          = require "../src/streammachine/logger"
+RewindBuffer    = require "../coffee/streammachine/rewind_buffer"
+Logger          = require "../coffee/streammachine/logger"
 
 path = require "path"
 fs = require "fs"

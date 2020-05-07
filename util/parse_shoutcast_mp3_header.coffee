@@ -1,4 +1,4 @@
-MP3 = require "../src/streammachine/parsers/mp3"
+MP3 = require "../coffee/streammachine/parsers/mp3"
 _ = require "underscore"
 
 mp3= new MP3

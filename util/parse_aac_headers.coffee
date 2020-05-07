@@ -1,4 +1,4 @@
-AAC = require "../src/streammachine/parsers/aac"
+AAC = require "../coffee/streammachine/parsers/aac"
 _ = require "underscore"
 
 aac = new AAC

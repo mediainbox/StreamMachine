@@ -20,7 +20,7 @@ nconf = require "nconf"
 request = require "request"
 debug = require("debug") "sm:streamer"
 
-StreamMachine = require "./src/streammachine"
+StreamMachine = require "./coffee/streammachine"
 
 class Streamer
     constructor: (@config) ->

@@ -1,4 +1,4 @@
-StreamListener = require "../src/streammachine/util/stream_listener"
+StreamListener = require "../coffee/streammachine/util/stream_listener"
 
 argv = require("yargs")
     .usage("Usage: $0 --host localhost --port 8001 --stream foo --shoutcast")

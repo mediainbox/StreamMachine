@@ -1,7 +1,7 @@
 path = require "path"
 fs = require "fs"
 
-FakeTranscoder = require "../src/streammachine/util/fake_transcoder"
+FakeTranscoder = require "../coffee/streammachine/util/fake_transcoder"
 
 @args = require("yargs")
     .usage("Usage: $0 --dir ./test/files/mp3 --port 8001")
