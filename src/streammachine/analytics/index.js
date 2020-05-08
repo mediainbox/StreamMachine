@@ -133,21 +133,6 @@ module.exports = Analytics = class Analytics {
               }
             });
 
-            console.log('BATCH WRITE', {
-              index: idx[0],
-              body: {
-                session_id: obj.client.session_id,
-                time: new Date(obj.time),
-                kbytes: obj.kbytes,
-                duration: obj.duration,
-                session_duration: dur,
-                stream: obj.stream,
-                client: obj.client,
-                offsetSeconds: obj.offsetSeconds,
-                contentTime: obj.contentTime,
-                type: "listen"
-              }
-            })
             return typeof cb === "function" ? cb(null) : void 0;
           });
       }

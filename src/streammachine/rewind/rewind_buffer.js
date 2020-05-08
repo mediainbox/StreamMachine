@@ -473,9 +473,9 @@ module.exports = RewindBuffer = (function() {
       // make sure there's something to send
       if (this.buf.length === 0) {
         this.push(null);
-        return false;
+      } else {
+        this._writeHeader();
       }
-      this._writeHeader();
     }
 
     //----------

@@ -49,7 +49,7 @@ Streamer = class Streamer {
     if (!this.config.uri) {
       throw new Error('No remote config URL supplied in config file');
     }
-    debug(`fetch remove config from ${this.config.uri}`);
+    debug(`fetch remote config from ${this.config.uri}`);
     return request.get(this.config.uri, {
       json: true,
       qs: {

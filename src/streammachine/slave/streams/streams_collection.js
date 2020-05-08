@@ -6,6 +6,10 @@ module.exports = class StreamsCollection {
 
   }
 
+  toArray() {
+    return Object.values(this.map);
+  }
+
   get(key) {
     return this.map[key];
   }

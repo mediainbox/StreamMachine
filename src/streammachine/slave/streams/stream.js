@@ -1,6 +1,5 @@
 const { Events } = require('../../events');
 const _ = require("lodash");
-const uuid = require("node-uuid");
 const RewindBuffer = require("../../rewind/rewind_buffer");
 const EventEmitter = require('events').EventEmitter;
 
@@ -8,28 +7,32 @@ const INTERNAL_EVENTS = {
   SOURCE_RECEIVED: "SOURCE_RECEIVED"
 };
 
-// Stream is the componenent where that listeners connect to.
-// Loads data from rewind buffer and pushes them to clients
+/**
+ * Stream is the componenent where that listeners connect to.
+ * Loads data from rewind buffer and pushes them to clients
+ */
 module.exports = class Stream extends EventEmitter {
   constructor(key, opts, ctx) {
     super();
 
-    this.ctx = ctx;
+    // remove our max listener count
+    this.setMaxListeners(0);
 
+    this.ctx = ctx;
     this.logger = ctx.logger.child({
       component: `stream[${key}]`
     })
 
     this.key = key;
     this.opts = opts;
+
     this.StreamTitle = this.opts.metaTitle;
     this.StreamUrl = "";
-    // remove our max listener count
-    this.setMaxListeners(0);
+
     this._id_increment = 1;
     this._lmeta = {};
-    this.preroll = null;
-    // -- Stats Counters -- #
+
+    // stats
     this._totalConnections = 0;
     this._totalKBytesSent = 0;
 
