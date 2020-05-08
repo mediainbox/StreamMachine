@@ -7,3 +7,4 @@ gcloud.json
 dump/*
 *.dump
 logs
+greenlock.d
