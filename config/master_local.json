@@ -21,7 +21,10 @@
     },
     "debug_incoming_requests": true,
     "log": {
-      "stdout": true
+      "json": {
+        "file": "/dev/stream-machine/logs/log.txt"
+      },
+      "stackdriver": true
     },
     "source_port": 8080,
     "enable-heapdump": true,

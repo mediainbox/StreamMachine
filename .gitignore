@@ -1,14 +1,9 @@
 config/dev
-z/
 .idea
 newrelic.js
 node_modules
 rewind_dump
 gcloud.json
-
-*.js
-*.js.map
-*.map
-!js/
-!js/**/*.js
-!js/**/*.map
+dump/*
+*.dump
+logs
