@@ -27,6 +27,7 @@ StreamMachine = require("./streammachine");
 
 Streamer = class Streamer {
   constructor(config1) {
+    this.mode = nconf.get("mode");
     this.config = config1;
   }
 

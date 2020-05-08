@@ -59,7 +59,7 @@ module.exports = Master = (function() {
       this.ctx.events = new EventsHub();
       this.ctx.master = this;
       this.logger.debug("initialize master");
-      if (this.config.redis != null && 0) {
+      if (this.config.redis != null) {
         // -- load our streams configuration from redis -- #
 
         // we store streams and sources into Redis, but not our full
@@ -118,7 +118,7 @@ module.exports = Master = (function() {
       //@logger.logger.add new Analytics.LogTransport(@analytics), {}, true
 
       // -- Rewind Dump and Restore -- #
-      if (this.config.rewind_dump) {
+      if (this.config.rewind_dump && false) {
         this.rewind_dr = new RewindDumpRestore(this, this.config.rewind_dump);
       }
       // -- Set up our monitoring module -- #
