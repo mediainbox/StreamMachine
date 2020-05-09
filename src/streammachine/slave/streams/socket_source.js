@@ -1,5 +1,6 @@
 const http = require("http");
 const {EventEmitter} = require("events");
+const {Events} = require('../../events');
 
 /**
  * Emulate a source connection receiving data via sockets from master
@@ -27,7 +28,7 @@ module.exports = class SocketSource extends EventEmitter {
     });
 
     getVitals = (retries = 0) => {
-      return this.masterConnection.vitals(this.stream.key, (err, obj) => {
+      this.ctx.events.emit(Events.Link.SLAVE_VITALS, this.stream.key, (err, obj) => {
         if (err) {
           this.logger.error(`Failed to get vitals (${retries} retries remaining): ${err}`);
           if (retries > 0) {

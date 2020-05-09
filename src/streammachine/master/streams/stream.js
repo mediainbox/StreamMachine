@@ -61,7 +61,8 @@ module.exports = Stream = (function() {
         })
       });
       // Rewind listens to us, not to our source
-      this.rewind.emit("source", this);
+      this.rewind._rConnectSource(this)
+      //this.rewind.emit("source", this);
       // Pass along buffer loads
       this.rewind.on("buffer", (c) => {
         return this.emit("buffer", c);

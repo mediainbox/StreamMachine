@@ -164,11 +164,6 @@ module.exports = RewindBuffer = (function() {
         this._rsecsPerChunk = vitals.emitDuration;
         this._rstreamKey = vitals.streamKey;
         this._rUpdateMax();
-        return this.logger.debug("rewind's max buffer length is ???", {
-          max: this._rmax,
-          secsPerChunk: this._rsecsPerChunk,
-          secs: vitals.emitDuration
-        });
       }
     }
 
@@ -179,6 +174,7 @@ module.exports = RewindBuffer = (function() {
         this._rbuffer.setMax(this._rmax);
         this._rburst = Math.round(this._rburstsecs / this._rsecsPerChunk);
       }
+
       return this.logger.debug(`rewind max buffer length is at ${this._rmax} chunks (${this._rsecs} seconds) `);
     }
 

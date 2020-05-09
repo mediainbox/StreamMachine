@@ -1,4 +1,4 @@
-const { Events } = require('../../events');
+const { Events, BetterEventEmitter } = require('../../events');
 const _ = require("lodash");
 const RewindBuffer = require("../../rewind/rewind_buffer");
 const EventEmitter = require('events').EventEmitter;
@@ -11,7 +11,7 @@ const INTERNAL_EVENTS = {
  * Stream is the componenent where that listeners connect to.
  * Loads data from rewind buffer and pushes them to clients
  */
-module.exports = class Stream extends EventEmitter {
+module.exports = class Stream extends BetterEventEmitter {
   constructor(key, opts, ctx) {
     super();
 
@@ -61,13 +61,7 @@ module.exports = class Stream extends EventEmitter {
       this.source.on("buffer", this.bufferFunc);
     });
 
-    // now run configure...
-    process.nextTick(() => {
-      return this.configure(this.opts);
-    });
-
     // -- Wait to Load Rewind Buffer -- #
-    this.emit("_source_waiting");
     this._sourceInitializing = true;
 
     this._sourceInitT = setTimeout(() => {
@@ -100,6 +94,11 @@ module.exports = class Stream extends EventEmitter {
           return this.logger.debug("Sending _source_init after load success");
         });
       });
+    });
+
+
+    process.nextTick(() => {
+      return this.configure(this.opts);
     });
   }
 
@@ -140,19 +139,6 @@ module.exports = class Stream extends EventEmitter {
           return this.source.getStreamKey(cb);
         });
       }
-    }
-  }
-
-  //----------
-  _once_source_loaded(cb) {
-    if (this._sourceInitializing) {
-      // wait for a source_init event
-      this.logger.debug("_once_source_loaded is waiting for _source_init");
-      return this.once("_source_init", () => {
-        return typeof cb === "function" ? cb() : void 0;
-      });
-    } else {
-      return typeof cb === "function" ? cb() : void 0;
     }
   }
 
@@ -258,7 +244,7 @@ module.exports = class Stream extends EventEmitter {
     // don't ask for a rewinder while our source is going through init,
     // since we don't want to fail an offset request that should be
     // valid.
-    return this._once_source_loaded(() => {
+    return this.runOrWait("_source_init", () => {
       // get a rewinder (handles the actual broadcast)
       return this.rewindBuffer.getRewinder(lmeta.id, opts, (err, rewind, ...extra) => {
         if (err) {

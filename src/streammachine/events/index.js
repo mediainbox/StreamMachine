@@ -30,5 +30,6 @@ Events = {
 
 module.exports = {
   EventsHub: EventEmitter,
-  Events: Events
+  Events: Events,
+  BetterEventEmitter: require('./better_event_emitter')
 };

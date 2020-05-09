@@ -35,6 +35,7 @@ module.exports = {
       transports.push(new StackdriverLogging({
         name: "stackdriver",
         logName: 'stream_machine',
+        level: config.log.stackdriver.level || 'debug',
         serviceContext: {
           service: 'stream-machine',
           version: '1.0.0'

@@ -72,6 +72,24 @@ module.exports = MasterAPI = class MasterAPI {
     this.app.options("*", (req, res) => {
       return res.status(200).end("");
     });
+
+    this.app.get('/help', (req, res) => {
+      res.send(`
+StreamMachine Master API
+  Available endpoints:
+    GET /listeners 
+    GET /streams
+      GET /streams/:stream
+      GET /streams/:stream/config
+    GET /sources
+      GET /sources/:source/mount
+      GET /sources/:source/config
+    GET /config
+    GET /slaves
+    GET /users
+      `);
+    });
+
     // -- Routing -- #
     this.app.get("/listeners", (req, res) => {
       if (this.master.analytics) {

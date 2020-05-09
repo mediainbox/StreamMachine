@@ -1,19 +1,19 @@
-var EventEmitter, MasterConfigRedisStore, debug;
+const EventEmitter = require('events').EventEmitter;
 
-EventEmitter = require('events').EventEmitter;
-
-debug = require("debug")("sm:redis_config");
-
-module.exports = MasterConfigRedisStore = class MasterConfigRedisStore extends EventEmitter {
-  constructor(redis) {
+module.exports = class MasterConfigRedisStore extends EventEmitter {
+  constructor(ctx) {
     super();
-    this.redis = redis;
+
+    this.logger = ctx.logger.child({
+      component: 'redis_config'
+    });
+    this.redis = ctx.providers.redis;
+
     process.nextTick(() => {
-      return this._config();
+      this._config();
     });
   }
 
-  //----------
   _config() {
     return this.redis.once_connected((client) => {
       debug("Querying config from Redis");
@@ -21,7 +21,7 @@ module.exports = MasterConfigRedisStore = class MasterConfigRedisStore extends E
         var config;
         if (reply) {
           config = JSON.parse(reply.toString());
-          debug("Got redis config of ", config);
+          this.logger.debug("got redis config", { config });
           return this.emit("config", config);
         } else {
           return this.emit("config", null);
@@ -30,20 +30,18 @@ module.exports = MasterConfigRedisStore = class MasterConfigRedisStore extends E
     });
   }
 
-  //----------
   _update(config, cb) {
     return this.redis.once_connected((client) => {
       debug("Saving configuration to Redis");
       return client.set(this.redis.prefixedKey("config"), JSON.stringify(config), (err, reply) => {
         if (err) {
-          debug(`Redis: Failed to save updated config: ${err}`);
+          this.logger.debug(`Redis: Failed to save updated config: ${err}`);
           return cb(err);
         } else {
-          debug("Set config to ", config, reply);
+          this.logger.debug("Set config to ", config, reply);
           return cb(null);
         }
       });
     });
   }
-
 };

@@ -21,45 +21,21 @@ module.exports = class MasterConnection extends require("events").EventEmitter {
     this.attempts = 1;
     this.masterUrlIndex = 0;
 
-    // -- connect to the master server -- #
-    this._start();
-  }
-
-  _start() {
     this.hookAnalyticsEvents();
-    this._connect();
+    this.connect();
   }
 
-  //----------
-  once_connected(cb) {
-    if (this.connected) {
-      return cb(null, this.io);
-    } else {
-      return this.once(Events.Slave.CONNECTED, () => {
-        return cb(null, this.io);
-      });
-    }
+  hookAnalyticsEvents() {
+    this.ctx.events.on(Events.Listener.LISTEN, data => {
+      this.io.emit(Events.Listener.LISTEN, data);
+    });
+
+    this.ctx.events.on(Events.Listener.SESSION_START, data => {
+      this.io.emit(Events.Listener.SESSION_START, data);
+    });
   }
 
-  tryFallbackConnection() {
-    this.disconnect();
-    const masterUrls = this.config.master;
-
-    this.masterUrlIndex++;
-    if (this.masterUrlIndex >= masterUrls.length) {
-      // all master urls tried, emit error
-      this.logger.error('no more available master connections to try, emit error');
-      this.ctx.events.emit(Events.Slave.CONNECT_ERROR);
-      return;
-    }
-
-    // else, try to connect to the next url
-    this.logger.debug('try next master available url');
-    this._connect();
-  }
-
-  //----------
-  _connect() {
+  connect() {
     const masterWsUrl = this.config.master[this.masterUrlIndex];
 
     this.logger.debug(`connect to master at ${masterWsUrl}`);
@@ -137,26 +113,34 @@ module.exports = class MasterConnection extends require("events").EventEmitter {
     this.io.on("reconnect_failed", () => {
       this.tryFallbackConnection();
     });
+
+    this.ctx.events.on(Events.Link.SLAVE_VITALS, (key, cb) => {
+      this.io.emit(Events.Link.SLAVE_VITALS, key, cb);
+    });
   }
 
-  //----------
+  tryFallbackConnection() {
+    this.disconnect();
+    const masterUrls = this.config.master;
+
+    this.masterUrlIndex++;
+    if (this.masterUrlIndex >= masterUrls.length) {
+      // all master urls tried, emit error
+      this.logger.error('no more available master connections to try, emit error');
+      this.ctx.events.emit(Events.Slave.CONNECT_ERROR);
+      return;
+    }
+
+    // else, try to connect to the next url
+    this.logger.debug('try next master available url');
+    this.connect();
+  }
+
   disconnect() {
-    var ref;
-    return (ref = this.io) != null ? ref.disconnect() : void 0;
-  }
+    if (!this.io) {
+      return;
+    }
 
-  hookAnalyticsEvents() {
-    this.ctx.events.on(Events.Listener.LISTEN, data => {
-      this.io.emit(Events.Listener.LISTEN, data);
-    });
-
-    this.ctx.events.on(Events.Listener.SESSION_START, data => {
-      this.io.emit(Events.Listener.SESSION_START, data);
-    });
-  }
-
-  //----------
-  vitals(key, cb) {
-    return this.io.emit(Events.Link.SLAVE_VITALS, key, cb);
+    this.io.disconnect();
   }
 };

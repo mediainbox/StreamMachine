@@ -66,7 +66,7 @@ module.exports = Master = (function() {
         // config object. Other stuff still loads from the config file
         this.logger.debug("initialize Redis connection");
         this.ctx.providers.redis = new Redis(this.config.redis);
-        this.configStore = new MasterConfigRedisStore(this.ctx.providers.redis);
+        this.configStore = new MasterConfigRedisStore(ctx);
         this.configStore.on("config", (config) => {
           if (config) {
             // stash the configuration
