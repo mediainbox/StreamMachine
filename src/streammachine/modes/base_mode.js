@@ -2,7 +2,7 @@ var BaseMode, _, createLogger, nconf;
 
 nconf = require("nconf");
 
-_ = require("underscore");
+_ = require("lodash");
 
 ({createLogger} = require("../logger"));
 

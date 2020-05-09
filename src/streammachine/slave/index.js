@@ -2,7 +2,6 @@ const _ = require("lodash");
 const Stream = require("./streams/stream");
 const ListenServer = require("./server/listen_server");
 const MasterConnection = require("./master_io/master_connection");
-const SocketSource = require("./streams/socket_source");
 const { Events, EventsHub } = require('../events');
 const StreamsCollection = require("./streams/streams_collection");
 const { EventEmitter } = require("events");
@@ -98,8 +97,13 @@ module.exports = class Slave extends EventEmitter {
         config
       });
 
-      const stream = new Stream(key, config, this.ctx);
-      stream.useSource(new SocketSource(this.masterConnection, stream, this.ctx));
+      const stream = new Stream({
+        key,
+        config,
+        masterConnection: this.masterConnection,
+        ctx: this.ctx,
+      });
+
       this.streams.add(key, stream);
     });
 

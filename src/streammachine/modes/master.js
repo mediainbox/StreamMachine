@@ -1,12 +1,10 @@
 var Logger, Master, MasterMode, RPC, _, debug, express, nconf;
 
-_ = require("underscore");
+_ = require("lodash");
 
 express = require("express");
 
 nconf = require("nconf");
-
-RPC = require("ipc-rpc");
 
 Logger = require("../logger");
 
@@ -31,28 +29,6 @@ module.exports = MasterMode = (function() {
       this.server = express();
       this.server.use("/s", this.master.transport.app);
       this.server.use("/api", this.master.api.app);
-      if (process.send != null) {
-        this._rpc = new RPC(process, {
-          functions: {
-            OK: function(msg, handle, cb) {
-              return cb(null, "OK");
-            },
-            master_port: (msg, handle, cb) => {
-              var ref;
-              return cb(null, ((ref = this.handle) != null ? ref.address().port : void 0) || "NONE");
-            },
-            source_port: (msg, handle, cb) => {
-              var ref, ref1;
-              return cb(null, ((ref = this.master.sourcein) != null ? (ref1 = ref.server.address()) != null ? ref1.port : void 0 : void 0) || "NONE");
-            },
-            config: (config, handle, cb) => {
-              return this.master.configure(config, (err) => {
-                return cb(err, this.master.config());
-              });
-            }
-          }
-        });
-      }
       //start_handoff: (msg,handle,cb) =>
       //    @_sendHandoff()
       //    cb null, "OK"

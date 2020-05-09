@@ -1,4 +1,4 @@
-const _ = require("underscore");
+const _ = require("lodash");
 const SocketIO = require("socket.io");
 const SlaveConnection = require('./slave_connection');
 const {Events} = require('../../events');

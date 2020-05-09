@@ -1,6 +1,6 @@
 var SourceMount, _;
 
-_ = require("underscore");
+_ = require("lodash");
 
 module.exports = SourceMount = (function() {
   class SourceMount extends require("events").EventEmitter {

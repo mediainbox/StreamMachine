@@ -3,43 +3,31 @@ require('@google-cloud/trace-agent').start
     projectId: process.env.GCLOUD_PROJECT
     keyFilename: process.env.GCLOUD_KEY_FILENAME
 */
-var StreamMachine, Streamer, _, debug, heapdump, nconf, request, streamer;
 
 process.env.NEW_RELIC_NO_CONFIG_FILE = 'true';
-
 if (process.env.NEW_RELIC_APP_NAME && process.env.NEW_RELIC_LICENSE_KEY) {
   console.log('[integrations] loading NewRelic');
   require('newrelic');
 }
 
-//require('@google-cloud/debug-agent').start
-//    projectId: process.env.GCLOUD_PROJECT
-//    keyFilename: process.env.GCLOUD_KEY_FILENAME
-_ = require("lodash");
+const _ = require("lodash");
+const nconf = require("nconf");
+const axios = require("axios");
+const debug = require("debug")("sm:streamer");
+const StreamMachine = require("./streammachine");
 
-nconf = require("nconf");
-
-request = require("request");
-
-debug = require("debug")("sm:streamer");
-
-StreamMachine = require("./streammachine");
-
-Streamer = class Streamer {
+class Streamer {
   constructor(config1) {
     this.mode = nconf.get("mode");
     this.config = config1;
   }
 
-  //----------
   initialize() {
     return this.readConfig((config) => {
-      this.ping();
       return this.createStreamMachine(config);
     });
   }
 
-  //----------
   readConfig(callback) {
     if (this.config.client) {
       debug(`using local config: ${this.config.config}`);
@@ -49,10 +37,10 @@ Streamer = class Streamer {
     if (!this.config.uri) {
       throw new Error('No remote config URL supplied in config file');
     }
+
     debug(`fetch remote config from ${this.config.uri}`);
-    return request.get(this.config.uri, {
-      json: true,
-      qs: {
+    return axios.get(this.config.uri, {
+      params: {
         ping: this.mode
       }
     }, (error, response, body) => {
@@ -66,11 +54,13 @@ Streamer = class Streamer {
         return this.retry(callback);
       }
       debug("Fetched radio config successfully");
+
+      this.ping();
+
       return callback(body);
     });
   }
 
-  //----------
   retry(callback) {
     return setTimeout(() => {
       debug("Retry");
@@ -78,7 +68,6 @@ Streamer = class Streamer {
     }, this.config.ping / 2);
   }
 
-  //----------
   createStreamMachine(config1) {
     this.config = config1;
     // There are three potential modes of operation:
@@ -99,14 +88,13 @@ Streamer = class Streamer {
     }
   }
 
-  //----------
   ping() {
     return setTimeout(() => {
       _.throttle(() => {
         return debug("Ping", 10000);
       });
-      return request.put(this.config.uri, {
-        qs: {
+      return axios.put(this.config.uri, {
+        params: {
           ping: this.mode,
           name: this.config.name
         }
@@ -115,43 +103,11 @@ Streamer = class Streamer {
       });
     }, this.config.ping);
   }
+}
 
-};
-
-//----------
-
-//----------
 nconf.env().argv();
-
 nconf.file({
   file: nconf.get("config") || nconf.get("CONFIG") || "/etc/streammachine.conf"
 });
 
-// -- Debugging -- #
-// These next two sections are for debugging and use tools that are not included
-// as dependencies.
-if (nconf.get("enable-heapdump")) {
-  console.log("ENABLING HEAPDUMP (trigger via USR2)");
-  require("heapdump");
-}
-
-if (nconf.get("heapdump-interval")) {
-  console.log("ENABLING PERIODIC HEAP DUMPS");
-  heapdump = require("heapdump");
-  setInterval(() => {
-    var file;
-    file = `/tmp/streammachine-${process.pid}-${Date.now()}.heapsnapshot`;
-    return heapdump.writeSnapshot(file, (err) => {
-      if (err) {
-        return console.error(err);
-      } else {
-        return console.error(`Wrote heap snapshot to ${file}`);
-      }
-    });
-  }, Number(nconf.get("heapdump-interval")) * 1000);
-}
-
-// -- -- #
-streamer = new Streamer(nconf.get());
-
-streamer.initialize();
+new Streamer(nconf.get()).initialize();

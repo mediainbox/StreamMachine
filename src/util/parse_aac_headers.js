@@ -2,7 +2,7 @@ var AAC, _, aac, ema, ema_alpha, firstHeader, headerCount;
 
 AAC = require("../streammachine/parsers/aac");
 
-_ = require("underscore");
+_ = require("lodash");
 
 aac = new AAC();
 

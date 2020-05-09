@@ -1,4 +1,4 @@
-const _ = require("underscore");
+const _ = require("lodash");
 const StackdriverLogging = require('@google-cloud/logging-winston').LoggingWinston;
 const CustomTransports = require("./transports");
 const cluster = require('cluster');

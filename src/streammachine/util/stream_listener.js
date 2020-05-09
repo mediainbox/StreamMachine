@@ -6,7 +6,7 @@ http = require("http");
 
 debug = require("debug")("sm:util:stream_listener");
 
-_ = require("underscore");
+_ = require("lodash");
 
 module.exports = StreamListener = class StreamListener extends require("events").EventEmitter {
   constructor(host, port, stream, shoutcast = false) {

@@ -1,6 +1,6 @@
 var Redis, RedisStore, Url, _, debug, nconf;
 
-_ = require('underscore');
+_ = require("lodash");
 
 Redis = require('redis');
 

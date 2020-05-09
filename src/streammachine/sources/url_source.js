@@ -11,7 +11,7 @@ domain = require("domain");
 
 moment = require("moment");
 
-_ = require("underscore");
+_ = require("lodash");
 
 module.exports = UrlSource = class UrlSource extends require("./base/base_source") {
   TYPE() {

@@ -1,6 +1,6 @@
 var CoreObj, _;
 
-_ = require("underscore");
+_ = require("lodash");
 
 CoreObj = {
   type: {

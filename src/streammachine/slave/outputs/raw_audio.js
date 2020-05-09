@@ -1,64 +1,80 @@
-var BaseOutput, RawAudio, debug;
+const BaseHttpOutput = require("./base_http_output");
 
-BaseOutput = require("./base_output");
+module.exports = class RawAudio extends BaseHttpOutput {
+  type = "raw";
+  pump = true;
 
-debug = require("debug")("sm:outputs:raw_audio");
-
-module.exports = RawAudio = class RawAudio extends BaseOutput {
   constructor({ stream, req, res, ctx }) {
-    var headers;
     super({
-      type: "raw",
-      stream, req, res, ctx
+      stream,
+      req,
+      res,
+      ctx
     });
-    this.disconnected = false;
-    debug("Incoming request.");
-    this.pump = true;
-    if (this.opts.req && this.opts.res) {
-      this.client.offsetSecs = this.opts.req.query.offset || -1;
-      this.opts.res.chunkedEncoding = false;
-      this.opts.res.useChunkedEncodingByDefault = false;
-      headers = {
-        "Content-Type": this.stream.opts.format === "mp3" ? "audio/mpeg" : this.stream.opts.format === "aac" ? "audio/aacp" : "unknown",
-        "Accept-Ranges": "none"
-      };
-      // write out our headers
-      this.opts.res.writeHead(200, headers);
-      this.opts.res._send('');
-      process.nextTick(() => {
-        return this.stream.startSession(this.client, (err, session_id) => {
-          this.client.session_id = session_id;
-          return this.connectToStream();
-        });
-      });
-    } else if (this.opts.socket) {
-      // -- just the data -- #
-      this.pump = false;
-      process.nextTick(() => {
-        return this.connectToStream();
-      });
-    } else {
-      // fail
-      this.logger.error("Listener passed without connection handles or socket.");
-    }
-    // register our various means of disconnection
-    this.socket.on("end", () => {
-      return this.disconnect();
-    });
-    this.socket.on("close", () => {
-      return this.disconnect();
-    });
-    this.socket.on("error", (err) => {
-      this.logger.debug(`Got client socket error: ${err}`);
-      return this.disconnect();
+
+    this.logger.debug('handle new listener');
+
+    this.client.offsetSecs = req.query.offset || 0;
+    this.init();
+
+    return this.stream.startSession(this.client, (err, session_id) => {
+      this.client.session_id = session_id;
+      return this.connectToStream();
     });
   }
 
-  static canHandleRequest(req) {
+  getType() {
+    return "raw";
+  }
+
+  static canHandleRequest() {
     return true;
   }
 
-  //----------
+  configureResponse(baseHeaders) {
+    this.res.chunkedEncoding = false;
+    this.res.useChunkedEncodingByDefault = false;
+    this.res.writeHead(200, baseHeaders);
+    this.res._send('');
+  }
+
+  connectToStream() {
+    if (this.disconnected) {
+      this.logger.warn('');
+      return;
+    }
+
+    this.logger.debug('connect new listener');
+
+    /**
+     * this.stream.connectListener(this.socket)
+     */
+
+    return this.stream.listen(this, {
+      offsetSecs: this.client.offsetSecs,
+      offset: this.client.offset,
+      pump: this.pump,
+      startTime: new Date()
+    }, (err, source) => {
+      var ref;
+      this.source = source;
+      if (err) {
+        if (this.res != null) {
+          this.res.status(500).end(err);
+        } else {
+          if ((ref = this.socket) != null) {
+            ref.end();
+          }
+        }
+        return false;
+      }
+      // update our offset now that it's been checked for availability
+      this.client.offset = this.source.offset();
+
+      return this.source.pipe(this.socket);
+    });
+  }
+
   disconnect() {
     return super.disconnect(() => {
       var ref, ref1;
@@ -70,42 +86,4 @@ module.exports = RawAudio = class RawAudio extends BaseOutput {
       }
     });
   }
-
-  //----------
-  prepForHandoff(cb) {
-    // remove the initial client.offsetSecs if it exists
-    delete this.client.offsetSecs;
-    return typeof cb === "function" ? cb() : void 0;
-  }
-
-  //----------
-  connectToStream() {
-    if (!this.disconnected) {
-      debug(`Connecting to stream ${this.stream.key}`);
-      return this.stream.listen(this, {
-        offsetSecs: this.client.offsetSecs,
-        offset: this.client.offset,
-        pump: this.pump,
-        startTime: this.opts.startTime
-      }, (err, source) => {
-        var ref;
-        this.source = source;
-        if (err) {
-          if (this.opts.res != null) {
-            this.opts.res.status(500).end(err);
-          } else {
-            if ((ref = this.socket) != null) {
-              ref.end();
-            }
-          }
-          return false;
-        }
-        // update our offset now that it's been checked for availability
-        this.client.offset = this.source.offset();
-
-        return this.source.pipe(this.socket);
-      });
-    }
-  }
-
 };

@@ -2,7 +2,7 @@ var MP3, _, firstHeader, headerCount, mp3;
 
 MP3 = require("../streammachine/parsers/mp3");
 
-_ = require("underscore");
+_ = require("lodash");
 
 mp3 = new MP3();
 

@@ -4,7 +4,7 @@ path = require("path");
 
 fs = require("fs");
 
-_ = require("underscore");
+_ = require("lodash");
 
 // RewindDumpRestore is in charge of making periodic backups of a RewindBuffer's
 // data. This is important for helping a crashed process get back up to

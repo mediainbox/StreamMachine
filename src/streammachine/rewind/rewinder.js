@@ -1,7 +1,7 @@
 var Rewinder, _, debug,
   boundMethodCheck = function(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new Error('Bound instance method accessed before binding'); } };
 
-_ = require("underscore");
+_ = require("lodash");
 
 debug = require("debug")("sm:rewind:rewinder");
 

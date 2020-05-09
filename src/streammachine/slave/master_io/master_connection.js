@@ -35,6 +35,10 @@ module.exports = class MasterConnection extends require("events").EventEmitter {
     });
   }
 
+  getStreamVitals(key, cb) {
+    this.io.emit(Events.Link.STREAM_VITALS, key, cb);
+  }
+
   connect() {
     const masterWsUrl = this.config.master[this.masterUrlIndex];
 
@@ -73,7 +77,7 @@ module.exports = class MasterConnection extends require("events").EventEmitter {
         }
 
         this.io.off('connect_error', onConnectError);
-        this.logger.debug("vconnection to master ok and validated");
+        this.logger.debug("connection to master validated, slave is connected");
         this.id = this.io.io.engine.id;
         this.connected = true;
 
@@ -107,15 +111,12 @@ module.exports = class MasterConnection extends require("events").EventEmitter {
       obj.chunk.data = Buffer.from(obj.chunk.data);
       obj.chunk.ts = new Date(obj.chunk.ts);
 
+      // emit globally, this event will be listened by stream sources
       return this.ctx.events.emit(`audio:${obj.stream}`, obj.chunk);
     });
 
     this.io.on("reconnect_failed", () => {
       this.tryFallbackConnection();
-    });
-
-    this.ctx.events.on(Events.Link.SLAVE_VITALS, (key, cb) => {
-      this.io.emit(Events.Link.SLAVE_VITALS, key, cb);
     });
   }
 

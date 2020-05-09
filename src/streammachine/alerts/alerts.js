@@ -2,11 +2,7 @@ var ALERT_TYPES, Alerts, _, nconf, nodemailer, pagerduty;
 
 nconf = require("nconf");
 
-_ = require("underscore");
-
-nodemailer = require("nodemailer");
-
-pagerduty = require("pagerduty");
+_ = require("lodash");
 
 ALERT_TYPES = {
   sourceless: {

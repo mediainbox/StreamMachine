@@ -1,6 +1,6 @@
 var Monitoring, _;
 
-_ = require("underscore");
+_ = require("lodash");
 
 // Monitoring component
 // - checks if a stream has no active sources
