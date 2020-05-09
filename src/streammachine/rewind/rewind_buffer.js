@@ -1,6 +1,6 @@
 var Concentrate, Dissolve, MemoryStore, RewindBuffer, Rewinder, _, nconf;
 
-_ = require('underscore');
+_ = require("lodash");
 
 Concentrate = require("concentrate");
 

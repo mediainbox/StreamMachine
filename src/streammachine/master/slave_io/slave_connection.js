@@ -31,12 +31,11 @@ module.exports = SlaveConnection = class SlaveConnection extends require("events
       this.ctx.events.emit(Events.Listener.SESSION_START, data);
     });
 
-
-    // -- RPC Handlers -- #
-    this.socket.on(Events.Link.SLAVE_VITALS, (key, cb) => {
+    this.socket.on(Events.Link.STREAM_VITALS, (key, cb) => {
       // respond with the stream's vitals
       return this.ctx.master.vitals(key, cb);
     });
+
     // attach disconnect handler
     this.socket.on("disconnect", () => {
       return this._handleDisconnect();

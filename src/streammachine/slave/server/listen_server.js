@@ -3,10 +3,12 @@ const cors = require("cors");
 const { EventEmitter } = require('events');
 const bannedClientsMiddleware = require('./middlewares/banned_clients');
 const rootStreamRewrite = require('./middlewares/root_stream');
+const trackingMiddleware = require('./middlewares/tracking');
 const utilityController = require('./utility_controller');
 const setupHttpServer = require('./http_server');
 const { get } = require('lodash');
 const { outputs } = require('../outputs');
+const cookieParser = require('cookie-parser');
 
 module.exports = class ListenServer extends EventEmitter {
   constructor({ streams, ctx }) {
@@ -21,9 +23,14 @@ module.exports = class ListenServer extends EventEmitter {
     })
 
     this.app = express();
-    this.app.set("x-powered-by", "StreamMachine");
+    this.app.set("x-powered-by", false);
     this.app.httpAllowHalfOpen = true;
     this.app.useChunkedEncodingByDefault = false;
+    this.app.use((req, res, next) => {
+      res.set('Server', 'StreamMachine/MediaInbox');
+      next();
+    });
+    this.app.use(cookieParser());
 
     if (get(config, 'cors.enabled')) {
       this.logger.debug("enable cors");
@@ -47,23 +54,15 @@ module.exports = class ListenServer extends EventEmitter {
         return;
       }
 
-      /*
-      FIXME
-      if (this.isGeolockEnabled && this.isGeolocked(req, stream)) {
-        if (s.opts.geolock.fallback) {
-          return res.redirect(302, s.opts.geolock.fallback);
-        } else {
-          return res.status(403).end("Invalid Country.");
-        }
-      }
-      */
-
       req.stream = stream;
       next();
     });
 
     // url rewriter for root route
     this.app.use(rootStreamRewrite(this.streams));
+
+    // tracking data for users/session
+    this.app.use(trackingMiddleware(this.streams));
 
     // requests debug logger
     // TODO: like stackdriver
@@ -87,10 +86,11 @@ module.exports = class ListenServer extends EventEmitter {
 
     // listen to the stream
     this.app.get("/:stream", (req, res) => {
-      const HandlerOutput = outputs.find(output => {
+      const OutputHandler = outputs.find(output => {
         return output.canHandleRequest(req);
       });
-      new HandlerOutput({
+
+      new OutputHandler({
         stream: req.stream,
         req,
         res,

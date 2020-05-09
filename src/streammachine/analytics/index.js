@@ -2,7 +2,7 @@ const { Events } = require('../events');
 
 var Analytics, AnalyticsEsStore, URL, _, debug, nconf, tz, winston;
 
-_ = require("underscore");
+_ = require("lodash");
 
 URL = require("url");
 
@@ -15,6 +15,8 @@ nconf = require("nconf");
 debug = require("debug")("sm:analytics");
 
 AnalyticsEsStore = require("./store/es_store");
+
+const axios = require('axios');
 
 // This module is responsible for:
 
@@ -29,6 +31,11 @@ module.exports = Analytics = class Analytics {
     this.logger = this.ctx.logger.child({
       component: "analytics"
     });
+
+    if (!this.ctx.config.analytics) {
+      return;
+    }
+
     this.config = this.ctx.config.analytics;
     this._timeout_sec = Number(this.config.finalize_secs);
     if (this.ctx.providers.redis) {
@@ -72,11 +79,40 @@ module.exports = Analytics = class Analytics {
   listenToEvents() {
     this.ctx.events.on(Events.Listener.LISTEN, data => {
       this.handleEvent(data);
+      this.sendToGa(data);
     });
 
     this.ctx.events.on(Events.Listener.SESSION_START, data => {
       this.handleEvent(data);
+
     });
+  }
+
+  sendToGa(data) {
+    console.log('SEND TO GA', {
+      params: {
+        v: 1,
+        tid: 'UA-165927993-1',
+        t: 'pageview',
+        dp: '/' + data.stream,
+        ua: data.client.ua,
+        cid: data.client.session_id,
+        //uip: data.client.ip,
+        uip: '213.239.245.241',
+      }
+    })
+    axios.post('http://www.google-analytics.com/collect', {}, {
+      params: {
+        v: 1,
+        tid: 'UA-165927993-1',
+        t: 'pageview',
+        dp: '/' + data.stream,
+        ua: data.client.ua,
+        cid: data.client.session_id,
+        //uip: data.client.ip,
+        uip: '213.239.245.241',
+      }
+    })
   }
 
   //----------

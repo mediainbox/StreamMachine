@@ -1,6 +1,6 @@
 var BaseOutput, Pumper, debug;
 
-BaseOutput = require("./base_output");
+BaseOutput = require("./base_http_output");
 
 debug = require("debug")("sm:outputs:pumper");
 

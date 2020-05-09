@@ -1,8 +1,6 @@
 var ProxySource, RewindBuffer, Stream, URL, _, uuid;
 
-_ = require("underscore");
-
-uuid = require("node-uuid");
+_ = require("lodash");
 
 URL = require("url");
 

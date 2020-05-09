@@ -2,7 +2,7 @@ var FileSource, _, fs;
 
 fs = require("fs");
 
-_ = require("underscore");
+_ = require("lodash");
 
 // FileSource emulates a stream source by reading a local audio file in a
 // loop at the correct audio speed.

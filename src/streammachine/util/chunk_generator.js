@@ -1,6 +1,6 @@
 var ChunkGenerator, _, debug;
 
-_ = require("underscore");
+_ = require("lodash");
 
 debug = require("debug")("sm:util:chunk_generator");
 
