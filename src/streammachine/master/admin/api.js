@@ -189,7 +189,7 @@ StreamMachine Master API
     });
     // Clear a Rewind Buffer
     this.app.delete("/streams/:stream/rewind", (req, res) => {
-      return req.stream.rewind.resetRewind((err) => {
+      return req.stream.rewind.rese((err) => {
         if (err) {
           return api.invalid(req, res, err);
         } else {

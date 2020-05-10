@@ -3,6 +3,7 @@ const Dissolve = require("dissolve");
 const Rewinder = require("./rewinder");
 const MemoryStore = require("./store/memory_store");
 const RewindWriter = require('./rewind_writer');
+const { passthrough, BetterEventEmitter } = require('../events');
 
 // RewindBuffer supports play from an arbitrary position in the last X hours
 // of our stream.
@@ -20,12 +21,15 @@ const RewindWriter = require('./rewind_writer');
 //   duration and meta)
 // * uint16: data length
 // * Buffer: data chunk
-module.exports = class RewindBuffer extends require("events").EventEmitter {
+module.exports = class RewindBuffer extends BetterEventEmitter {
+  static EVENTS = {
+    RESET: 'reset'
+  }
+
   constructor(args = {}) {
     super();
+
     this.opts = args
-    this.onListen = args.onListen;
-    this.onListenerDisconnect = args.onListenerDisconnect;
     this.logger = args.logger.child({
       component: `stream[${args.station}]:rewind_buffer`
     });
@@ -33,89 +37,64 @@ module.exports = class RewindBuffer extends require("events").EventEmitter {
     // FIXME: accessed by rewinder.....
     this.seconds = args.seconds;
     this.burst = args.burst;
-    this._rsecs = args.seconds || 0;
-    this._rburstsecs = args.burst || 0;
+    this.maxSeconds = args.seconds || 0;
 
-
-    this._rsecsPerChunk = Infinity;
-    this._rmax = null;
-    this._rburst = null;
+    this.configured = false;
+    this._rstreamKey = null;
+    this.secondsPerChunk = Infinity;
+    this.maxChunks = null;
     this._rkey = args.key;
-    this._risLoading = false;
-    // each listener should be an object that defines obj._offset and
-    // obj.writeFrame. We implement RewindBuffer.Listener, but other
-    // classes can work with those pieces
-    this._rlisteners = [];
+    this.loading = false;
+
+    this.rewinders = [];
+
     // -- instantiate our memory buffer -- #
-    this._rbuffer = args.buffer_store || new MemoryStore();
-    this._rbuffer.on("shift", (b) => {
-      return this.emit("rshift", b);
-    });
-    this._rbuffer.on("push", (b) => {
-      return this.emit("rpush", b);
-    });
-    this._rbuffer.on("unshift", (b) => {
-      return this.emit("runshift", b);
-    });
+    this.buffer = new MemoryStore();
 
-    // -- set up header and frame functions -- #
-    this._rdataFunc = (chunk) => {
-      var i, l, len, ref, results;
-      // push the chunk on the buffer
-      this._rbuffer.insert(chunk);
-      ref = this._rlisteners;
-      // loop through all connected listeners and pass the frame buffer at
-      // their offset.
-      results = [];
-      for (i = 0, len = ref.length; i < len; i++) {
-        l = ref[i];
-        // we'll give them whatever is at length - offset
-        // FIXME: This lookup strategy is horribly inefficient
-        results.push(this._rbuffer.at(l._offset, (err, b) => {
-          return l._insert(b);
-        }));
-      }
-      return results;
-    };
+    this.hookEvents();
   }
 
-  //----------
-  disconnect() {
-    this._rdataFunc = function () {
-    };
-    this._rbuffer.removeAllListeners();
-    return true;
+  hookEvents() {
+    passthrough(['shift', 'push', 'unshift'], this.buffer, this);
   }
 
-  //----------
+  push = (chunk) => {
+    if (this.disconnected) {
+      return;
+    }
+
+    this.buffer.insert(chunk);
+
+    const results = [];
+    this.rewinders.forEach(rewinder => {
+      // we'll give them whatever is at length - offset
+      // FIXME: This lookup strategy is horribly inefficient
+      results.push(this.buffer.at(rewinder.offset(), (err, b) => {
+        return rewinder._insert(b);
+      }));
+    });
+
+    return results;
+  };
+
   isLoading() {
-    return this._risLoading;
+    return this.loading;
   }
 
-  //----------
-  resetRewind(cb) {
-    this._rbuffer.reset(cb);
-    return this.emit("reset");
+  reset(cb) {
+    this.buffer.reset(cb);
+    this.emit(RewindBuffer.EVENTS.RESET);
   }
 
-  //----------
-  setRewind(secs, burst) {
-    this._rsecs = secs;
-    this._rburstsecs = burst;
+  setRewind(secs, burstSecs) {
+    this.maxSeconds = secs;
     return this._rUpdateMax();
-  }
-
-  push(data) {
-
-    //before -> this._rChunkLength(vitals);
-
-    this._rdataFunc(data);
   }
 
   _rConnectSource = (newsource, cb) => {
     this.logger.debug("RewindBuffer got source event");
     if (this._rsource) {
-      this._rsource.removeListener("data", this._rdataFunc);
+      this._rsource.removeListener("data", this.push);
       this.logger.debug("removed old rewind data listener");
     }
     return newsource.vitals((function (_this) {
@@ -125,7 +104,7 @@ module.exports = class RewindBuffer extends require("events").EventEmitter {
         } else {
           _this._rChunkLength(vitals);
         }
-        newsource.on("data", _this._rdataFunc);
+        newsource.on("data", _this.push);
         _this._rsource = newsource;
         return typeof cb === "function" ? cb(null) : void 0;
       };
@@ -133,96 +112,117 @@ module.exports = class RewindBuffer extends require("events").EventEmitter {
   }
 
 
-  //----------
 
   // Return rewind buffer status, including HTTP Live Streaming if enabled
   _rStatus() {
     var ref, ref1, status;
     status = {
-      buffer_length: this._rbuffer.length(),
-      first_buffer_ts: (ref = this._rbuffer.first()) != null ? ref.ts : void 0,
-      last_buffer_ts: (ref1 = this._rbuffer.last()) != null ? ref1.ts : void 0
+      buffer_length: this.buffer.length(),
+      first_buffer_ts: (ref = this.buffer.first()) != null ? ref.ts : void 0,
+      last_buffer_ts: (ref1 = this.buffer.last()) != null ? ref1.ts : void 0
     };
     return status;
   }
 
-  //----------
   _rChunkLength(vitals) {
     if (this._rstreamKey !== vitals.streamKey) {
       if (this._rstreamKey) {
         // we're reconnecting, but didn't match rate...  we
         // should wipe out the old buffer
         this.logger.debug("Invalid existing rewind buffer. Reset.");
-        this._rbuffer.reset();
+        this.buffer.reset();
       }
       // compute new frame numbers
-      this._rsecsPerChunk = vitals.emitDuration;
+      this.secondsPerChunk = vitals.emitDuration;
       this._rstreamKey = vitals.streamKey;
       this._rUpdateMax();
     }
   }
 
-  //----------
   _rUpdateMax() {
-    if (this._rsecsPerChunk) {
-      this._rmax = Math.round(this._rsecs / this._rsecsPerChunk);
-      this._rbuffer.setMax(this._rmax);
-      this._rburst = Math.round(this._rburstsecs / this._rsecsPerChunk);
+    if (this.secondsPerChunk) {
+      this.maxChunks = Math.round(this.maxSeconds / this.secondsPerChunk);
+      this.buffer.setMax(this.maxChunks);
     }
 
-    this.logger.info(`rewind max buffer length is ${this._rsecs} seconds (${this._rmax} chunks)`);
+    this.logger.info(`rewind max buffer length is ${this.maxSeconds} seconds (${this.maxChunks} chunks)`);
   }
 
-  //----------
   getRewinder(id, opts, cb) {
     var rewind;
     // create a rewinder object
     rewind = new Rewinder(this, id, opts, cb);
     if (!opts.pumpOnly) {
       // add it to our list of listeners
-      return this._raddListener(rewind);
+      return this.addRewinder(rewind);
     }
   }
 
-  //----------
-  recordListen(opts) {
-    this.onListen && this.onListen(opts);
-  }
-
-  disconnectListener(connectionId) {
-    this.onListenerDisconnect && this.onListenerDisconnect(connectionId);
-  }
-
-  // stub function. must be defined for real in the implementing class
-
-  //----------
   bufferedSecs() {
     // convert buffer length to seconds
-    return Math.round(this._rbuffer.length() * this._rsecsPerChunk);
+    return Math.round(this.buffer.length() * this.secondsPerChunk);
   }
-
-  //----------
 
   // Insert a chunk into the RewindBuffer. Inserts can only go backward, so
-  // the timestamp must be less than @_rbuffer[0].ts for a valid chunk
+  // the timestamp must be less than @buffer[0].ts for a valid chunk
   _insertBuffer(chunk) {
-    return this._rbuffer.insert(chunk);
+    return this.buffer.insert(chunk);
   }
 
-  //----------
+  preload(loader, cb) {
+    this.loading = true;
+    this.emit("rewind_loading");
+
+    loader
+      .on('readable', () => {
+        let c;
+        const results = [];
+
+        while (c = parser.read()) {
+          if (!results.length) {
+            // empty results, it's header
+            this.emit("header", c);
+            this._rChunkLength({
+              emitDuration: c.secs_per_chunk,
+              streamKey: c.stream_key
+            });
+          } else {
+            this._insertBuffer(c);
+            this.emit("buffer", c);
+          }
+
+          results.push(true);
+        }
+      })
+      .on('end', () => {
+        var obj;
+        obj = {
+          seconds: this.bufferedSecs(),
+          length: this.buffer.length()
+        };
+        this.logger.info(`rewind buffer received has ${obj.seconds} seconds (${obj.length} chunks)`);
+        this.emit("rewind_loaded");
+        this.loading = false;
+      })
+      .on('error', () => {
+        this.loading = false;
+        this.emit("rewind_loaded");
+      });
+  }
+
 
   // Load a RewindBuffer.  Buffer should arrive newest first, which means
   // that we can simply shift() it into place and don't have to lock out
   // any incoming data.
   loadBuffer(stream, cb) {
     var headerRead, parser;
-    this._risLoading = true;
+    this.loading = true;
     this.emit("rewind_loading");
     if (!stream) {
       // Calling loadBuffer with no stream is really just for testing
       process.nextTick(() => {
         this.emit("rewind_loaded");
-        return this._risLoading = false;
+        return this.loading = false;
       });
       return cb(null, {
         seconds: 0,
@@ -277,22 +277,21 @@ module.exports = class RewindBuffer extends require("events").EventEmitter {
       var obj;
       obj = {
         seconds: this.bufferedSecs(),
-        length: this._rbuffer.length()
+        length: this.buffer.length()
       };
       this.logger.info(`rewind buffer received has ${obj.seconds} seconds (${obj.length} chunks)`);
       this.emit("rewind_loaded");
-      this._risLoading = false;
+      this.loading = false;
       return typeof cb === "function" ? cb(null, obj) : void 0;
     });
   }
 
-  //----------
 
   // Dump the rewindbuffer. We want to dump the newest data first, so that
   // means running back from the end of the array to the front.
   dumpBuffer(cb) {
     // taking a copy of the array should effectively freeze us in place
-    return this._rbuffer.clone((err, rbuf_copy) => {
+    return this.buffer.clone((err, rbuf_copy) => {
       var go;
       if (err) {
         cb(err);
@@ -300,22 +299,20 @@ module.exports = class RewindBuffer extends require("events").EventEmitter {
       }
       go = (hls) => {
         var writer;
-        writer = new RewindWriter(rbuf_copy, this._rsecsPerChunk, this._rstreamKey, hls);
+        writer = new RewindWriter(rbuf_copy, this.secondsPerChunk, this._rstreamKey, hls);
         return cb(null, writer);
       };
       return go();
     });
   }
 
-  //----------
   checkOffsetSecs(secs) {
     return this.checkOffset(this.secsToOffset(secs));
   }
 
-  //----------
   checkOffset(offset) {
     var bl;
-    bl = this._rbuffer.length();
+    bl = this.buffer.length();
     if (offset < 0) {
       this.logger.debug("offset is invalid! 0 for live.");
       return 0;
@@ -333,22 +330,14 @@ module.exports = class RewindBuffer extends require("events").EventEmitter {
     }
   }
 
-  //----------
   secsToOffset(secs) {
-    return Math.round(Number(secs) / this._rsecsPerChunk);
+    return Math.round(Number(secs) / this.secondsPerChunk);
   }
 
-  //----------
   offsetToSecs(offset) {
-    return Math.round(Number(offset) * this._rsecsPerChunk);
+    return Math.round(Number(offset) * this.secondsPerChunk);
   }
 
-  //----------
-  timestampToOffset(time, cb) {
-    return cb(null, this._rbuffer._findTimestampOffset(time));
-  }
-
-  //----------
   pumpSeconds(rewinder, seconds, concat, cb) {
     var frames;
     // pump the most recent X seconds
@@ -356,7 +345,6 @@ module.exports = class RewindBuffer extends require("events").EventEmitter {
     return this.pumpFrom(rewinder, frames, frames, concat, cb);
   }
 
-  //----------
   pumpFrom(rewinder, offset, length, concat, cb) {
     // we want to send _length_ chunks, starting at _offset_
     if (offset === 0 || length === 0) {
@@ -365,7 +353,7 @@ module.exports = class RewindBuffer extends require("events").EventEmitter {
       }
       return true;
     }
-    return this._rbuffer.range(offset, length, (err, chunks) => {
+    return this.buffer.range(offset, length, (err, chunks) => {
       var b, buffers, cbuf, duration, i, len, meta, offsetSeconds, pumpLen, ref;
       pumpLen = 0;
       duration = 0;
@@ -394,7 +382,7 @@ module.exports = class RewindBuffer extends require("events").EventEmitter {
       }
       // how many seconds are between this date and the end of the
       // buffer?
-      offsetSeconds = offset instanceof Date ? (Number(this._rbuffer.last().ts) - Number(offset)) / 1000 : this.offsetToSecs(offset);
+      offsetSeconds = offset instanceof Date ? (Number(this.buffer.last().ts) - Number(offset)) / 1000 : this.offsetToSecs(offset);
       if ((ref = this.log) != null) {
         ref.debug("Converting offset to seconds: ", {
           offset: offset,
@@ -410,7 +398,6 @@ module.exports = class RewindBuffer extends require("events").EventEmitter {
     });
   }
 
-  //----------
   burstFrom(rewinder, offset, burstSecs, cb) {
     var burst;
     // we want to send them @burst frames (if available), starting at offset.
@@ -429,20 +416,22 @@ module.exports = class RewindBuffer extends require("events").EventEmitter {
     }
   }
 
-  //----------
-  _raddListener(obj) {
-    if ((obj._offset != null) && obj._offset >= 0) {
-      this._rlisteners.push(obj);
-      return true;
-    } else {
-      return false;
+  addRewinder(obj) {
+    if (obj.offset() < 0) {
+      // FIXME: ??? see -1 in rewinder
+      this.logger.error(`can not add rewinder with negative offset`);
+      return;
     }
+
+    this.rewinders.push(obj);
   }
 
-  //----------
-  _rremoveListener(obj) {
-    this._rlisteners = _(this._rlisteners).without(obj);
-    return true;
+  removeRewinder(rewinder) {
+    this.rewinders = this.rewinders.slice(0).filter(l => l !== rewinder);
   }
 
+  disconnect() {
+    this.disconnected = true;
+    this.buffer.removeAllListeners();
+  }
 };

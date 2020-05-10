@@ -30,8 +30,17 @@ Events = {
   },
 };
 
+function passthrough(_events, source, target) {
+  const events = Array.isArray(_events) ? _events : [_events];
+
+  events.forEach(event => {
+    source.on(event, (...args) => target.emit(event, ...args));
+  });
+}
+
 module.exports = {
   EventsHub: EventEmitter,
   Events: Events,
-  BetterEventEmitter: require('./better_event_emitter')
+  BetterEventEmitter: require('./better_event_emitter'),
+  passthrough
 };

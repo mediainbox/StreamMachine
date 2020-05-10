@@ -82,8 +82,6 @@ module.exports = class Stream extends BetterEventEmitter {
       burst: this.config.burst,
       logger: this.logger,
       station: this.key,
-      //onListen: this.recordListen.bind(this),
-      //onListenerDisconnect: this.disconnectListener.bind(this)
     });
 
     this.masterConnection.getRewind(this.key, (err, res) => {
@@ -95,11 +93,13 @@ module.exports = class Stream extends BetterEventEmitter {
 
       this.rewindBuffer.loadBuffer(res, (err) => {
         if (err) {
-          // log?
-          return;
+          this.logger.error("error ocurred during buffer load", { err });
+        } else {
+          this.logger.info("rewind load from master done");
         }
 
-        this.logger.info("rewind load from master done, allow listener connections");
+        this.logger.info('allow listener connections to start');
+
         this.emit(INTERNAL_EVENTS.SOURCE_INIT);
       });
     });

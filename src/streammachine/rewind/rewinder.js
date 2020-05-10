@@ -44,7 +44,7 @@ module.exports = Rewinder = class Rewinder extends require("stream").Readable {
     this._offsetSeconds = null;
     this._contentTime = null;
     this._pumpOnly = false;
-    this._offset = -1;
+    this._offset = 0;
     this._queue = [];
     this._queuedBytes = 0;
     this._reading = false;
@@ -67,7 +67,9 @@ module.exports = Rewinder = class Rewinder extends require("stream").Readable {
             contentTime: this._contentTime
           };
           this.emit("listen", obj);
-          this.rewind.recordListen(obj);
+
+          //this.rewind.recordListen(obj);
+
           // reset our stats
           this._sentBytes = 0;
           this._sentDuration = 0;
@@ -144,7 +146,6 @@ module.exports = Rewinder = class Rewinder extends require("stream").Readable {
     }
   }
 
-  //----------
   onFirstMeta(cb) {
     if (this._queue.length > 0) {
       return typeof cb === "function" ? cb(null, this._queue[0].meta) : void 0;
@@ -251,46 +252,19 @@ module.exports = Rewinder = class Rewinder extends require("stream").Readable {
     }
   }
 
-  //----------
-
-    // Set a new offset (in seconds)
-  setOffset(offset) {
-    var data;
-    // -- make sure our offset is good -- #
-    this._offset = this.rewind.checkOffsetSecs(offset);
-    // clear out the data we had buffered
-    this._queue.slice(0);
-    if (this._offset === 0) {
-      // pump some data before we start regular listening
-      //debug(`Rewinder: Pumping ${this.rewind.burst} seconds.`);
-      this.rewind.pumpSeconds(this, this.pumpSecs);
-    } else {
-      // we're offset, so we'll pump from the offset point forward instead of
-      // back from live
-      [this._offset, data] = this.rewind.burstFrom(this._offset, this.pumpSecs);
-      this._queue.push(data);
-    }
-    return this._offset;
-  }
-
-  //----------
-
-    // Return the current offset in chunks
+  // Return the current offset in chunks
   offset() {
     return this._offset;
   }
 
-  //----------
-
-    // Return the current offset in seconds
+  // Return the current offset in seconds
   offsetSecs() {
     return this.rewind.offsetToSecs(this._offset);
   }
 
-  //----------
   disconnect() {
     var obj;
-    this.rewind._rremoveListener(this);
+    this.rewind.removeRewinder(this);
     // Record either a) our full listening session (pump requests) or
     // b) the portion of the request that we haven't already recorded
     // (non-pump requests)
@@ -302,18 +276,19 @@ module.exports = Rewinder = class Rewinder extends require("stream").Readable {
       contentTime: this._contentTime
     };
     this.emit("listen", obj);
-    this.rewind.recordListen(obj);
+
+    //this.rewind.recordListen(obj);
+
     if (this._segTimer) {
       // clear our listen segment timer
       clearInterval(this._segTimer);
     }
     // This just takes the listener out of lmeta. This will probably go
     // away at some point or be rolled into the function above
-    this.rewind.disconnectListener(this.conn_id);
+
+    //this.rewind.disconnectListener(this.conn_id);
+
     // make sure we're freed up for GC
     return this.removeAllListeners();
   }
-
 };
-
-//----------
