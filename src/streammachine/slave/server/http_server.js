@@ -9,13 +9,14 @@ module.exports = function setupHttpServer({ app, ctx }) {
   });
 
   if (process.env.NO_GREENLOCK) {
-    logger.info("Setup http server on port " + config.http_port);
+    logger.info("setup http server on port " + config.http_port);
     server = http.createServer(app);
     server.listen(config.http_port || 80);
     return;
   }
 
-  logger.info(`setup Greenlock http/https servers with ${config.cluster} workers`);
+  logger.info(`init Greenlock http/https servers with ${config.cluster} workers`);
+  logger.info(`setup http/s server on ports ${config.http_port}/${config.https_port}`);
   const packageRoot = path.resolve(__dirname, '../../../..');
 
   return greenlock.init({

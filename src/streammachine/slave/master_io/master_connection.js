@@ -1,5 +1,10 @@
 const socketIO = require("socket.io-client");
 const {Events} = require('../../events');
+const async = require('async');
+const http = require('http');
+
+const REWIND_REQUEST_TIMEOUT = 15 * 1000;
+
 
 /**
  * This is the component that connects to Master
@@ -16,7 +21,7 @@ module.exports = class MasterConnection extends require("events").EventEmitter {
     this.config = this.ctx.config.slave;
 
     this.connected = false;
-    this.io = null;
+    this.ws = null;
     this.id = null;
     this.attempts = 1;
     this.masterUrlIndex = 0;
@@ -26,17 +31,25 @@ module.exports = class MasterConnection extends require("events").EventEmitter {
   }
 
   hookAnalyticsEvents() {
-    this.ctx.events.on(Events.Listener.LISTEN, data => {
-      this.io.emit(Events.Listener.LISTEN, data);
+    this.ctx.events.on(Events.Listener.SESSION_START, data => {
+      // serialize event to go through ws
+      this.ws.emit(Events.Listener.SESSION_START, {
+        stream: data.stream.key,
+        listener: {
+          connectedAt: data.listener.connectedAt,
+          client: data.listener.client,
+        }
+      });
     });
 
-    this.ctx.events.on(Events.Listener.SESSION_START, data => {
-      this.io.emit(Events.Listener.SESSION_START, data);
+    this.ctx.events.on(Events.Listener.LISTEN, data => {
+      // serialize event to go through ws
+      this.ws.emit(Events.Listener.LISTEN, data);
     });
   }
 
   getStreamVitals(key, cb) {
-    this.io.emit(Events.Link.STREAM_VITALS, key, cb);
+    this.ws.emit(Events.Link.STREAM_VITALS, key, cb);
   }
 
   connect() {
@@ -44,7 +57,7 @@ module.exports = class MasterConnection extends require("events").EventEmitter {
 
     this.logger.debug(`connect to master at ${masterWsUrl}`);
 
-    this.io = socketIO.connect(masterWsUrl, {
+    this.ws = socketIO.connect(masterWsUrl, {
       reconnection: true,
       reconnectionAttempts: 3,
       timeout: this.config.timeout,
@@ -55,10 +68,10 @@ module.exports = class MasterConnection extends require("events").EventEmitter {
       this.attempts++;
     };
 
-    this.io.on("connect_error", onConnectError);
+    this.ws.on("connect_error", onConnectError);
 
-    this.io.on("connect", () => {
-      this.logger.debug(`connection to master[${this.masterUrlIndex}] started`);
+    this.ws.on("connect", () => {
+      this.logger.info(`connection to master[${this.masterUrlIndex}] started`);
 
       // TODO: verify this
       // make sure our connection is valid with a ping
@@ -67,7 +80,7 @@ module.exports = class MasterConnection extends require("events").EventEmitter {
         this.tryFallbackConnection();
       }, 1000);
 
-      return this.io.emit(Events.Link.CONNECTION_VALIDATE, (res) => {
+      return this.ws.emit(Events.Link.CONNECTION_VALIDATE, (res) => {
         clearTimeout(pingTimeout);
 
         if (res !== 'OK') {
@@ -76,16 +89,16 @@ module.exports = class MasterConnection extends require("events").EventEmitter {
           return;
         }
 
-        this.io.off('connect_error', onConnectError);
-        this.logger.debug("connection to master validated, slave is connected");
-        this.id = this.io.io.engine.id;
+        this.ws.off('connect_error', onConnectError);
+        this.logger.info("connection to master validated, slave is connected");
+        this.id = this.ws.io.engine.id;
         this.connected = true;
 
         this.ctx.events.emit(Events.Slave.CONNECTED);
       });
     });
 
-    this.io.on("disconnect", () => {
+    this.ws.on("disconnect", () => {
       this.connected = false;
       this.logger.debug("disconnected from master");
 
@@ -95,15 +108,15 @@ module.exports = class MasterConnection extends require("events").EventEmitter {
       return this.ctx.events.emit(Events.Slave.DISCONNECT);
     });
 
-    this.io.on(Events.Link.CONFIG, (config) => {
+    this.ws.on(Events.Link.CONFIG, (config) => {
       this.ctx.events.emit(Events.Link.CONFIG, config);
     });
 
-    this.io.on(Events.Link.SLAVE_STATUS, (cb) => {
+    this.ws.on(Events.Link.SLAVE_STATUS, (cb) => {
       this.ctx.events.emit(Events.Link.SLAVE_STATUS);
     });
 
-    this.io.on(Events.Link.AUDIO, (obj) => {
+    this.ws.on(Events.Link.AUDIO, (obj) => {
       // our data gets converted into an ArrayBuffer to go over the
       // socket. convert it back before insertion
       // convert timestamp back to a date object
@@ -115,7 +128,7 @@ module.exports = class MasterConnection extends require("events").EventEmitter {
       return this.ctx.events.emit(`audio:${obj.stream}`, obj.chunk);
     });
 
-    this.io.on("reconnect_failed", () => {
+    this.ws.on("reconnect_failed", () => {
       this.tryFallbackConnection();
     });
   }
@@ -137,11 +150,39 @@ module.exports = class MasterConnection extends require("events").EventEmitter {
     this.connect();
   }
 
+  getRewind(key, cb) {
+    this.logger.info(`make rewind buffer request for stream ${key}`);
+
+    const wrapped = async.timeout(_cb => {
+      http.request({
+        hostname: this.ws.io.opts.hostname,
+        port: this.ws.io.opts.port,
+        path: `/s/${key}/rewind`,
+        headers: {
+          'stream-slave-id': this.id
+        }
+      }, (res) => {
+        this.logger.info(`got rewind response with status ${res.statusCode}`);
+
+        if (res.statusCode !== 200) {
+          _cb(new Error("rewind request got a non 200 response"));
+          return;
+        }
+
+        _cb(null, res);
+      })
+        .on("error", _cb)
+        .end();
+    }, REWIND_REQUEST_TIMEOUT);
+
+    wrapped(cb);
+  }
+
   disconnect() {
-    if (!this.io) {
+    if (!this.ws) {
       return;
     }
 
-    this.io.disconnect();
+    this.ws.disconnect();
   }
 };

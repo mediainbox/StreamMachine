@@ -80,10 +80,10 @@ module.exports = Rewinder = class Rewinder extends require("stream").Readable {
     };
     oFunc = (_offset) => {
       this._offset = _offset;
-      debug("Rewinder: creation with ", {
+      /*debug("Rewinder: creation with ", {
         opts: opts,
         offset: this._offset
-      });
+      });*/
       // -- What are we sending? -- #
       if (opts != null ? opts.live_segment : void 0) {
         // we're sending a segment of HTTP Live Streaming data
@@ -113,7 +113,7 @@ module.exports = Rewinder = class Rewinder extends require("stream").Readable {
       } else if (opts != null ? opts.pump : void 0) {
         if (this._offset === 0) {
           // pump some data before we start regular listening
-          debug(`Rewinder: Pumping ${this.rewind.burst} seconds.`);
+          //debug(`Rewinder: Pumping ${this.rewind.burst} seconds.`);
           this.rewind.pumpSeconds(this, this.pumpSecs, true);
           return finalizeFunc();
         } else {
@@ -262,7 +262,7 @@ module.exports = Rewinder = class Rewinder extends require("stream").Readable {
     this._queue.slice(0);
     if (this._offset === 0) {
       // pump some data before we start regular listening
-      debug(`Rewinder: Pumping ${this.rewind.burst} seconds.`);
+      //debug(`Rewinder: Pumping ${this.rewind.burst} seconds.`);
       this.rewind.pumpSeconds(this, this.pumpSecs);
     } else {
       // we're offset, so we'll pump from the offset point forward instead of

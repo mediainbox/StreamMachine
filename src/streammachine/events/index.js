@@ -14,7 +14,7 @@ Events = {
     CONFIG: "config", // config updated, payload = @master.config()
     AUDIO: "audio", // new audio chunk, payload = { stream: key, chunk: {data: Buffer, ts: number} }
     STREAM_VITALS: "STREAM_VITALS", // vitals are required stream props { streamKey, framesPerSec, emitDuration }
-    SLAVE_STATUS: "status"
+    SLAVE_STATUS: "status",
   },
   Slave: {
     CONNECT_ERROR: 'CONNECT_ERROR',
@@ -23,6 +23,7 @@ Events = {
     STREAMS_UPDATE_OK: "streams",
   },
   Listener: {
+    LANDED: "LANDED",
     SESSION_START: "session_start",
     LISTEN: "listen",
     DISCONNECT: "DISCONNECT",

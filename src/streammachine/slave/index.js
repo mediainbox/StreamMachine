@@ -5,12 +5,13 @@ const MasterConnection = require("./master_io/master_connection");
 const { Events, EventsHub } = require('../events');
 const StreamsCollection = require("./streams/streams_collection");
 const { EventEmitter } = require("events");
+const ListenersHandler = require("./listeners/handler");
 
 module.exports = class Slave extends EventEmitter {
   constructor(ctx) {
     super();
-    this.ctx = ctx;
 
+    this.ctx = ctx;
     this.connected = false
     this.configured = false;
     this.config = this.ctx.config;
@@ -23,8 +24,8 @@ module.exports = class Slave extends EventEmitter {
     this.ctx.events = new EventsHub(); // TODO: move to mode?
     this.streams = new StreamsCollection();
     this.masterConnection = new MasterConnection(this.ctx);
+    this.listenersHandler = new ListenersHandler({ ctx });
 
-    // -- set up our stream server -- #
     this.server = new ListenServer({
       streams: this.streams,
       ctx: this.ctx,

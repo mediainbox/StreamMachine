@@ -9,6 +9,7 @@ module.exports = function trackingMiddleware(streams) {
 
   return function _trackingMiddleware(req, res, next) {
     req.tracking = {};
+
     // NOTE: session_id refers to the listening session, not the browser one
     req.tracking.session_id = getSessionId(req);
 

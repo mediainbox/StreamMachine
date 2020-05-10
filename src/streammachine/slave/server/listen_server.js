@@ -7,8 +7,8 @@ const trackingMiddleware = require('./middlewares/tracking');
 const utilityController = require('./utility_controller');
 const setupHttpServer = require('./http_server');
 const { get } = require('lodash');
-const { outputs } = require('../outputs');
 const cookieParser = require('cookie-parser');
+const {Events} = require('../../events');
 
 module.exports = class ListenServer extends EventEmitter {
   constructor({ streams, ctx }) {
@@ -22,19 +22,19 @@ module.exports = class ListenServer extends EventEmitter {
       component: "listen_server",
     })
 
-    this.app = express();
-    this.app.set("x-powered-by", false);
-    this.app.httpAllowHalfOpen = true;
-    this.app.useChunkedEncodingByDefault = false;
-    this.app.use((req, res, next) => {
+    const app = this.app = express();
+    app.set("x-powered-by", false);
+    app.httpAllowHalfOpen = true;
+    app.useChunkedEncodingByDefault = false;
+    app.use((req, res, next) => {
       res.set('Server', 'StreamMachine/MediaInbox');
       next();
     });
-    this.app.use(cookieParser());
+    app.use(cookieParser());
 
     if (get(config, 'cors.enabled')) {
       this.logger.debug("enable cors");
-      this.app.use(cors({
+      app.use(cors({
         origin: config.cors.origin || true,
         methods: "GET,HEAD"
       }));
@@ -42,15 +42,15 @@ module.exports = class ListenServer extends EventEmitter {
 
     if (config.behind_proxy) {
       this.logger.debug("enable 'trust proxy' for express");
-      this.app.set("trust proxy", true);
+      app.set("trust proxy", true);
     }
 
     // :stream parameter load and validation for requests
-    this.app.param("stream", (req, res, next, key) => {
+    app.param("stream", (req, res, next, key) => {
       const stream = this.streams.get(key);
 
       if (!stream) {
-        return res.status(404).end("Invalid stream.\n");
+        res.status(404).end("Invalid stream.\n");
         return;
       }
 
@@ -59,10 +59,10 @@ module.exports = class ListenServer extends EventEmitter {
     });
 
     // url rewriter for root route
-    this.app.use(rootStreamRewrite(this.streams));
+    app.use(rootStreamRewrite(this.streams));
 
     // tracking data for users/session
-    this.app.use(trackingMiddleware(this.streams));
+    app.use(trackingMiddleware(this.streams));
 
     // requests debug logger
     // TODO: like stackdriver
@@ -71,36 +71,30 @@ module.exports = class ListenServer extends EventEmitter {
 
     // check user agent for banned clients
     if (this.config.ua_skip) {
-      this.app.use(bannedClientsMiddleware(this.config.ua_skip, this.logger))
+      app.use(bannedClientsMiddleware(this.config.ua_skip, this.logger))
     }
 
     // utility routes
-    this.app.get("/index.html", utilityController.index);
-    this.app.get("/crossdomain.xml", utilityController.crossdomain);
+    app.get("/index.html", utilityController.index);
+    app.get("/crossdomain.xml", utilityController.crossdomain);
 
     // listener routes for stream
-    this.app.head("/:stream", (req, res) => {
+    app.head("/:stream", (req, res) => {
       res.set("content-type", "audio/mpeg");
-      return res.status(200).end();
+      res.status(200).end();
     });
 
     // listen to the stream
-    this.app.get("/:stream", (req, res) => {
-      const OutputHandler = outputs.find(output => {
-        return output.canHandleRequest(req);
-      });
+    app.get("/:stream", (req, res) => {
+      this.logger.debug(`new listener for ${req.stream.key} from ip ${req.ip}`);
 
-      new OutputHandler({
+      this.ctx.events.emit(Events.Listener.LANDED, {
         stream: req.stream,
         req,
         res,
-        ctx: this.ctx
       });
     });
 
-    this.server = setupHttpServer({
-      app: this.app,
-      ctx: this.ctx,
-    });
+    this.server = setupHttpServer({ app, ctx });
   }
 };

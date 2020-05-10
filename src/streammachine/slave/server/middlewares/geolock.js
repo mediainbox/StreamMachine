@@ -1,4 +1,4 @@
-
+/*
 this.isGeolockEnabled = config.geolock?.enabled;
 if (isGeolockEnabled) {
   this.logger.info("enable geolock for streams");
@@ -14,7 +14,6 @@ this.app.param("stream", (req, res, next, key) => {
     return;
   }
 
-  /*
   FIXME
   if (this.isGeolockEnabled && this.isGeolocked(req, stream)) {
     if (s.opts.geolock.fallback) {
@@ -23,20 +22,13 @@ this.app.param("stream", (req, res, next, key) => {
       return res.status(403).end("Invalid Country.");
     }
   }
-  */
 
   req.stream = s;
   next();
 });
+*/
 
-
-
-
-
-
-
-
-//----------
+/*
 isGeolocked(req, stream, opts) {
   var country, data, index, locked;
   locked = false;
@@ -63,3 +55,5 @@ isGeolocked(req, stream, opts) {
   }
   return locked;
 }
+
+*/

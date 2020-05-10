@@ -78,29 +78,16 @@ module.exports = Analytics = class Analytics {
 
   listenToEvents() {
     this.ctx.events.on(Events.Listener.LISTEN, data => {
-      this.handleEvent(data);
-      this.sendToGa(data);
+      this.handleEvent("listen", data);
+      //this.sendToGa(data);
     });
 
     this.ctx.events.on(Events.Listener.SESSION_START, data => {
-      this.handleEvent(data);
-
+      this.handleEvent("session_start", data);
     });
   }
 
   sendToGa(data) {
-    console.log('SEND TO GA', {
-      params: {
-        v: 1,
-        tid: 'UA-165927993-1',
-        t: 'pageview',
-        dp: '/' + data.stream,
-        ua: data.client.ua,
-        cid: data.client.session_id,
-        //uip: data.client.ip,
-        uip: '213.239.245.241',
-      }
-    })
     axios.post('http://www.google-analytics.com/collect', {}, {
       params: {
         v: 1,
@@ -115,65 +102,61 @@ module.exports = Analytics = class Analytics {
     })
   }
 
-  //----------
-  handleEvent(obj, cb) {
-    var index_date, ref, ref1, session_id, time;
-    session_id = null;
-    if (!((ref = obj.client) != null ? ref.session_id : void 0)) {
-      if (typeof cb === "function") {
-        cb(new Error("Object does not contain a session ID"));
-      }
-      return false;
+  handleEvent(type, data, cb) {
+    if (!data.stream || !data.listener) {
+      logger.error('event data does not contain stream or listener data', {
+        type,
+        data,
+      });
+      return;
     }
+
+    const { stream, listener } = data;
+
     // write one index per day of data
-    index_date = tz(obj.time, "%F");
-    time = new Date(obj.time);
+    const time = new Date(listener.connectedAt);
+
     // clean up IPv4 IP addresses stuck in IPv6
-    if ((ref1 = obj.client) != null ? ref1.ip : void 0) {
-      obj.client.ip = obj.client.ip.replace(/^::ffff:/, "");
-    }
-    return this.store._indicesForTimeRange("listens", time, (err, idx) => {
-      switch (obj.type) {
+    const ip = listener.client.ip.replace(/^::ffff:/, "");
+
+    this.store._indicesForTimeRange("listens", time, (err, idx) => {
+      switch (type) {
         case "session_start":
           this.store.idx_batch.write({
             index: idx[0],
             body: {
-              time: new Date(obj.time),
-              session_id: obj.client.session_id,
-              stream: obj.stream_group || obj.stream,
-              client: obj.client,
-              type: "start"
+              type: "start",
+              stream,
+              time,
+              session_id: listener.client.session_id,
+              client: listener.client,
             }
           });
-          if (typeof cb === "function") {
-            cb(null);
-          }
           break;
-        // -- start tracking the session -- #
+
         case "listen":
           // do we know of other duration for this session?
           this._getStashedDurationFor(obj.client.session_id, obj.duration, (err, dur) => {
             this.store.idx_batch.write({
               index: idx[0],
               body: {
-                session_id: obj.client.session_id,
-                time: new Date(obj.time),
-                kbytes: obj.kbytes,
-                duration: obj.duration,
+                type: "listen",
+                stream,
+                time,
+                session_id: listener.client.session_id,
                 session_duration: dur,
-                stream: obj.stream,
-                client: obj.client,
-                offsetSeconds: obj.offsetSeconds,
-                contentTime: obj.contentTime,
-                type: "listen"
+                kbytes: listener.kbytes,
+                duration: listener.duration,
+                client: listener.client,
+                offsetSeconds: listener.offsetSeconds,
+                contentTime: listener.contentTime,
               }
             });
-
-            return typeof cb === "function" ? cb(null) : void 0;
           });
       }
+
       // -- update our timer -- #
-      return this._updateSessionTimerFor(obj.client.session_id, (err) => {});
+      return this._updateSessionTimerFor(listener.client.session_id, (err) => {});
     });
   }
 

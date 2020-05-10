@@ -61,6 +61,7 @@ module.exports = {
         json()
       ),
       level: 'debug',
+      //level: 'silly',
       transports: transports
     });
 

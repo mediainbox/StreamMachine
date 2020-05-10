@@ -16,8 +16,8 @@
       "es_api_version": "1.7",
       "finalize_secs": "30"
     },
-    "redis": {
-      "server": "redis://localhost:6379"
+    "redis1": {
+      "server1": "redis://localhost:6379"
     },
     "debug_incoming_requests": true,
     "log": {

@@ -11,18 +11,15 @@ module.exports = MemoryStore = class MemoryStore extends require("./base_store")
     this.buffer = [];
   }
 
-  //----------
   reset(cb) {
     this.buffer = [];
     return typeof cb === "function" ? cb(null) : void 0;
   }
 
-  //----------
   length() {
     return this.buffer.length;
   }
 
-  //----------
   _findTimestampOffset(ts) {
     var a, b, da, db, foffset, ref;
     foffset = bs(this.buffer, {
@@ -59,7 +56,6 @@ module.exports = MemoryStore = class MemoryStore extends require("./base_store")
     }
   }
 
-  //----------
   at(offset, cb) {
     if (offset instanceof Date) {
       offset = this._findTimestampOffset(offset);
@@ -77,7 +73,6 @@ module.exports = MemoryStore = class MemoryStore extends require("./base_store")
     return cb(null, this.buffer[this.buffer.length - 1 - offset]);
   }
 
-  //----------
   range(offset, length, cb) {
     var end, start;
     if (offset instanceof Date) {
@@ -101,7 +96,6 @@ module.exports = MemoryStore = class MemoryStore extends require("./base_store")
     return cb(null, this.buffer.slice(start, end));
   }
 
-  //----------
   first() {
     return this.buffer[0];
   }
@@ -110,14 +104,12 @@ module.exports = MemoryStore = class MemoryStore extends require("./base_store")
     return this.buffer[this.buffer.length - 1];
   }
 
-  //----------
   clone(cb) {
     var buf_copy;
     buf_copy = this.buffer.slice(0);
     return cb(null, buf_copy);
   }
 
-  //----------
   insert(chunk) {
     var cts, fb, lb;
     fb = this.buffer[0];
@@ -152,7 +144,6 @@ module.exports = MemoryStore = class MemoryStore extends require("./base_store")
     return true;
   }
 
-  //----------
   _truncate() {
     var b, results;
     results = [];
@@ -164,9 +155,5 @@ module.exports = MemoryStore = class MemoryStore extends require("./base_store")
     return results;
   }
 
-  //----------
   info() {}
-
 };
-
-//----------

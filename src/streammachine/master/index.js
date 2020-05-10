@@ -18,9 +18,10 @@ const SourceMount = require("./sources/source_mount");
 const RewindDumpRestore = require("../rewind/dump_restore");
 const {Events, EventsHub} = require('../events');
 const StreamDataBroadcaster = require('./streams/stream_data_broadcaster');
+const { EventEmitter } = require('events');
 
 // A Master handles configuration, slaves, incoming sources, logging and the admin interface
-class Master extends require("events").EventEmitter {
+module.exports = class Master extends EventEmitter {
   constructor(ctx) {
     var ref;
     super();
@@ -72,7 +73,7 @@ class Master extends require("events").EventEmitter {
     // -- create a server to provide the API -- #
     this.api = new MasterAPI(this.ctx);
     // -- create a backend server for stream requests -- #
-    this.transport = new Master.StreamTransport(this);
+    this.transport = new StreamTransport(this);
     // -- start the source listener -- #
     this.sourcein = new SourceIn(this.ctx);
     // -- create an alerts object -- #
@@ -707,9 +708,8 @@ class Master extends require("events").EventEmitter {
 
 };
 
-module.exports = Master;
 
-Master.StreamTransport = class StreamTransport {
+class StreamTransport {
   constructor(master) {
     this.master = master;
     this.app = express();
