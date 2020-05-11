@@ -31,8 +31,13 @@ class DebugTransport extends Transport {
     metaToLog = _.pickBy(meta, function(value, key) {
       return typeof key !== 'symbol';
     });
-    //fn(`[${level}] ${message}`, metaToLog);
-    fn(`[${level}] ${message}`);
+
+    if (level === 'error') {
+      fn(`[${level}] ${message}`, metaToLog);
+    } else {
+      fn(`[${level}] ${message}`);
+    }
+
     return callback(null, true);
   }
 }

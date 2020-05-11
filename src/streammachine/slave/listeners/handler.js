@@ -33,7 +33,7 @@ module.exports = class ListenersHandler {
       unique_listener_id: req.tracking.unique_listener_id,
       session_id: req.tracking.session_id,
     };
-    const offset = req.query.offset || 0;
+    const offset = req.query.offset ? Number(req.query.offset) : 0;
 
     const listener = new Listener({
       client,

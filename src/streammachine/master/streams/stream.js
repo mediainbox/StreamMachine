@@ -75,16 +75,14 @@ module.exports = class Stream extends EventEmitter {
     // set up a rewind buffer, for use in bringing new slaves up to speed
     // or to transfer to a new master when restarting
     this.rewind = new RewindBuffer({
-      seconds: this.config.seconds,
-      burst: this.config.burst,
-      station: this.key,
-      key: `master__${this.key}`,
-      logger: this.logger.child({
-        module: "rewind"
-      })
+      id: `master__${this.key}`,
+      streamKey: this.key,
+      maxSeconds: this.config.seconds,
+      initialBurst: this.config.burst,
+      logger: this.logger
     });
     // Rewind listens to us, not to our source
-    this.rewind._rConnectSource(this)
+    this.rewind.connectSource(this)
     //this.rewind.emit("source", this);
     // Pass along buffer loads
     this.rewind.on("buffer", (c) => {
@@ -224,7 +222,7 @@ module.exports = class Stream extends EventEmitter {
       id: this.key,
       vitals: this._vitals,
       source: this.source.status(),
-      rewind: this.rewind._rStatus()
+      rewind: this.rewind.getStatus()
     };
   }
 

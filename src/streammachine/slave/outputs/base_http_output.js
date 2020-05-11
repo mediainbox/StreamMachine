@@ -56,7 +56,10 @@ module.exports = class BaseHttpOutput extends BaseOutput {
       this.socket.end();
     }
 
-    this.source.disconnect();
+    if (this.source) {
+      this.source.disconnect();
+    }
+
     this.disconnected = true;
 
     if (!external) {

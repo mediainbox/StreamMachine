@@ -1,7 +1,7 @@
 const { Events, BetterEventEmitter } = require('../../events');
 const _ = require("lodash");
 const RewindBuffer = require("../../rewind/rewind_buffer");
-const Collection = require('../../util/collection');
+const {createRewindLoader} = require("../../rewind/loader");
 const ListenersCleaner = require("../listeners/cleaner");
 const Listeners = require("../listeners/listeners");
 
@@ -70,7 +70,11 @@ module.exports = class Stream extends BetterEventEmitter {
 
     this.masterConnection.getStreamVitals(this.key, (err, vitals) => {
       this.logger.info('received vitals from master', { vitals });
-      this.vitals = vitals;
+      this.vitals = {
+        streamKey: vitals.streamKey,
+        framesPerSecond: vitals.framesPerSec,
+        secondsPerChunk: vitals.emitDuration,
+      };
       this.initRewindBuffer();
     });
   }
@@ -78,10 +82,12 @@ module.exports = class Stream extends BetterEventEmitter {
   initRewindBuffer() {
     // rewind buffer associated to this stream
     this.rewindBuffer = new RewindBuffer({
-      seconds: this.config.seconds,
-      burst: this.config.burst,
+      id: `slave__${this.key}`,
+      streamKey: this.key,
+      maxSeconds: this.config.seconds,
+      initialBurst: this.config.burst,
+      vitals: this.vitals,
       logger: this.logger,
-      station: this.key,
     });
 
     this.masterConnection.getRewind(this.key, (err, res) => {
@@ -91,15 +97,8 @@ module.exports = class Stream extends BetterEventEmitter {
         return;
       }
 
-      this.rewindBuffer.loadBuffer(res, (err) => {
-        if (err) {
-          this.logger.error("error ocurred during buffer load", { err });
-        } else {
-          this.logger.info("rewind load from master done");
-        }
-
+      this.rewindBuffer.preload(createRewindLoader(res), (err) => {
         this.logger.info('allow listener connections to start');
-
         this.emit(INTERNAL_EVENTS.SOURCE_INIT);
       });
     });
@@ -110,7 +109,7 @@ module.exports = class Stream extends BetterEventEmitter {
 
     listener.setId(this.nextListenerId++);
     this.listeners.add(listener.id, listener);
-    this.logger.debug(`serve listener #${listener.id}`);
+    this.logger.debug(`new listener #${listener.id}, assign rewinder`);
 
     listener.once('disconnect', () => {
       this.logger.debug(`listener #${listener.id} disconnected, remove from list`);
@@ -123,10 +122,15 @@ module.exports = class Stream extends BetterEventEmitter {
       // get a rewinder that handles the actual broadcast
       this.rewindBuffer.getRewinder(listener.id, opts, (err, rewinder) => {
         if (err) {
+          this.logger.error(`error ocurred while loading rewinder for listener #${listener.id}`, {
+            err,
+            opts,
+          });
           cb(err);
           return;
         }
 
+        this.logger.debug(`got rewinder for listener #${listener.id}`);
         cb(null, rewinder);
       });
     });
@@ -134,7 +138,7 @@ module.exports = class Stream extends BetterEventEmitter {
 
   status() {
     return {
-      ...this.rewindBuffer._rStatus(),
+      ...this.rewindBuffer.getStatus(),
       key: this.key,
       listeners: this.listeners.count(),
       connections: this.stats.connections,

@@ -86,7 +86,7 @@ module.exports = class ListenServer extends EventEmitter {
 
     // listen to the stream
     app.get("/:stream", (req, res) => {
-      this.logger.debug(`new listener for ${req.stream.key} from ip ${req.ip}`);
+      this.logger.debug(`listen request for ${req.stream.key} from ip ${req.ip}`);
 
       this.ctx.events.emit(Events.Listener.LANDED, {
         stream: req.stream,

@@ -48,11 +48,13 @@ module.exports = Rewinder = class Rewinder extends require("stream").Readable {
     this._queue = [];
     this._queuedBytes = 0;
     this._reading = false;
+
     this._bounceRead = _.debounce(() => {
       return this.read(0);
     }, 100);
+
     this._segTimer = null;
-    this.pumpSecs = opts.pump === true ? this.rewind.burst : opts.pump;
+    this.pumpSecs = opts.pump === true ? this.rewind.initialBurst : opts.pump;
     finalizeFunc = (...args) => {
       if (!this._pumpOnly) {
         // for non-pump requests, we want to set a timer that will
@@ -141,7 +143,8 @@ module.exports = Rewinder = class Rewinder extends require("stream").Readable {
         return oFunc(offset);
       });
     } else {
-      offset = opts.offsetSecs ? this.rewind.checkOffsetSecs(opts.offsetSecs) : opts.offset ? this.rewind.checkOffset(opts.offset) : 0;
+      //offset = opts.offsetSecs ? this.rewind.validateSecondsOffset(opts.offsetSecs) : opts.offset ? this.rewind.validateOffset(opts.offset) : 0;
+      offset = opts.offset ? this.rewind.validateSecondsOffset(opts.offset) : 0;
       oFunc(offset);
     }
   }
@@ -248,7 +251,8 @@ module.exports = Rewinder = class Rewinder extends require("stream").Readable {
       this._contentTime = b.ts;
     }
     if (!this._reading) {
-      return this._bounceRead();
+      //return this._bounceRead();
+      this.read(0);
     }
   }
 

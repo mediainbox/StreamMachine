@@ -1,3 +1,4 @@
+const {toTime} = require('../../helpers/datetime');
 var Icy, UrlSource, _, domain, moment, url, util,
   boundMethodCheck = function(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new Error('Bound instance method accessed before binding'); } };
 
@@ -160,7 +161,7 @@ module.exports = UrlSource = class UrlSource extends require("./base/base_source
     });
     // outgoing -> Stream
     this.on("_chunk", this.broadcastData);
-    this.logChunk = _.throttle(this._logChunk.bind(this), 30000);
+    this.logChunk = this._logChunk.bind(this);
     return this.on("_chunk", this.logChunk);
   }
 
@@ -173,7 +174,7 @@ module.exports = UrlSource = class UrlSource extends require("./base/base_source
 
   _logChunk(chunk) {
     boundMethodCheck(this, UrlSource);
-    return this.logger.silly(`received chunk from parser (time: ${chunk.ts.toISOString().substr(11)}, total: ${this.chunksCount})`);
+    return this.logger.silly(`received chunk from parser (time: ${toTime(chunk.ts)}, total: ${this.chunksCount})`);
   }
 
   checkStatus() {

@@ -468,7 +468,7 @@ module.exports = class Master extends EventEmitter {
     ref = this.streams;
     for (key in ref) {
       s = ref[key];
-      status[key] = s.rewind._rStatus();
+      status[key] = s.rewind.getStatus();
     }
     return status;
   }
