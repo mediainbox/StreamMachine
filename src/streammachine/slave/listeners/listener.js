@@ -1,11 +1,8 @@
 const { EventEmitter } = require('events');
 
-// We disconnect clients that have fallen too far behind on their
-// buffers. Buffer size can be configured via the "max_buffer" setting,
-// which takes bits
-
 module.exports = class Listener extends EventEmitter {
   id = null;
+  disconnected = false;
 
   constructor({ client, output, opts }) {
     super();
@@ -20,7 +17,7 @@ module.exports = class Listener extends EventEmitter {
 
   hookEvents() {
     this.output.once('disconnect', () => {
-      this.emit('disconnect');
+      this.disconnect();
     });
   }
 
@@ -33,6 +30,13 @@ module.exports = class Listener extends EventEmitter {
   }
 
   disconnect() {
-    this.output.disconnect(true);
+    if (this.disconnected) {
+      return;
+    }
+    this.disconnected = true;
+
+    this.output.disconnect();
+    this.removeAllListeners();
+    this.emit('disconnect');
   }
 }

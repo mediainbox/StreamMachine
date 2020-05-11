@@ -1,9 +1,5 @@
-var Rewinder, _, debug,
-  boundMethodCheck = function(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new Error('Bound instance method accessed before binding'); } };
-
-_ = require("lodash");
-
-debug = require("debug")("sm:rewind:rewinder");
+const _ = require("lodash");
+const {Readable} = require("stream");
 
 // Rewinder is the general-purpose listener stream.
 // Arguments:
@@ -19,23 +15,20 @@ debug = require("debug")("sm:rewind:rewinder");
 // * pumpOnly: Boolean, default false
 //   - Don't hook the Rewinder up to incoming data. Pump whatever data is
 //     requested and then send EOF
-module.exports = Rewinder = class Rewinder extends require("stream").Readable {
+module.exports = Rewinder = class Rewinder extends Readable {
   constructor(rewind, conn_id, opts = {}, cb) {
     var finalizeFunc, oFunc, offset;
     super({
-      highWaterMark: 256 * 1024
+      highWaterMark: 256 * 1024 // 256 KB
     });
-    //----------
 
     // Implement the guts of the Readable stream. For a normal stream,
     // RewindBuffer will be calling _insert at regular ticks to put content
     // into our queue, and _read takes the task of buffering and sending
     // that out to the listener.
-    this._read = this._read.bind(this);
-    //----------
-    this._insert = this._insert.bind(this);
     this.rewind = rewind;
     this.conn_id = conn_id;
+
     // keep track of the duration of the segments we have pushed
     // Note that for non-pump requests, these will be reset periodically
     // as we report listening segments
@@ -49,12 +42,9 @@ module.exports = Rewinder = class Rewinder extends require("stream").Readable {
     this._queuedBytes = 0;
     this._reading = false;
 
-    this._bounceRead = _.debounce(() => {
-      return this.read(0);
-    }, 100);
-
     this._segTimer = null;
     this.pumpSecs = opts.pump === true ? this.rewind.initialBurst : opts.pump;
+
     finalizeFunc = (...args) => {
       if (!this._pumpOnly) {
         // for non-pump requests, we want to set a timer that will
@@ -82,6 +72,7 @@ module.exports = Rewinder = class Rewinder extends require("stream").Readable {
       finalizeFunc = null;
       return cb = null;
     };
+
     oFunc = (_offset) => {
       this._offset = _offset;
       /*debug("Rewinder: creation with ", {
@@ -89,22 +80,7 @@ module.exports = Rewinder = class Rewinder extends require("stream").Readable {
         offset: this._offset
       });*/
       // -- What are we sending? -- #
-      if (opts != null ? opts.live_segment : void 0) {
-        // we're sending a segment of HTTP Live Streaming data
-        this._pumpOnly = true;
-        return this.rewind.hls.pumpSegment(this, opts.live_segment, (err, info) => {
-          if (err) {
-            return cb(err);
-          }
-          debug("Pumping HLS segment with ", {
-            duration: info.duration,
-            length: info.length,
-            offsetSeconds: info.offsetSeconds
-          });
-          this._offsetSeconds = info.offsetSeconds;
-          return finalizeFunc(info);
-        });
-      } else if (opts != null ? opts.pumpOnly : void 0) {
+      if (opts != null ? opts.pumpOnly : void 0) {
         // we're just giving one pump of data, then EOF
         this._pumpOnly = true;
         return this.rewind.pumpFrom(this, this._offset, this.rewind.secsToOffset(this.pumpSecs), false, (err, info) => {
@@ -135,33 +111,14 @@ module.exports = Rewinder = class Rewinder extends require("stream").Readable {
         return finalizeFunc();
       }
     };
-    if (opts.timestamp) {
-      this.rewind.findTimestamp(opts.timestamp, (err, offset) => {
-        if (err) {
-          return cb(err);
-        }
-        return oFunc(offset);
-      });
-    } else {
-      //offset = opts.offsetSecs ? this.rewind.validateSecondsOffset(opts.offsetSecs) : opts.offset ? this.rewind.validateOffset(opts.offset) : 0;
-      offset = opts.offset ? this.rewind.validateSecondsOffset(opts.offset) : 0;
-      oFunc(offset);
-    }
+
+    //offset = opts.offsetSecs ? this.rewind.validateSecondsOffset(opts.offsetSecs) : opts.offset ? this.rewind.validateOffset(opts.offset) : 0;
+    offset = opts.offset ? this.rewind.validateSecondsOffset(opts.offset) : 0;
+    oFunc(offset);
   }
 
-  onFirstMeta(cb) {
-    if (this._queue.length > 0) {
-      return typeof cb === "function" ? cb(null, this._queue[0].meta) : void 0;
-    } else {
-      return this.once("readable", () => {
-        return typeof cb === "function" ? cb(null, this._queue[0].meta) : void 0;
-      });
-    }
-  }
-
-  _read(size) {
+  _read = (size) => {
     var _pushQueue, sent;
-    boundMethodCheck(this, Rewinder);
     // we only want one queue read going on at a time, so go ahead and
     // abort if we're already reading
     if (this._reading) {
@@ -238,12 +195,12 @@ module.exports = Rewinder = class Rewinder extends require("stream").Readable {
       }
     };
     return _pushQueue();
-  }
+  };
 
-  _insert(b) {
-    boundMethodCheck(this, Rewinder);
+  _insert = (b) => {
     this._queue.push(b);
     this._queuedBytes += b.data.length;
+
     if (!this._contentTime) {
       // we set contentTime the first time we find it unset, which will be
       // either on our first insert or on our first insert after logging
@@ -254,17 +211,7 @@ module.exports = Rewinder = class Rewinder extends require("stream").Readable {
       //return this._bounceRead();
       this.read(0);
     }
-  }
-
-  // Return the current offset in chunks
-  offset() {
-    return this._offset;
-  }
-
-  // Return the current offset in seconds
-  offsetSecs() {
-    return this.rewind.offsetToSecs(this._offset);
-  }
+  };
 
   disconnect() {
     var obj;
@@ -293,6 +240,13 @@ module.exports = Rewinder = class Rewinder extends require("stream").Readable {
     //this.rewind.disconnectListener(this.conn_id);
 
     // make sure we're freed up for GC
-    return this.removeAllListeners();
+    this.removeAllListeners();
+
+    console.log('rewinder disconnected');
+  }
+
+  // returns the current offset in chunks
+  getOffset() {
+    return this._offset;
   }
 };

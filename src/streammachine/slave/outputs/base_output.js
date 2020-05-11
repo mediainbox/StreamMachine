@@ -19,7 +19,7 @@ module.exports = class BaseOutput extends EventEmitter {
     throw new Error('Must implement getType()');
   }
 
-  preroll() {
+  sendFrom() {
     throw new Error('Must implement preroll()');
   }
 };

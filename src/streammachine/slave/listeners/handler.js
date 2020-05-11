@@ -54,14 +54,14 @@ module.exports = class ListenersHandler {
         offset,
         pump: output.pump
       }
-    }, (err, source) => {
+    }, (err, rewinder) => {
       if (err) {
-        res.status(500).end(err);
+        res.status(500).end('Server error');
         listener.disconnect(true);
         return;
       }
 
-      output.send(source);
+      output.sendFrom(rewinder);
     });
   };
 }

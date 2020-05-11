@@ -3,7 +3,6 @@ const BaseOutput = require('./base_output');
 
 module.exports = class BaseHttpOutput extends BaseOutput {
   format = null;
-  initialized = false;
   disconnected = true;
 
   constructor({ stream, req, res, ctx }) {
@@ -47,23 +46,25 @@ module.exports = class BaseHttpOutput extends BaseOutput {
     });
   }
 
-  disconnect(external = false) {
+  disconnect(internal = true) {
     if (this.disconnected) {
       return;
     }
+    this.disconnected = true;
 
     if (!this.socket.destroyed) {
       this.socket.end();
     }
 
-    if (this.source) {
+    if (this.source) { // source = Rewinder
       this.source.disconnect();
     }
 
-    this.disconnected = true;
-
-    if (!external) {
+    if (internal) {
       this.emit("disconnect");
     }
+
+    this.logger.debug('output disconnected');
+    this.removeAllListeners();
   }
 };

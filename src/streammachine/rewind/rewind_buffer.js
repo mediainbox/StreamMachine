@@ -87,7 +87,7 @@ module.exports = class RewindBuffer extends BetterEventEmitter {
     this.rewinders.forEach(rewinder => {
       // we'll give them whatever is at length - offset
       // FIXME: This lookup strategy is horribly inefficient
-      this.buffer.at(rewinder.offset(), (err, b) => {
+      this.buffer.at(rewinder.getOffset(), (err, b) => {
         return rewinder._insert(b);
       });
     });
@@ -104,7 +104,7 @@ module.exports = class RewindBuffer extends BetterEventEmitter {
 
     source.vitals((err, vitals) => {
       if (this.vitals.streamKey && this.vitals.streamKey === vitals.streamKey) {
-        this.logger.debug("Rewind buffer validated new source.  Reusing buffer.");
+        this.logger.debug("rewind buffer validated new source, keep current buffer");
       } else {
         this.updateVitals({
           // TODO: standarize globally
@@ -318,14 +318,14 @@ module.exports = class RewindBuffer extends BetterEventEmitter {
     }
   }
 
-  addRewinder(obj) {
-    if (obj.offset() < 0) {
+  addRewinder(rewinder) {
+    if (rewinder.getOffset() < 0) {
       // FIXME: ??? see -1 in rewinder
       this.logger.error(`can not add rewinder with negative offset`);
       return;
     }
 
-    this.rewinders.push(obj);
+    this.rewinders.push(rewinder);
   }
 
   removeRewinder(rewinder) {

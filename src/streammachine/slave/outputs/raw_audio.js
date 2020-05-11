@@ -27,10 +27,10 @@ module.exports = class RawAudio extends BaseHttpOutput {
     return bufferSize + queuedBytes;
   }
 
-  // move to base?
-  send(source, preroll = null) {
+  // TODO: move to BaseHttpOutput?
+  sendFrom(source) {
     if (this.disconnected) {
-      this.logger.warn('called ready after disconnect');
+      this.logger.warn('sendFrom() was called after disconnect');
       return;
     }
 

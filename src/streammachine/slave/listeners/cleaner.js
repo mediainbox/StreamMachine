@@ -1,12 +1,15 @@
 const CLEAN_INTERVAL = 60000;
 
+// We disconnect clients that have fallen too far behind on their
+// buffers. Buffer size can be configured via the "max_buffer" setting,
+// which takes bits
 module.exports = class ListenersCleaner {
-  constructor({ listeners, ctx, key, maxBuffer }) {
+  constructor({ listeners, ctx, key, maxBufferSize }) {
     this.listeners = listeners;
     this.logger = ctx.logger.child({
       component: `listeners-cleaner[${key}]`
     });
-    this.maxBuffer = maxBuffer;
+    this.maxBufferSize = maxBufferSize;
 
     this.scheduleCheck();
   }
@@ -20,7 +23,7 @@ module.exports = class ListenersCleaner {
         const queuedBytes = listener.getQueuedBytes();
         totalBufferSize += queuedBytes;
 
-        if (queuedBytes < this.maxBuffer) {
+        if (queuedBytes < this.maxBufferSize) {
           return;
         }
 
