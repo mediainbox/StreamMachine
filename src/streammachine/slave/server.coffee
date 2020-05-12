@@ -29,7 +29,7 @@ module.exports = class Server extends require('events').EventEmitter
         @app.httpAllowHalfOpen = true
         @app.useChunkedEncodingByDefault = false
 
-        @app.set "x-powered-by", "StreamMachine"
+        @app.set "x-powered-by", "StreamMachine by mediainbox.net"
 
         # -- are we behind a geolock? -- #
 
@@ -144,7 +144,7 @@ module.exports = class Server extends require('events').EventEmitter
 
             res.status(200).end """
                 <html>
-                    <head><title>StreamMachine</title></head>
+                    <head><title>StreamMachine by mediainbox.net</title></head>
                     <body>
                         <h1>OK</h1>
                     </body>
@@ -171,7 +171,7 @@ module.exports = class Server extends require('events').EventEmitter
 
             host = req.headers?.host || req.stream.options.host
 
-            res.status(200).end "[playlist]\nNumberOfEntries=1\nFile1=http://#{host}/#{req.stream.key}/\n"
+            res.status(200).end "[playlist]\nNumberOfEntries=1\nFile1=https://#{host}/#{req.stream.key}/\n"
 
         # -- HTTP Live Streaming -- #
 
@@ -192,7 +192,7 @@ module.exports = class Server extends require('events').EventEmitter
 
         # listen to the stream
         @app.get "/:stream", (req,res) =>
-            res.set "X-Powered-By", "StreamMachine"
+            res.set "X-Powered-By", "StreamMachine by mediainbox.net"
 
             # -- Stream match! -- #
             if req.query.pump
@@ -269,7 +269,7 @@ module.exports = class Server extends require('events').EventEmitter
                 packageRoot
                 configDir: "./greenlock.d"
                 cluster: true,
-                workers: 4,
+                workers: config.cluster || 4,
                 maintainerEmail: "contact@mediainbox.io"
             })
                 .ready((glx) =>
