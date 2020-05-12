@@ -43,7 +43,7 @@ module.exports = Server = (function(_super) {
     }
     this.app.httpAllowHalfOpen = true;
     this.app.useChunkedEncodingByDefault = false;
-    this.app.set("x-powered-by", "StreamMachine");
+    this.app.set("x-powered-by", "StreamMachine by mediainbox.net");
     this.isGeolockEnabled = this.config.geolock && this.config.geolock.enabled;
     if (this.isGeolockEnabled) {
       this.logger.info("Enabling 'geolock' for streams");
@@ -163,7 +163,7 @@ module.exports = Server = (function(_super) {
       return function(req, res) {
         res.set("content-type", "text/html");
         res.set("connection", "close");
-        return res.status(200).end("<html>\n    <head><title>StreamMachine</title></head>\n    <body>\n        <h1>OK</h1>\n    </body>\n</html>");
+        return res.status(200).end("<html>\n    <head><title>StreamMachine by mediainbox.net</title></head>\n    <body>\n        <h1>OK</h1>\n    </body>\n</html>");
       };
     })(this));
     this.app.get("/crossdomain.xml", (function(_this) {
@@ -179,7 +179,7 @@ module.exports = Server = (function(_super) {
         res.set("content-type", "audio/x-scpls");
         res.set("connection", "close");
         host = ((_ref6 = req.headers) != null ? _ref6.host : void 0) || req.stream.options.host;
-        return res.status(200).end("[playlist]\nNumberOfEntries=1\nFile1=http://" + host + "/" + req.stream.key + "/\n");
+        return res.status(200).end("[playlist]\nNumberOfEntries=1\nFile1=https://" + host + "/" + req.stream.key + "/\n");
       };
     })(this));
     this.app.get("/sg/:group.m3u8", (function(_this) {
@@ -219,7 +219,7 @@ module.exports = Server = (function(_super) {
     })(this));
     this.app.get("/:stream", (function(_this) {
       return function(req, res) {
-        res.set("X-Powered-By", "StreamMachine");
+        res.set("X-Powered-By", "StreamMachine by mediainbox.net");
         if (req.query.pump) {
           return new _this.core.Outputs.pumper(req.stream, {
             req: req,
@@ -303,7 +303,7 @@ module.exports = Server = (function(_super) {
         packageRoot: packageRoot,
         configDir: "./greenlock.d",
         cluster: true,
-        workers: 4,
+        workers: config.cluster || 4,
         maintainerEmail: "contact@mediainbox.io"
       }).ready((function(_this) {
         return function(glx) {
