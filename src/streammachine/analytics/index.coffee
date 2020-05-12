@@ -348,7 +348,7 @@ module.exports = class Analytics
             size: 1
 
         # session start is allowed to be anywhere in the last 24 hours
-        @_indicesForTimeRange "listens", new Date(), "-72 hours", (err,indices) =>
+        @_indicesForTimeRange "listens", new Date(), "-24 hours", (err,indices) =>
             @es.search body:body, index:indices, ignoreUnavailable:true, (err,res) =>
                 return cb new Error "Error querying session start for #{id}: #{err}" if err
 
@@ -380,7 +380,7 @@ module.exports = class Analytics
             size:1
 
 
-        @_indicesForTimeRange "sessions", new Date(), "-72 hours", (err,indices) =>
+        @_indicesForTimeRange "sessions", new Date(), "-24 hours", (err,indices) =>
             @es.search body:body, index:indices, ignoreUnavailable:true, (err,res) =>
                 return cb new Error "Error querying for old session #{id}: #{err}" if err
 
@@ -417,7 +417,7 @@ module.exports = class Analytics
                 last_listen:
                     max:{ field:"time" }
 
-        @_indicesForTimeRange "listens", new Date(), ts||"-72 hours", (err,indices) =>
+        @_indicesForTimeRange "listens", new Date(), ts||"-24 hours", (err,indices) =>
             @es.search index:indices, body:body, ignoreUnavailable:true, (err,res) =>
                 return cb new Error "Error querying listens to finalize session #{id}: #{err}" if err
 
