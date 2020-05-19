@@ -237,6 +237,9 @@ module.exports = SourceIn = (function(_super) {
       if (line == null) {
         return;
       }
+      
+      console.log('///// ICY PARSER HEADER: ' + line);
+      
       if (line) {
         match = this.headerExp.exec(line);
         return this.info.headers[match[1].toLowerCase()] = match[2];
