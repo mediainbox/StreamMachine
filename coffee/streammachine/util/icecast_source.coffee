@@ -1,12 +1,10 @@
-FileSource = require "../sources/file_source"
+FileSource = require "../sources/file"
 net = require "net"
 
 debug = require("debug")("sm:sources:icecast")
 
 module.exports = class IcecastSource extends require("events").EventEmitter
     constructor: (@opts) ->
-        super()
-
         @_connected = false
         @sock = null
 

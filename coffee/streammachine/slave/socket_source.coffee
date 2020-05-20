@@ -4,19 +4,20 @@ http = require "http"
 
 module.exports = class SocketSource extends require("events").EventEmitter
     constructor: (@slave,@stream) ->
-        super()
-
         @log = @stream.log.child subcomponent:"socket_source"
 
         @log.debug "created SocketSource for #{@stream.key}"
 
-        @slave.masterConnection.on "audio:#{@stream.key}", (chunk) =>
+        @slave.io.on "audio:#{@stream.key}", (chunk) =>
             @emit "data", chunk
+
+        @slave.io.on "hls_snapshot:#{@stream.key}", (snapshot) =>
+            @emit "hls_snapshot", snapshot
 
         @_streamKey = null
 
         getVitals = (retries=0) =>
-            @slave.masterConnection.vitals @stream.key, (err,obj) =>
+            @slave.io.vitals @stream.key, (err,obj) =>
                 if err
                     @log.error "Failed to get vitals (#{retries} retries remaining): #{err}"
 
@@ -56,6 +57,11 @@ module.exports = class SocketSource extends require("events").EventEmitter
 
     #----------
 
+    getHLSSnapshot: (cb) ->
+        @slave.io.hls_snapshot @stream.key, cb
+
+    #----------
+
     getRewind: (cb) ->
         # connect to the master's StreamTransport and ask for any rewind
         # buffer that is available
@@ -68,13 +74,13 @@ module.exports = class SocketSource extends require("events").EventEmitter
         # connect to: @master.options.host:@master.options.port
 
         # GET request for rewind buffer
-        @log.debug "Making Rewind Buffer request for #{@stream.key}", sock_id:@slave.masterConnection.id
+        @log.debug "Making Rewind Buffer request for #{@stream.key}", sock_id:@slave.io.id
         req = http.request
-            hostname:   @slave.masterConnection.io.io.opts.host
-            port:       @slave.masterConnection.io.io.opts.port
+            hostname:   @slave.io.io.io.opts.host
+            port:       @slave.io.io.io.opts.port
             path:       "/s/#{@stream.key}/rewind"
             headers:
-                'stream-slave-id':    @slave.masterConnection.id
+                'stream-slave-id':    @slave.io.id
         , (res) =>
             clearTimeout gRT
 

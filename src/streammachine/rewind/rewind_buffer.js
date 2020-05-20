@@ -163,14 +163,16 @@ module.exports = class RewindBuffer extends BetterEventEmitter {
     this.logger.info(`buffer adjusted, max length is ${this.maxSeconds} seconds (${this.maxChunks} chunks)`);
   }
 
-  getRewinder(id, opts, cb) {
-    var rewind;
-    // create a rewinder object
-    rewind = new Rewinder(this, id, opts, cb);
+  async getRewinder(id, opts) {
+    const rewind = new Rewinder(this, opts);
+
     if (!opts.pumpOnly) {
       // add it to our list of listeners
-      return this.addRewinder(rewind);
+      this.addRewinder(rewind);
     }
+
+    await rewind.start();
+    return rewind;
   }
 
   // Load a RewindBuffer.  Buffer should arrive newest first, which means

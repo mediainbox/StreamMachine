@@ -35,8 +35,8 @@
     "streams": {
       "cadena3.mp3": {
         "key": "cadena3.mp3",
-        "preroll": "",
-        "transcoder": "",
+        "preroll": "http://demo.deliveryengine.adswizz.com/vast/4.0/request/alias/cad3testpub",
+        "transcoder": "http://masterdo5.mediainbox.net:15000/encoding",
         "log_interval": 30000,
         "meta_interval": 32768,
         "max_buffer": 4194304,

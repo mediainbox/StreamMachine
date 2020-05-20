@@ -4,6 +4,8 @@ module.exports = class RawAudio extends BaseHttpOutput {
   type = "raw";
   pump = true;
 
+  isStreaming = false;
+
   static canHandleRequest() {
     return true;
   }
@@ -21,6 +23,10 @@ module.exports = class RawAudio extends BaseHttpOutput {
   }
 
   getQueuedBytes() {
+    if (!this.isStreaming) {
+      return false;
+    }
+
     const bufferSize = this.socket.bufferSize || 0;
     const queuedBytes = this.source._queuedBytes || 0;
 
@@ -34,6 +40,7 @@ module.exports = class RawAudio extends BaseHttpOutput {
       return;
     }
 
+    this.isStreaming = true;
     this.source = source; // stream is Rewinder object
     source.pipe(this.socket);
   }

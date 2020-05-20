@@ -4,6 +4,7 @@ Dissolve    = require "dissolve"
 nconf       = require "nconf"
 
 Rewinder        = require "./rewind/rewinder"
+HLSSegmenter    = require "./rewind/hls_segmenter"
 
 MemoryStore     = require "./rewind/memory_store"
 
@@ -26,12 +27,6 @@ MemoryStore     = require "./rewind/memory_store"
 
 module.exports = class RewindBuffer extends require("events").EventEmitter
     constructor: (rewind_opts={}) ->
-        super()
-
-        @logger = rewind_opts.logger.child({
-            component: "rewind_buffer:#{rewind_opts.station}"
-        })
-
         @_rsecs         = rewind_opts.seconds || 0
         @_rburstsecs    = rewind_opts.burst || 0
         @_rsecsPerChunk = Infinity
@@ -40,6 +35,10 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
         @_rkey          = rewind_opts.key
 
         @_risLoading    = false
+
+        # This could already be set if we've subclassed RewindBuffer, so
+        # only set it if it doesn't exist
+        @log            = rewind_opts.log if rewind_opts.log && !@log
 
         # each listener should be an object that defines obj._offset and
         # obj.writeFrame. We implement RewindBuffer.Listener, but other
@@ -53,6 +52,11 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
         @_rbuffer.on "push",     (b) => @emit "rpush", b
         @_rbuffer.on "unshift",  (b) => @emit "runshift", b
 
+        # -- set up Live Streaming segments -- #
+
+        if rewind_opts.hls
+            @log.debug "Setting up HLS Segmenter.", segment_duration:rewind_opts.hls
+            @hls_segmenter = new HLSSegmenter @, rewind_opts.hls, @log
 
         # -- set up header and frame functions -- #
 
@@ -102,12 +106,12 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
     #----------
 
     _rConnectSource: (newsource,cb) ->
-        @logger.debug "new source event"
+        @log.debug "RewindBuffer got source event"
         # -- disconnect from old source -- #
 
         if @_rsource
             @_rsource.removeListener "data", @_rdataFunc
-            @logger.debug "removed old rewind data listener"
+            @log.debug "removed old rewind data listener"
 
         # -- compute initial stats -- #
 
@@ -115,7 +119,7 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
             if @_rstreamKey && @_rstreamKey == vitals.streamKey
                 # reconnecting, but rate matches so we can keep using
                 # our existing buffer.
-                @logger.debug "Rewind buffer validated new source.  Reusing buffer."
+                @log.debug "Rewind buffer validated new source.  Reusing buffer."
 
             else
                 @_rChunkLength vitals
@@ -137,6 +141,9 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
             first_buffer_ts:    @_rbuffer.first()?.ts
             last_buffer_ts:     @_rbuffer.last()?.ts
 
+        if @hls_segmenter
+            _.extend status, @hls_segmenter.status()
+
         status
 
     #----------
@@ -146,7 +153,7 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
             if @_rstreamKey
                 # we're reconnecting, but didn't match rate...  we
                 # should wipe out the old buffer
-                @logger.debug "Invalid existing rewind buffer. Reset."
+                @log.debug "Invalid existing rewind buffer. Reset."
                 @_rbuffer.reset()
 
             # compute new frame numbers
@@ -155,7 +162,7 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
 
             @_rUpdateMax()
 
-            @logger.debug "rewind's max buffer length is ???", max:@_rmax, secsPerChunk:@_rsecsPerChunk, secs:vitals.emitDuration
+            @log.debug "Rewind's max buffer length is ", max:@_rmax, secsPerChunk:@_rsecsPerChunk, secs:vitals.emitDuration
 
     #----------
 
@@ -164,7 +171,7 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
             @_rmax          = Math.round @_rsecs / @_rsecsPerChunk
             @_rbuffer.setMax @_rmax
             @_rburst        = Math.round @_rburstsecs / @_rsecsPerChunk
-        @logger.debug "rewind max buffer length is at #{@_rmax} chunks (#{@_rsecs} seconds) "
+        @log.debug "Rewind's max buffer length is ", max:@_rmax, seconds:@_rsecs
 
     #----------
 
@@ -210,6 +217,8 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
                 @emit "rewind_loaded"
                 @_risLoading = false
 
+            @hls_segmenter._loadMap null if @hls_segmenter
+
             return cb null, seconds:0, length:0
 
         parser = Dissolve()
@@ -244,6 +253,9 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
                     @emit "header", c
                     @_rChunkLength emitDuration:c.secs_per_chunk, streamKey:c.stream_key
 
+                    if c.hls && @hls_segmenter
+                        @hls_segmenter._loadMap c.hls
+
                 else
                     @_insertBuffer(c)
                     @emit "buffer", c
@@ -252,7 +264,7 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
 
         parser.on "end", =>
             obj = seconds:@bufferedSecs(), length:@_rbuffer.length()
-            @logger.info "rewind buffer is now at #{obj.seconds} seconds and #{obj.length} bytes"
+            @log.info "RewindBuffer is now at ", obj
             @emit "rewind_loaded"
             @_risLoading = false
             cb? null, obj
@@ -273,7 +285,13 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
                 writer = new RewindBuffer.RewindWriter rbuf_copy, @_rsecsPerChunk, @_rstreamKey, hls
                 cb null, writer
 
-            go()
+            if @hls_segmenter
+                @hls_segmenter._dumpMap (err,info) =>
+                    return cb err if err
+                    go info
+
+            else
+                go()
 
 
     #----------
@@ -287,14 +305,14 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
         bl = @_rbuffer.length()
 
         if offset < 0
-            @logger.debug "offset is invalid! 0 for live."
+            @log.silly "offset is invalid! 0 for live."
             return 0
 
         if bl >= offset
-            @logger.debug "Granted. current buffer length is ", length:bl
+            @log.silly "Granted. current buffer length is ", length:bl
             return offset
         else
-            @logger.debug "Not available. Instead giving max buffer of ", length:bl - 1
+            @log.silly "Not available. Instead giving max buffer of ", length:bl - 1
             return bl - 1
 
     #----------
@@ -356,7 +374,7 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
             else
                 @offsetToSecs(offset)
 
-            @log?.debug "Converting offset to seconds: ", offset:offset, secs:offsetSeconds
+            @log?.silly "Converting offset to seconds: ", offset:offset, secs:offsetSeconds
             cb? null, meta:meta, duration:duration, length:pumpLen, offsetSeconds:offsetSeconds
 
     #----------
@@ -394,12 +412,12 @@ module.exports = class RewindBuffer extends require("events").EventEmitter
 
     class @RewindWriter extends require("stream").Readable
         constructor: (@buf,@secs,@streamKey,@hls) ->
-            super highWaterMark:25*1024*1024
-
             @c          = Concentrate()
             @slices     = 0
             @i          = @buf.length - 1
             @_ended     = false
+
+            super highWaterMark:25*1024*1024
 
             # make sure there's something to send
             if @buf.length == 0

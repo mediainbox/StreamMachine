@@ -1,0 +1,35 @@
+{
+  "key": "cadena3.mp3",
+  "preroll": "http://demo.deliveryengine.adswizz.com/vast/4.0/request/alias/cad3testpub",
+  "transcoder": "http://masterdo5.mediainbox.net:15000/encoding",
+  "log_interval": 30000,
+  "meta_interval": 32768,
+  "max_buffer": 4194304,
+  "seconds": 300,
+  "burst": 2,
+  "source_password": "c3source",
+  "host": "cadena3.com.ar",
+  "fallback": "http://c3dl1.mediainbox.net:8000/cadena3.mp3",
+  "acceptSourceMeta": true,
+  "log_minutes": true,
+  "monitored": false,
+  "metaTitle": "Cadena3",
+  "metaUrl": "cadena3.com.ar",
+  "format": "mp3",
+  "preroll_key": "",
+  "root_route": true,
+  "group": null,
+  "bandwidth": 0,
+  "codec": null,
+  "ffmpeg_args": null,
+  "stream_key": null,
+  "impression_delay": 5000,
+  "geolock": {
+    "enabled": false,
+    "mode": "whitelist",
+    "fallback": "",
+    "countryCodes": [
+      "AR"
+    ]
+  }
+}

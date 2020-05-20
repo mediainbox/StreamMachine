@@ -8,23 +8,22 @@ Throttle        = require "throttle"
 
 Users = require "./users"
 
-module.exports = class MasterAPI
-    constructor: (@ctx) ->
-        @logger = @ctx.logger.child({
-            component: "api"
-        })
-        @master = @ctx.master
+module.exports = class API
+    constructor: (@master,require_auth=false) ->
+        @log = @master.log.child component:"admin"
 
         @app = express()
 
         # -- set up authentication -- #
 
-        @users = new Users.Local @ctx
+        @users = new Users.Local @
 
-        if @ctx.config.require_auth
+        if require_auth
             passport.use new BasicStrategy (user,passwd,done) =>
                 @users.validate user, passwd, done
+
             @app.use passport.initialize()
+
             @app.use passport.authenticate('basic', { session: false })
 
         # -- Param Handlers -- #

@@ -21,7 +21,8 @@
   "license": "MIT",
   "scripts": {
     "start:dev": "DEBUG=* node ./js/streamer.js --config config/master-dev.json",
-    "test": "./node_modules/.bin/mocha"
+    "test": "./node_modules/.bin/mocha",
+    "coffee": "grunt default"
   },
   "dependencies": {
     "@elastic/elasticsearch": "^6.8.6",
@@ -61,14 +62,22 @@
     "watch-for-path": "~0.0.1",
     "winston": "^3.2.1",
     "winston-transport": "^4.3.0",
+    "xml2js": "^0.4.23",
     "yargs": "~3.18"
   },
   "devDependencies": {
+    "@types/lodash": "^4.14.152",
+    "@types/xml2js": "^0.4.5",
+    "@types/xmldom": "^0.1.29",
     "chai": "~2.3.0",
     "heapdump": "~0.3.15",
     "mocha": "~2.3.2",
     "optimist": "~0.5.2",
-    "weak": "~1.0.1"
+    "ts-node": "^8.10.1",
+    "typescript": "^3.9.3",
+    "weak": "~1.0.1",
+    "xmldom": "^0.3.0",
+    "xpath": "^0.0.27"
   },
   "bin": {
     "streammachine": "./streammachine-cmd",

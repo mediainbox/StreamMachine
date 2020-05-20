@@ -1,9 +1,11 @@
 _       = require "underscore"
 express = require "express"
 nconf   = require "nconf"
-RPC     = require "ipc-rpc"
+
 Logger  = require "../logger"
 Master  = require "../master"
+
+RPC     = require "ipc-rpc"
 
 debug = require("debug")("sm:modes:master")
 
@@ -13,18 +15,20 @@ debug = require("debug")("sm:modes:master")
 # source streams and proxy them to the slaves, providing an admin
 # interface and a point to consolidate logs and listener counts.
 
-module.exports = class MasterMode extends require("./base_mode")
+module.exports = class MasterMode extends require("./base")
 
     MODE: "Master"
+    constructor: (@opts,cb) ->
+        @log = new Logger _.extend @opts.log, nconf.get 'log'
 
-    constructor: (config, cb) ->
-        super(config)
+        debug "Master instance initialized."
 
-        process.title = "SM:MASTER"
-        @logger.debug "master mode start"
+        process.title = "StreamM:master"
+
+        super
 
         # create a master
-        @master = new Master(@ctx)
+        @master = new Master _.extend {}, @opts, logger:@log
 
         # Set up a server for our admin
         @server = express()
@@ -60,7 +64,7 @@ module.exports = class MasterMode extends require("./base_mode")
     _handoffStart: (cb) ->
         @_acceptHandoff (err) =>
             if err
-                @logger.error "_handoffStart Failed! Falling back to normal start: #{err}"
+                @log.error "_handoffStart Failed! Falling back to normal start: #{err}"
                 @_normalStart cb
 
     #----------
@@ -69,19 +73,18 @@ module.exports = class MasterMode extends require("./base_mode")
         # load any rewind buffers from disk
         @master.loadRewinds()
 
-        port = @ctx.config.master.port
-        @handle = @server.listen port
-        @master.slaveServer.listen(@handle)
+        @handle = @server.listen @opts.master.port
+        @master.slaves.listen(@handle)
         @master.sourcein.listen()
 
-        @logger.info "master server listening on port #{port}"
+        @log.info "Listening."
 
         cb? null, @
 
     #----------
 
     _sendHandoff: (rpc) ->
-        @logger.info "Got handoff signal from new process."
+        @log.event "Got handoff signal from new process."
 
         debug "In _sendHandoff. Waiting for config."
 
@@ -91,11 +94,11 @@ module.exports = class MasterMode extends require("./base_mode")
             # send stream/source info so we make sure our configs are matched
             rpc.request "config", @master.config(), (err,streams) =>
                 if err
-                    @logger.error "Error setting config on new process: #{err}"
+                    @log.error "Error setting config on new process: #{err}"
                     cb "Error sending config: #{err}"
                     return false
 
-                @logger.info "New Master confirmed configuration."
+                @log.info "New Master confirmed configuration."
                 debug "New master confirmed configuration."
 
                 # basically we leave the config request open while we send streams
@@ -106,28 +109,28 @@ module.exports = class MasterMode extends require("./base_mode")
                 @master.sendHandoffData rpc, (err) =>
                     debug "Back in _sendHandoff. Sending listening sockets."
 
-                    @logger.info "Sent master data to new process."
+                    @log.event "Sent master data to new process."
 
                     _afterSockets = _.after 2, =>
                         debug "Socket transfer is done."
-                        @logger.info "Sockets transferred.  Exiting."
+                        @log.info "Sockets transferred.  Exiting."
                         process.exit()
 
                     # Hand over the source port
-                    @logger.info "Hand off source socket."
+                    @log.info "Hand off source socket."
                     rpc.request "source_socket", null, @master.sourcein.server, (err) =>
-                        @logger.error "Error sending source socket: #{err}" if err
+                        @log.error "Error sending source socket: #{err}" if err
                         _afterSockets()
 
-                    @logger.info "Hand off master socket."
+                    @log.info "Hand off master socket."
                     rpc.request "master_handle", null, @handle, (err) =>
-                        @logger.error "Error sending master handle: #{err}" if err
+                        @log.error "Error sending master handle: #{err}" if err
                         _afterSockets()
 
     #----------
 
     _acceptHandoff: (cb) ->
-        @logger.info "Initializing handoff receptor."
+        @log.info "Initializing handoff receptor."
 
         debug "In _acceptHandoff"
 
@@ -158,30 +161,30 @@ module.exports = class MasterMode extends require("./base_mode")
                 debug "Telling handoff sender that we're configured."
                 @_rpc.request "configured", @master.config(), (err,reply) =>
                     if err
-                        @logger.error "Failed to send config broadcast when starting handoff: #{err}"
+                        @log.error "Failed to send config broadcast when starting handoff: #{err}"
                         return false
 
                     debug "Handoff sender ACKed config."
 
-                    @logger.info "Handoff initiator ACKed our config broadcast."
+                    @log.info "Handoff initiator ACKed our config broadcast."
 
                     @master.loadHandoffData @_rpc, =>
-                        @logger.info "Handoff receiver believes all stream and source data has arrived."
+                        @log.info "Handoff receiver believes all stream and source data has arrived."
 
                     aFunc = _.after 2, =>
-                        @logger.info "Source and Master handles are up."
+                        @log.info "Source and Master handles are up."
                         cb? null, @
 
                     @_rpc.once "source_socket", (msg,handle,cb) =>
-                        @logger.info "Source socket is incoming."
+                        @log.info "Source socket is incoming."
                         @master.sourcein.listen handle
                         cb null
                         aFunc()
 
                     @_rpc.once "master_handle", (msg,handle,cb) =>
-                        @logger.info "Master socket is incoming."
+                        @log.info "Master socket is incoming."
                         @handle = @server.listen handle
-                        @master.slaveServer?.listen @handle
+                        @master.slaves?.listen @handle
                         cb null
                         aFunc()
 

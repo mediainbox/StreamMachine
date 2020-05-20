@@ -4,7 +4,6 @@ fs = require "fs"
 
 module.exports = class FakeTranscoder extends require("events").EventEmitter
     constructor: (@port,@files_dir) ->
-        super()
 
         @app = express()
 

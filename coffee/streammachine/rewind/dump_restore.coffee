@@ -11,16 +11,12 @@ _       = require "underscore"
 
 module.exports = class RewindDumpRestore extends require('events').EventEmitter
     constructor: (@master,@settings) ->
-        super()
-
         @_streams       = {}
         @_queue         = []
         @_working       = false
         @_shouldLoad    = false
 
-        @logger = @master.logger.child(
-            component: "rewind_dump_restore"
-        )
+        @log = @master.log.child(module:"rewind_dump_restore")
 
         # -- make sure directory is valid -- #
 
@@ -29,7 +25,7 @@ module.exports = class RewindDumpRestore extends require('events').EventEmitter
         if (s = fs.statSync(@_path))?.isDirectory()
             # good
         else
-            @logger.error "RewindDumpRestore path (#{@_path}) is invalid."
+            @log.error "RewindDumpRestore path (#{@_path}) is invalid."
             return false
 
         # -- create agents for each stream -- #
@@ -42,13 +38,13 @@ module.exports = class RewindDumpRestore extends require('events').EventEmitter
 
         # watch for new streams
         @master.on "new_stream", (stream) =>
-            @logger.debug "dump restore received new stream #{stream.key}"
+            @log.debug "RewindDumpRestore got new stream: #{stream.key}"
             @_streams[stream.key] = new Dumper stream.key, stream.rewind, @_path
 
         # -- set our interval -- #
 
         if (@settings.frequency||-1) > 0
-            @logger.debug "dump restore initialized with #{@settings.frequency} seconds interval"
+            @log.debug "RewindDumpRestore initialized with interval of #{ @settings.frequency } seconds."
             @_int = setInterval =>
                 @_triggerDumps()
             , @settings.frequency*1000
@@ -67,16 +63,15 @@ module.exports = class RewindDumpRestore extends require('events').EventEmitter
             if d = load_q.shift()
                 d._tryLoad (err,stats) =>
                     if err
-                        @logger.error "Load for #{ d.key } errored: #{err}", stream:d.key
+                        @log.error "Load for #{ d.key } errored: #{err}", stream:d.key
                         results.errors += 1
                     else
-                        @logger.info "dump restored for #{d.key}"
                         results.success += 1
 
                     _load()
             else
                 # done
-                @logger.info "dump restore load complete", success:results.success, errors:results.errors
+                @log.info "RewindDumpRestore load complete.", success:results.success, errors:results.errors
                 cb? null, results
 
         _load()
@@ -84,7 +79,7 @@ module.exports = class RewindDumpRestore extends require('events').EventEmitter
     #----------
 
     _triggerDumps: (cb) ->
-        @logger.debug "Queuing Rewind dumps"
+        @log.silly "Queuing Rewind dumps"
         @_queue.push ( d for k,d of @_streams )...
 
         @_dump cb if !@_working
@@ -98,9 +93,9 @@ module.exports = class RewindDumpRestore extends require('events').EventEmitter
             d._dump (err,file,timing) =>
                 if err
                     if d.stream
-                        @logger.error "Dump for #{d.key} errored: #{err}", stream:d.stream.key
+                        @log.error "Dump for #{d.key} errored: #{err}", stream:d.stream.key
                     else
-                        @logger.error "Dump for #{d.key} errored (with no stream): #{err}"
+                        @log.error "Dump for #{d.key} errored (with no stream): #{err}"
                 # for tests...
                 @emit "debug", "dump", d.key, err, file:file, timing:timing
 
@@ -114,8 +109,6 @@ module.exports = class RewindDumpRestore extends require('events').EventEmitter
 
     class Dumper extends require('events').EventEmitter
         constructor: (@key,@rewind,@_path) ->
-            super()
-
             @_i             = null
             @_active        = false
             @_loaded        = null

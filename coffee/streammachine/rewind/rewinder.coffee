@@ -203,9 +203,7 @@ module.exports = class Rewinder extends require("stream").Readable
             @_sentBytes     += next_buf.data.length
             @_sentDuration  += (next_buf.duration / 1000)
 
-
-            #debug "Sent duration is now #{ @_sentDuration }"
-
+            debug "Sent duration is now #{ @_sentDuration }"
 
             # Not all chunks will contain metadata, but go ahead and send
             # ours out if it does
@@ -287,8 +285,8 @@ module.exports = class Rewinder extends require("stream").Readable
 
     #----------
 
-    disconnect: ->
         @rewind._rremoveListener @
+    disconnect: ->
 
         # Record either a) our full listening session (pump requests) or
         # b) the portion of the request that we haven't already recorded

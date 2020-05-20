@@ -2,19 +2,28 @@ _       = require "underscore"
 nconf   = require "nconf"
 path    = require "path"
 RPC     = require "ipc-rpc"
+net     = require "net"
+CP      = require "child_process"
 
+Logger  = require "../logger"
 Slave   = require "../slave"
+
+debug = require("debug")("sm:modes:slave")
 
 #----------
 
-module.exports = class SlaveMode extends require("./base_mode")
+module.exports = class SlaveMode extends require("./base")
 
     MODE: "Slave"
-    constructor: (config,cb) ->
-        super(config)
+    constructor: (@opts,cb) ->
+        @log = (new Logger @opts.log).child({mode:'slave',pid:process.pid})
+        @log.debug "Slave Instance initialized"
 
-        process.title = "SM:SLAVE"
-        @logger.debug "slave mode start"
+        debug "Slave Mode init"
+
+        process.title = "StreamM:slave"
+
+        super
 
         @_handle        = null
         @_haveHandle    = false
@@ -24,4 +33,5 @@ module.exports = class SlaveMode extends require("./base_mode")
         @_lastAddress   = null
         @_initFull      = false
 
-        @slave = new Slave(@ctx)
+
+        @slave = new Slave _.extend({}, @opts, logger:@log), @

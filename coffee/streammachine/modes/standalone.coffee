@@ -8,17 +8,17 @@ Slave   = require "../slave"
 
 debug = require("debug")("sm:modes:standalone")
 
-module.exports = class StandaloneMode extends require("./base_mode")
+module.exports = class StandaloneMode extends require("./base")
     MODE: "StandAlone"
     constructor: (@opts,cb) ->
-        super(opts)
-
         # -- Set up logging -- #
 
         @log = (new Logger @opts.log).child pid:process.pid
         @log.debug("StreamMachine standalone initialized.")
 
         process.title = "StreamMachine"
+
+        super
 
         @streams = {}
 
@@ -87,7 +87,7 @@ module.exports = class StandaloneMode extends require("./base_mode")
 
             @slave.configureStreams @master.config().streams
 
-        @log.info "Standalone is listening on port #{@opts.port}"
+        @log.debug "Standalone is listening on port #{@opts.port}"
 
         # -- Handoff? -- #
 

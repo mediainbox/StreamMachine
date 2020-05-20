@@ -1,0 +1,131 @@
+{
+  "VAST": {
+    "$": {
+      "version": "4.0",
+      "xmlns": "http://www.iab.com/VAST"
+    },
+    "Ad": [
+      {
+        "$": {
+          "sequence": "1",
+          "id": "AdswizzAd73586"
+        },
+        "InLine": [
+          {
+            "AdSystem": [
+              "Adswizz"
+            ],
+            "Impression": [
+              {
+                "_": "http://demo.deliveryengine.adswizz.com/vast/4.0/v1.1/impression?H4sIAAAAAAAAAJ1VW4+bOhD+NewLCrIN5vKQh6TJtiu1PdWyqz5GvgwsKjERmN12f/0ZA4EkPRepUWR7xt/MfDO2\nB/F2IAfx9h6IdcR5dCcG+d0EpxJMC2uPbz3GNrWF1ghbvQJKHt/d1VVnwUC79hIHqLTThxscachlFkvIiIhSFoMsNFVFpgAUqCIZgOwDjt2FESMRY1xHGeGMxorqNJJRzGUc80IDm220saNNIeoOvGR3QVg1vbHtrzPlx4mp0Dth\nxdqKtgQLenXqJZJ/gXZVmaJBV4wynnjhVsOx8fheVnVdmRI3nOKw4SzB2MM6pyHikpCnMc7750ccSUDcD1cjJb63rVDwoNEBVaDDIi5WmVBkRSmIVRqm6YqIOI1TIgjmiQZ5/s1j99UUET2parB2pJRbcRfuvTFwGDeiKEtR016a\nFLheuHTX4rG5ls3pSiyvRYXSmFxX3Lp1e8/5DtfyJqS8iSlvg8qbqPImrFziytvA8ipyNRUXOAHyn8VFygOYZ7gU1plhwTf5db2FHgt7PtnfS/1awdvhB/xyKp5mWRYT3Bio6b7Fh9EYd5OyOGTO3zV5+2fFlzdupP3jek6Zh9tm\nTGsINC55yiMsyUm9iMrlwJnGSwuQUJlFKo1Qtfnuse3TPn/C6dvz9vND/mn/OD087BzlurjT8FopODeD0/yu3YiPtRiOk2YkYJQENIuClM9vuuoWvOk6vwtEMG+W0Eybg+t2RpJkxig7a2UPpul8UbXQzfsntTSnNKGzvhaT4SqM\ngpgwOqnxLEc1T4MwjfiobsXUriZZmdlr3vT2xd8coa2UWGiZhdfYjUZ1KZaMkp37D/pezGjxs2qQ/r0rVbA0v6abEdVfS3ryQpv7m9OpRhbDjZwLoBeuXxpscND5Hov9JyFrsBeFMv/r6rhAvjbWv8eeO5TlqhMbcZy/HN99d3P8\n+d6cu3JfHsFgP37AJrz2sAMjmmPqWuPRdY7YIONwbvYofhh0nf6xNw6h/xVy/jw96I9uEvYSa9v+Etpgiv8cD5NSch0SSvEjcJFfLUzZi/KcI3Qr0Y55/Q3dmgRBTwcAAA\u003d\u003d",
+                "$": {
+                  "id": "73586"
+                }
+              }
+            ],
+            "Pricing": [
+              {
+                "_": "0.00",
+                "$": {
+                  "currency": "EUR",
+                  "model": "CPM"
+                }
+              }
+            ],
+            "AdTitle": [
+              "SearSSamung test audio"
+            ],
+            "Advertiser": [
+              ""
+            ],
+            "Creatives": [
+              {
+                "Creative": [
+                  {
+                    "$": {
+                      "id": "73586",
+                      "sequence": "1"
+                    },
+                    "Linear": [
+                      {
+                        "TrackingEvents": [
+                          {
+                            "Tracking": [
+                              {
+                                "_": "http://demo.deliveryengine.adswizz.com/vast/4.0/v1.1/quartile/start?H4sIAAAAAAAAAJ1VW4+bOhD+NewLCjIGg3nIQ9Jk25XanmrZVR8jXwYWlZgIzG67v/6M\ngUCSnovUKLI9429mvhnbg3g7kIN4ew/EOmYsvhOD/G6CUwmmhbXHth6lm9pCa4StXgElj+3u6qqzYKBde6kDVNrpow2OYcRklkjIiIg5TUAWOlRFpgAUqCIdgPQDjt2FESUxpUzHGWE0TFSoeSzjhMkkYYUGOttoY0ebQtQdeOnu\ngrBqemPbX2fKjxNToXfCirUVbQkW9OrUSyT/Au2qMkWDrmhIWepFWw3HxmN7WdV1ZUrccIrDhtEUYw/rPIwQl0aMJzjvnx9xJAFxP1yNlNjetkLBg0YHoQIdFUmxyoQiqzAEseIR5ysiEp5wIgjmiQZ5/s2j99UUET2parB2pJRb\nMRfuvTFwGDfiOOOoaS9NClwvXLpr8dhcy+Z0JZbXokJpTK4rbt26ved8h2t5E1LexJS3QeVNVHkTVi5x5W1geRW5mooLjAD5z+Ii5QHMMlwK68yw4Jv8ut5Cj4U9n+zvpX6t4O3wA345FeNZliUENwZqum/xYTTG3aQsiajzd03e\n/lnx5Y0baf+4nlPm0bYZ0xoCjUvGWYwlOakXUbkcGNV4aQHSUGax4jGqNt89un3a5084fXvefn7IP+0fp4eHnaNcF3caXisF52Zwmt+1G/GxFsNxhhkJaEiCMIsDzuY3XXUL3nSd3wUimDdLaKbNwXU7I0k6Y5SdtbIH03S+qFro\n5v2TWpoTT8NZX4vJcBXFQUJoOKnxLEc140HEYzaqWzG1q0lWZvaaN7198TdHaCslFlpm4TV2o1FdiiWjdOf+g74XM1r8rBqkf+9KFSzNr+lmRPXXkp680Ob+5nSqkcVwI+cC6IXrlwYbHHS+RxP/Scga7EWhzP+6Oi6Qr43177Hn\nDmW56sRGHOcvx3ff3Rx/vjfnrtyXRzDYjx+wCa897MCIZpi61nh0nSM2yDicmz2KHwZdp3/sjUPof4WcP08P+qObhL3E2ra/hDaY4j/Hw6SUXEeUJ2FKL/KrhSl7UZ5zhG4l2jGvvwHsXhE7TwcAAA\u003d\u003d",
+                                "$": {
+                                  "event": "start"
+                                }
+                              },
+                              {
+                                "_": "http://demo.deliveryengine.adswizz.com/vast/4.0/v1.1/quartile/first?H4sIAAAAAAAAAJ1VW4+bOhD+NewLCjIGg3nIQ9Jk25XanmrZVR8jXwYWlZgIzG67v/6M\ngUCSnovUKLI9429mvhnbg3g7kIN4ew/EOmYsvhOD/G6CUwmmhbXHth6lm9pCa4StXgElj+3u6qqzYKBde6kDVNrpow2OYcRklkjIiIg5TUAWOlRFpgAUqCIdgPQDjt2FESUxpUzHGWE0TFSoeSzjhMkkYYUGOttoY0ebQtQdeOnu\ngrBqemPbX2fKjxNToXfCirUVbQkW9OrUSyT/Au2qMkWDrmhIWepFWw3HxmN7WdV1ZUrccIrDhtEUYw/rPIwQl0aMJzjvnx9xJAFxP1yNlNjetkLBg0YHoQIdFUmxyoQiqzAEseIR5ysiEp5wIgjmiQZ5/s2j99UUET2parB2pJRb\nMRfuvTFwGDfiOOOoaS9NClwvXLpr8dhcy+Z0JZbXokJpTK4rbt26ved8h2t5E1LexJS3QeVNVHkTVi5x5W1geRW5mooLjAD5z+Ii5QHMMlwK68yw4Jv8ut5Cj4U9n+zvpX6t4O3wA345FeNZliUENwZqum/xYTTG3aQsiajzd03e\n/lnx5Y0baf+4nlPm0bYZ0xoCjUvGWYwlOakXUbkcGNV4aQHSUGax4jGqNt89un3a5084fXvefn7IP+0fp4eHnaNcF3caXisF52Zwmt+1G/GxFsNxhhkJaEiCMIsDzuY3XXUL3nSd3wUimDdLaKbNwXU7I0k6Y5SdtbIH03S+qFro\n5v2TWpoTT8NZX4vJcBXFQUJoOKnxLEc140HEYzaqWzG1q0lWZvaaN7198TdHaCslFlpm4TV2o1FdiiWjdOf+g74XM1r8rBqkf+9KFSzNr+lmRPXXkp680Ob+5nSqkcVwI+cC6IXrlwYbHHS+RxP/Scga7EWhzP+6Oi6Qr43177Hn\nDmW56sRGHOcvx3ff3Rx/vjfnrtyXRzDYjx+wCa897MCIZpi61nh0nSM2yDicmz2KHwZdp3/sjUPof4WcP08P+qObhL3E2ra/hDaY4j/Hw6SUXEeUJ2FKL/KrhSl7UZ5zhG4l2jGvvwHsXhE7TwcAAA\u003d\u003d",
+                                "$": {
+                                  "event": "firstQuartile"
+                                }
+                              },
+                              {
+                                "_": "http://demo.deliveryengine.adswizz.com/vast/4.0/v1.1/quartile/midpoint?H4sIAAAAAAAAAJ1VW4+bOhD+NewLCjIGg3nIQ9Jk25XanmrZVR8jXwYWlZgIzG67v\n/6MgUCSnovUKLI9429mvhnbg3g7kIN4ew/EOmYsvhOD/G6CUwmmhbXHth6lm9pCa4StXgElj+3u6qqzYKBde6kDVNrpow2OYcRklkjIiIg5TUAWOlRFpgAUqCIdgPQDjt2FESUxpUzHGWE0TFSoeSzjhMkkYYUGOttoY0ebQtQde\nOnugrBqemPbX2fKjxNToXfCirUVbQkW9OrUSyT/Au2qMkWDrmhIWepFWw3HxmN7WdV1ZUrccIrDhtEUYw/rPIwQl0aMJzjvnx9xJAFxP1yNlNjetkLBg0YHoQIdFUmxyoQiqzAEseIR5ysiEp5wIgjmiQZ5/s2j99UUET2parB2p\nJRbMRfuvTFwGDfiOOOoaS9NClwvXLpr8dhcy+Z0JZbXokJpTK4rbt26ved8h2t5E1LexJS3QeVNVHkTVi5x5W1geRW5mooLjAD5z+Ii5QHMMlwK68yw4Jv8ut5Cj4U9n+zvpX6t4O3wA345FeNZliUENwZqum/xYTTG3aQsiajzd\n03e/lnx5Y0baf+4nlPm0bYZ0xoCjUvGWYwlOakXUbkcGNV4aQHSUGax4jGqNt89un3a5084fXvefn7IP+0fp4eHnaNcF3caXisF52Zwmt+1G/GxFsNxhhkJaEiCMIsDzuY3XXUL3nSd3wUimDdLaKbNwXU7I0k6Y5SdtbIH03S+q\nFro5v2TWpoTT8NZX4vJcBXFQUJoOKnxLEc140HEYzaqWzG1q0lWZvaaN7198TdHaCslFlpm4TV2o1FdiiWjdOf+g74XM1r8rBqkf+9KFSzNr+lmRPXXkp680Ob+5nSqkcVwI+cC6IXrlwYbHHS+RxP/Scga7EWhzP+6Oi6Qr4317\n7HnDmW56sRGHOcvx3ff3Rx/vjfnrtyXRzDYjx+wCa897MCIZpi61nh0nSM2yDicmz2KHwZdp3/sjUPof4WcP08P+qObhL3E2ra/hDaY4j/Hw6SUXEeUJ2FKL/KrhSl7UZ5zhG4l2jGvvwHsXhE7TwcAAA\u003d\u003d",
+                                "$": {
+                                  "event": "midpoint"
+                                }
+                              },
+                              {
+                                "_": "http://demo.deliveryengine.adswizz.com/vast/4.0/v1.1/quartile/third?H4sIAAAAAAAAAJ1VW4+bOhD+NewLCjIGg3nIQ9Jk25XanmrZVR8jXwYWlZgIzG67v/6M\ngUCSnovUKLI9429mvhnbg3g7kIN4ew/EOmYsvhOD/G6CUwmmhbXHth6lm9pCa4StXgElj+3u6qqzYKBde6kDVNrpow2OYcRklkjIiIg5TUAWOlRFpgAUqCIdgPQDjt2FESUxpUzHGWE0TFSoeSzjhMkkYYUGOttoY0ebQtQdeOnu\ngrBqemPbX2fKjxNToXfCirUVbQkW9OrUSyT/Au2qMkWDrmhIWepFWw3HxmN7WdV1ZUrccIrDhtEUYw/rPIwQl0aMJzjvnx9xJAFxP1yNlNjetkLBg0YHoQIdFUmxyoQiqzAEseIR5ysiEp5wIgjmiQZ5/s2j99UUET2parB2pJRb\nMRfuvTFwGDfiOOOoaS9NClwvXLpr8dhcy+Z0JZbXokJpTK4rbt26ved8h2t5E1LexJS3QeVNVHkTVi5x5W1geRW5mooLjAD5z+Ii5QHMMlwK68yw4Jv8ut5Cj4U9n+zvpX6t4O3wA345FeNZliUENwZqum/xYTTG3aQsiajzd03e\n/lnx5Y0baf+4nlPm0bYZ0xoCjUvGWYwlOakXUbkcGNV4aQHSUGax4jGqNt89un3a5084fXvefn7IP+0fp4eHnaNcF3caXisF52Zwmt+1G/GxFsNxhhkJaEiCMIsDzuY3XXUL3nSd3wUimDdLaKbNwXU7I0k6Y5SdtbIH03S+qFro\n5v2TWpoTT8NZX4vJcBXFQUJoOKnxLEc140HEYzaqWzG1q0lWZvaaN7198TdHaCslFlpm4TV2o1FdiiWjdOf+g74XM1r8rBqkf+9KFSzNr+lmRPXXkp680Ob+5nSqkcVwI+cC6IXrlwYbHHS+RxP/Scga7EWhzP+6Oi6Qr43177Hn\nDmW56sRGHOcvx3ff3Rx/vjfnrtyXRzDYjx+wCa897MCIZpi61nh0nSM2yDicmz2KHwZdp3/sjUPof4WcP08P+qObhL3E2ra/hDaY4j/Hw6SUXEeUJ2FKL/KrhSl7UZ5zhG4l2jGvvwHsXhE7TwcAAA\u003d\u003d",
+                                "$": {
+                                  "event": "thirdQuartile"
+                                }
+                              },
+                              {
+                                "_": "http://demo.deliveryengine.adswizz.com/vast/4.0/v1.1/quartile/complete?H4sIAAAAAAAAAJ1VW4+bOhD+NewLCjIGg3nIQ9Jk25XanmrZVR8jXwYWlZgIzG67v\n/6MgUCSnovUKLI9429mvhnbg3g7kIN4ew/EOmYsvhOD/G6CUwmmhbXHth6lm9pCa4StXgElj+3u6qqzYKBde6kDVNrpow2OYcRklkjIiIg5TUAWOlRFpgAUqCIdgPQDjt2FESUxpUzHGWE0TFSoeSzjhMkkYYUGOttoY0ebQtQde\nOnugrBqemPbX2fKjxNToXfCirUVbQkW9OrUSyT/Au2qMkWDrmhIWepFWw3HxmN7WdV1ZUrccIrDhtEUYw/rPIwQl0aMJzjvnx9xJAFxP1yNlNjetkLBg0YHoQIdFUmxyoQiqzAEseIR5ysiEp5wIgjmiQZ5/s2j99UUET2parB2p\nJRbMRfuvTFwGDfiOOOoaS9NClwvXLpr8dhcy+Z0JZbXokJpTK4rbt26ved8h2t5E1LexJS3QeVNVHkTVi5x5W1geRW5mooLjAD5z+Ii5QHMMlwK68yw4Jv8ut5Cj4U9n+zvpX6t4O3wA345FeNZliUENwZqum/xYTTG3aQsiajzd\n03e/lnx5Y0baf+4nlPm0bYZ0xoCjUvGWYwlOakXUbkcGNV4aQHSUGax4jGqNt89un3a5084fXvefn7IP+0fp4eHnaNcF3caXisF52Zwmt+1G/GxFsNxhhkJaEiCMIsDzuY3XXUL3nSd3wUimDdLaKbNwXU7I0k6Y5SdtbIH03S+q\nFro5v2TWpoTT8NZX4vJcBXFQUJoOKnxLEc140HEYzaqWzG1q0lWZvaaN7198TdHaCslFlpm4TV2o1FdiiWjdOf+g74XM1r8rBqkf+9KFSzNr+lmRPXXkp680Ob+5nSqkcVwI+cC6IXrlwYbHHS+RxP/Scga7EWhzP+6Oi6Qr4317\n7HnDmW56sRGHOcvx3ff3Rx/vjfnrtyXRzDYjx+wCa897MCIZpi61nh0nSM2yDicmz2KHwZdp3/sjUPof4WcP08P+qObhL3E2ra/hDaY4j/Hw6SUXEeUJ2FKL/KrhSl7UZ5zhG4l2jGvvwHsXhE7TwcAAA\u003d\u003d",
+                                "$": {
+                                  "event": "complete"
+                                }
+                              }
+                            ]
+                          }
+                        ],
+                        "Duration": [
+                          "00:00:29"
+                        ],
+                        "MediaFiles": [
+                          {
+                            "MediaFile": [
+                              {
+                                "_": "http://delivery-cdn-cf.adswizz.com/demo/searssamsungvupsb2ad52cc8915f20641389136149_ad_52d7f82f8714e_1389885487_ad_13578701-5f87-4278-a2\n66-61a0dac7dd93_1_ad_73c1e612-8733-4340-8d9e-2f29a557f3fa.wav",
+                                "$": {
+                                  "bitrate": "320000",
+                                  "height": "0",
+                                  "width": "0",
+                                  "type": "audio/wav",
+                                  "delivery": "progressive"
+                                }
+                              }
+                            ],
+                            "Mezzanine": [
+                              "http://delivery-cdn-cf.adswizz.com/demo/searssamsungvupsb2ad52cc8915f20641389136149_ad_52d7f82f8714e_1389885487_ad_13578701-5f87-4278-a266-61\na0dac7dd93_1_ad_73c1e612-8733-4340-8d9e-2f29a557f3fa.wav"
+                            ]
+                          }
+                        ]
+                      }
+                    ],
+                    "UniversalAdId": [
+                      {
+                        "$": {
+                          "idValue": "unknown",
+                          "idRegistry": "unknown"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "Description": [
+              "SearSSamung test audio"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

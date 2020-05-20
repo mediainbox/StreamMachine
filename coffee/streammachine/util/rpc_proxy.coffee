@@ -1,6 +1,5 @@
 module.exports = class RPCProxy extends require("events").EventEmitter
     constructor: (@a,@b) ->
-        super()
         @messages = []
 
         @_aFunc = (msg,handle) =>

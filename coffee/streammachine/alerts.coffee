@@ -27,8 +27,6 @@ ALERT_TYPES =
 
 module.exports = class Alerts extends require("events").EventEmitter
     constructor: (@opts) ->
-        super()
-
         @logger = @opts.logger
 
         @email      = new Alerts.Email @, nconf.get("alerts:email") if nconf.get("alerts:email")
@@ -101,7 +99,7 @@ module.exports = class Alerts extends require("events").EventEmitter
             triggered_at:   obj.triggered_at
             description:    ALERT_TYPES[ obj.code ].description
 
-        @logger.warn "Alert: #{obj.key} : #{ alert.description }", alert
+        @logger.alert "Alert: #{obj.key} : #{ alert.description }", alert
         @emit "alert", alert
 
         # mark our alert as sent
@@ -117,7 +115,7 @@ module.exports = class Alerts extends require("events").EventEmitter
             last_seen_at:   obj.last_seen_at
             description:    ALERT_TYPES[ obj.code ].description
 
-        @logger.warn "Alert Cleared: #{obj.key} : #{ alert.description }", alert
+        @logger.alert "Alert Cleared: #{obj.key} : #{ alert.description }", alert
         @emit "alert_cleared", alert
 
         # we need to delete the alert now that it has been cleared. If the
