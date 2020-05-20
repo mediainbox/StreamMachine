@@ -66,8 +66,14 @@ module.exports = Preroller = (function() {
       return true;
     }
     count = this._counter++;
+    console.log('preroller: making ad request', {
+      config: this._config
+    });
     adreq = new Preroller.AdRequest(output, writer, this._config, count, (function(_this) {
       return function(err) {
+        if (err) {
+          console.error(err, 'preroller ad request error');
+        }
         if (err) {
           _this.stream.log.error(err);
         }
@@ -76,6 +82,7 @@ module.exports = Preroller = (function() {
     })(this));
     return adreq.on("error", (function(_this) {
       return function(err) {
+        console.error(err, 'preroller ad request error');
         return _this.stream.log.error(err);
       };
     })(this));
@@ -262,30 +269,36 @@ module.exports = Preroller = (function() {
 
   Preroller.AdObject = (function() {
     function AdObject(xmldoc, cb) {
-      var ad, creative, doc, error, impression, mediafile, wrapper, _ref, _ref1, _ref2, _ref3, _ref4, _ref5;
+      var ad, creative, doc, error, impression, mediafile, vastSelect, wrapper, _ref, _ref1, _ref2, _ref3, _ref4, _ref5;
       this.creativeURL = null;
       this.impressionURL = null;
       this.doc = null;
       debug("Parsing ad object XML");
       doc = new xmldom.DOMParser().parseFromString(xmldoc);
       debug("XML doc parsed.");
-      if (wrapper = (_ref = xpath.select("/VAST", doc)) != null ? _ref[0] : void 0) {
+      vastSelect = xpath.useNamespaces({
+        "ns": "http://www.iab.com/VAST"
+      });
+      if (wrapper = (_ref = vastSelect("/ns:VAST", doc)) != null ? _ref[0] : void 0) {
         debug("VAST wrapper detected");
-        if (ad = (_ref1 = xpath.select("Ad/InLine", wrapper)) != null ? _ref1[0] : void 0) {
+        if (ad = (_ref1 = vastSelect("ns:Ad/ns:InLine", wrapper)) != null ? _ref1[0] : void 0) {
           debug("Ad document found.");
-          if (creative = (_ref2 = xpath.select("./Creatives/Creative/Linear", ad)) != null ? _ref2[0] : void 0) {
-            if (mediafile = xpath.select("string(./MediaFiles/MediaFile[@type='audio/mpeg']/text())", creative)) {
+          if (creative = (_ref2 = vastSelect("./ns:Creatives/ns:Creative/ns:Linear", ad)) != null ? _ref2[0] : void 0) {
+            if (mediafile = vastSelect("string(./ns:MediaFiles/ns:MediaFile[@type='audio/mpeg']/text())", creative)) {
               debug("MP3 Media File is " + mediafile);
               this.creativeURL = mediafile;
-            } else if (mediafile = xpath.select("string(./MediaFiles/MediaFile[@type='audio/mp4']/text())", creative)) {
+            } else if (mediafile = vastSelect("string(./ns:MediaFiles/ns:MediaFile[@type='audio/mp4']/text())", creative)) {
               debug("MP4 Media File is " + mediafile);
               this.creativeURL = mediafile;
-            } else if (mediafile = xpath.select("string(./MediaFiles/MediaFile[@type='audio/aac']/text())", creative)) {
+            } else if (mediafile = vastSelect("string(./ns:MediaFiles/ns:MediaFile[@type='audio/aac']/text())", creative)) {
               debug("AAC Media File is " + mediafile);
+              this.creativeURL = mediafile;
+            } else if (mediafile = vastSelect("string(./ns:MediaFiles/ns:MediaFile[@type='audio/wav']/text())", creative)) {
+              debug("WAV Media File is " + mediafile);
               this.creativeURL = mediafile;
             }
           }
-          if (impression = xpath.select("string(./Impression/text())", ad)) {
+          if (impression = vastSelect("string(./ns:Impression/text())", ad)) {
             debug("Impression URL is " + impression);
             this.impressionURL = impression;
           }

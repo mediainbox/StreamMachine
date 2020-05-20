@@ -56,11 +56,18 @@ module.exports = class Preroller
 
         # -- create an ad request -- #
 
+
+        console.log('preroller: making ad request',
+            config: this._config
+        );
+
         adreq = new Preroller.AdRequest output, writer, @_config, count, (err) =>
+            console.error(err, 'preroller ad request error') if err
             @stream.log.error err if err
             cb()
 
         adreq.on "error", (err) =>
+            console.error(err, 'preroller ad request error');
             @stream.log.error err
 
     #----------
@@ -246,28 +253,33 @@ module.exports = class Preroller
 
             # -- VAST Support -- #
 
-            if wrapper = xpath.select("/VAST",doc)?[0]
+            vastSelect = xpath.useNamespaces({"ns": "http://www.iab.com/VAST"})
+
+            if wrapper = vastSelect("/ns:VAST",doc)?[0]
                 debug "VAST wrapper detected"
 
-                if ad = xpath.select("Ad/InLine",wrapper)?[0]
+                if ad = vastSelect("ns:Ad/ns:InLine",wrapper)?[0]
                     debug "Ad document found."
 
                     # find our linear creative
-                    if creative = xpath.select("./Creatives/Creative/Linear",ad)?[0]
+                    if creative = vastSelect("./ns:Creatives/ns:Creative/ns:Linear",ad)?[0]
 
                         # find the mpeg mediafile
-                        if mediafile = xpath.select("string(./MediaFiles/MediaFile[@type='audio/mpeg']/text())",creative)
+                        if mediafile = vastSelect("string(./ns:MediaFiles/ns:MediaFile[@type='audio/mpeg']/text())",creative)
                             debug "MP3 Media File is #{mediafile}"
                             @creativeURL = mediafile
-                        else if mediafile = xpath.select("string(./MediaFiles/MediaFile[@type='audio/mp4']/text())",creative)
+                        else if mediafile = vastSelect("string(./ns:MediaFiles/ns:MediaFile[@type='audio/mp4']/text())",creative)
                             debug "MP4 Media File is #{mediafile}"
                             @creativeURL = mediafile
-                        else if mediafile = xpath.select("string(./MediaFiles/MediaFile[@type='audio/aac']/text())",creative)
+                        else if mediafile = vastSelect("string(./ns:MediaFiles/ns:MediaFile[@type='audio/aac']/text())",creative)
                             debug "AAC Media File is #{mediafile}"
+                            @creativeURL = mediafile
+                        else if mediafile = vastSelect("string(./ns:MediaFiles/ns:MediaFile[@type='audio/wav']/text())",creative)
+                            debug "WAV Media File is #{mediafile}"
                             @creativeURL = mediafile
 
                     # find the impression URL
-                    if impression = xpath.select("string(./Impression/text())",ad)
+                    if impression = vastSelect("string(./ns:Impression/text())",ad)
                         debug "Impression URL is #{impression}"
                         @impressionURL = impression
 
