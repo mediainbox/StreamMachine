@@ -1,13 +1,13 @@
 import { Readable } from "stream";
 
 export interface PrerollerConfig {
-  streamKey: string;
-  streamId: string;
-  type: 'VAST' | 'DAAST';
-  adUrl: string;
-  adRequestTimeout: number;
-  transcoderUrl: string;
-  impressionDelay: number;
+  readonly streamId: string;
+  readonly streamKey: string;
+  readonly prerollKey: string;
+  readonly timeout: number;
+  readonly adUrl: string;
+  readonly transcoderUrl: string;
+  readonly impressionDelay: number;
 }
 
 export interface ListenerInfo {

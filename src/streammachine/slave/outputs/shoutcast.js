@@ -4,7 +4,7 @@ _ = require("lodash");
 
 Icy = require("icy");
 
-BaseOutput = require("./base_http_output");
+BaseOutput = require("./HttpOutput");
 
 debug = require("debug")("sm:outputs:shoutcast");
 

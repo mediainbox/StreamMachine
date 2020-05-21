@@ -211,7 +211,7 @@ module.exports = class RewindBuffer extends BetterEventEmitter {
       })
       .on('end', () => {
         this.preloading = false;
-        this.logger.info(`preloaded finished, loaded ${this.getBufferedSeconds()} seconds (${this.buffer.length()} chunks)`);
+        this.logger.info(`preload finished, loaded ${this.getBufferedSeconds()} seconds (${this.buffer.length()} chunks)`);
         this.emit(RewindBuffer.EVENTS.PRELOAD_DONE);
         cb();
       });

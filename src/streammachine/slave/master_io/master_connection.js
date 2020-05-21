@@ -34,7 +34,7 @@ module.exports = class MasterConnection extends require("events").EventEmitter {
     this.ctx.events.on(Events.Listener.SESSION_START, data => {
       // serialize event to go through ws
       this.ws.emit(Events.Listener.SESSION_START, {
-        stream: data.stream.key,
+        stream: data.stream.getId(),
         listener: {
           connectedAt: data.listener.connectedAt,
           client: data.listener.client,

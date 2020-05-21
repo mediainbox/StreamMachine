@@ -1,5 +1,5 @@
-module.exports = class Collection {
-  map = {};
+export class Collection<T> {
+  map: Record<string, T> = {};
 
   constructor() {}
 
@@ -7,29 +7,29 @@ module.exports = class Collection {
     return Object.values(this.map);
   }
 
-  get(key) {
+  get(key: string): T | null {
     return this.map[key];
   }
 
-  keys() {
+  keys(): readonly string[] {
     return Object.keys(this.map);
   }
 
-  add(key, element) {
+  add(key: string, element: T) {
     this.map[key] = element;
   }
 
-  remove(key) {
+  remove(key: string): T {
     const element = this.map[key];
     delete this.map[key];
     return element;
   }
 
-  count() {
+  count(): number {
     return this.keys().length;
   }
 
-  first() {
+  first(): T | null {
     if (!this.count()) {
       return null;
     }

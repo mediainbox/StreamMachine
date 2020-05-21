@@ -1,7 +1,7 @@
 import {EventEmitter} from "events";
 import {Logger} from "winston";
 import {AdInstance} from "./AdInstance";
-import axios from 'axios';
+import axios, {Cancel} from 'axios';
 import {IAdOperator, PrerollerConfig} from "./types";
 import {Readable} from "stream";
 import {Client} from "../types";
@@ -23,7 +23,9 @@ export class AdOperator extends EventEmitter implements IAdOperator {
   private transcoderResponse: Readable;
   private abortTimeout: NodeJS.Timeout;
   private impressionTimeout: NodeJS.Timeout;
+
   private isAborted = false;
+  private isFinished = false;
 
   constructor(
     private readonly adId: string,
@@ -41,42 +43,46 @@ export class AdOperator extends EventEmitter implements IAdOperator {
       .replace("!UUID!", client.sessionId);
   }
 
-  build(): Promise<Readable> {
-    return Promise.race([
-      this.abortOnTimeout(),
-      (async () => {
-        try {
-          const serverResponse = await this.requestAd();
-          const data = await parseAdResponse(serverResponse);
+  async build(): Promise<Readable> {
+    this.abortTimeout = this.abortOnTimeout();
 
-          this.ad = new AdInstance(this.adId, data);
+    try {
+      const serverResponse = await this.requestAd();
+      const data = await parseAdResponse(serverResponse);
 
-          // call transcoder to get a version of the creative
-          // that is matched to our specs
-          const creativeResponse = await this.requestCreative();
+      this.ad = new AdInstance(this.adId, data);
 
-          if (this.isAborted) {
-            return new EmptyReadable();
-          }
+      // call transcoder to get a version of the creative
+      // that is matched to our specs
+      const creativeResponse = await this.requestCreative();
+      clearTimeout(this.abortTimeout);
 
-          if (this.ad.data.impressionUrl) {
-            this.scheduleImpression();
-          } else {
-            this.logger.warn('skip impression call, no url found');
-          }
+      if (this.isAborted) {
+        return new EmptyReadable();
+      }
 
-          this.logger.debug('creative from transcoder built');
+      if (this.ad.data.impressionUrl) {
+        this.scheduleImpression();
+      } else {
+        this.logger.warn('skip impression call, no url found');
+      }
 
-          return creativeResponse;
-        } catch (error) {
-          return new EmptyReadable();
-        }
-      }).call(this)
-    ]);
+      this.logger.debug('creative from transcoder built');
+
+      return creativeResponse;
+    } catch (error) {
+      if (!axios.isCancel(error)) {
+        this.logger.error('error ocurred during ad build', { error });
+      }
+
+      return new EmptyReadable();
+    }
   }
 
   // fetch ad info from ad server
   private requestAd(): Promise<string> {
+    this.logger.debug('request ad from server');
+
     return axios
       .get(this.adUrl, {
         cancelToken: new axios.CancelToken(cancel => {
@@ -84,17 +90,15 @@ export class AdOperator extends EventEmitter implements IAdOperator {
         }),
       })
       .then(res => {
-        this.logger.debug('got response from ad server');
+        this.logger.debug('got ok response from ad server');
         return res.data;
-      })
-      .catch(error => {
-        this.logger.error('error ocurred during ad server request', { error });
-        throw error;
       });
   }
 
   // get transcoded ad audio from transcoding server
   private requestCreative(): Promise<Readable> {
+    this.logger.debug('request creative from transcoder');
+
     return axios.get(this.config.transcoderUrl, {
       responseType: "stream",
       params: {
@@ -108,15 +112,14 @@ export class AdOperator extends EventEmitter implements IAdOperator {
       .then(response => {
         this.transcoderResponse = response.data;
 
+        this.transcoderResponse.on('end', () => this.isFinished = true);
+
         return this.transcoderResponse;
-      })
-      .catch(err => {
-        throw err;
       });
   }
 
   private scheduleImpression() {
-    this.logger.debug('make impression request');
+    this.logger.debug('start impression request');
 
     this.impressionTimeout = setTimeout(() => {
       axios
@@ -131,14 +134,11 @@ export class AdOperator extends EventEmitter implements IAdOperator {
   }
 
   // if the preroll request can't be completed in time, abort
-  private abortOnTimeout(): Promise<Readable> {
-    return new Promise(resolve => {
-      setTimeout(() => {
-        this.logger.warn(`ad got build timeout, abort`)
-        this.abort();
-        resolve(new EmptyReadable());
-      }, this.config.adRequestTimeout);
-    });
+  private abortOnTimeout(): NodeJS.Timeout {
+    return setTimeout(() => {
+      this.logger.warn(`ad got build timeout, abort`)
+      this.abort();
+    }, this.config.timeout);
   }
 
   private cleanup() {
@@ -147,7 +147,7 @@ export class AdOperator extends EventEmitter implements IAdOperator {
   }
 
   abort() {
-    if (this.isAborted) {
+    if (this.isAborted || this.isFinished) {
       return;
     }
 
@@ -156,7 +156,9 @@ export class AdOperator extends EventEmitter implements IAdOperator {
     // abort any existing requests
     this.adRequestCancel && this.adRequestCancel();
     this.transcoderRequestCancel && this.transcoderRequestCancel();
+
     this.transcoderResponse?.unpipe();
+    this.transcoderResponse?.removeAllListeners();
 
     this.cleanup();
   }

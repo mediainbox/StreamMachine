@@ -1,10 +1,15 @@
+import {Client, IListener} from "../types";
 const { EventEmitter } = require('events');
 
-module.exports = class Listener extends EventEmitter {
-  id = null;
-  disconnected = false;
+export class Listener extends EventEmitter implements IListener {
+  private id: string;
+  private disconnected = false;
 
-  constructor({ client, output, opts }) {
+  constructor(
+    private readonly client: Client,
+    private readonly output: any,
+    private readonly opts: any,
+  ) {
     super();
 
     this.connectedAt = Date.now();
@@ -47,8 +52,12 @@ module.exports = class Listener extends EventEmitter {
      */
   }
 
-  setId(id) {
+  setId(id: string) {
     this.id = id;
+  }
+
+  getId() {
+    return this.id;
   }
 
   getClient() {
@@ -80,6 +89,7 @@ module.exports = class Listener extends EventEmitter {
     if (this.disconnected) {
       return;
     }
+
     this.disconnected = true;
 
     this.output.disconnect();

@@ -1,6 +1,9 @@
-const { outputs } = require('../outputs');
+import { makeOutput } from '../outputs/factory';
+
+const { Listener } =require('./Listener');
+
+const { outputs } = require('../outputs/factory');
 const {Events} = require('../../events');
-const Listener = require('./listener');
 
 module.exports = class ListenersHandler {
   constructor({ ctx }) {
@@ -14,8 +17,10 @@ module.exports = class ListenersHandler {
   }
 
   receive = ({ stream, req, res }) => {
-    const OutputHandler = outputs.find(output => {
-      return output.canHandleRequest(req);
+    const output = makeOutput({
+      stream,
+      req,
+      res
     });
 
     const output = new OutputHandler({
@@ -35,13 +40,13 @@ module.exports = class ListenersHandler {
     };
     const offset = req.query.offset ? Number(req.query.offset) : 0;
 
-    const listener = new Listener({
+    const listener = new Listener(
       client,
       output,
-      opts: {
+      {
         offset
       },
-    });
+    );
 
     this.ctx.events.emit(Events.Listener.SESSION_START, {
       stream,

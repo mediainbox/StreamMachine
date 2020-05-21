@@ -1,6 +1,8 @@
+import {IOutput} from "./IOutput";
+
 const PumperOutput = require("./pumper");
 const ShoutcastOutput = require("./shoutcast");
-const RawOutput = require("./raw_audio");
+const RawOutput = require("./RawOutput");
 
 module.exports = {
   outputs: [
@@ -8,4 +10,12 @@ module.exports = {
     ShoutcastOutput,
     RawOutput
   ],
+}
+
+
+export function makeOutput(args: {
+  stream: Stream,
+  req: express.Request
+}): IOutput {
+  return;
 }

@@ -32,11 +32,7 @@ class DebugTransport extends Transport {
       return typeof key !== 'symbol';
     });
 
-    if (level === 'error') {
-      fn(`[${level}] ${message}`, metaToLog);
-    } else {
-      fn(`[${level}] ${message}`);
-    }
+    fn(`[${level}] ${message}`, metaToLog);
 
     return callback(null, true);
   }

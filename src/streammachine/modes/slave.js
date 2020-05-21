@@ -1,5 +1,5 @@
 const _ = require("lodash");
-const Slave = require("../slave");
+const Slave = require("../slave/Slave");
 
 module.exports = class SlaveMode extends require("./base_mode") {
   MODE = "Slave";

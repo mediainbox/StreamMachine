@@ -4,8 +4,6 @@ import {IAdOperator, PrerollerConfig} from "./types";
 import {AdOperator} from "./AdOperator";
 import {IListener,} from "../types";
 
-const DEFAULT_AD_REQUEST_TIMEOUT = 500000;
-const DEFAULT_AD_IMPRESSION_DELAY = 5000;
 
 export class Preroller {
   private adRequests = 0;
@@ -27,17 +25,13 @@ export class Preroller {
     // FIXME: Make these configurable
     this.agent = new http.Agent(); //keepAlive:true, maxSockets:100
 
-    this.config.adRequestTimeout = this.config.adRequestTimeout || DEFAULT_AD_REQUEST_TIMEOUT;
-    this.config.impressionDelay = this.config.impressionDelay || DEFAULT_AD_IMPRESSION_DELAY;
+    this.logger.info('preroller initialized', {
+      config: this.config
+    });
   }
 
   getAdOperator(listener: IListener): IAdOperator {
     const adId = ++this.adRequests;
-
-    // -- create an ad request -- #
-    console.log('preroller: making ad request', {
-      config: this.config
-    });
 
     /*output.once("disconnect", () => {
       adRequest->abort
@@ -48,7 +42,7 @@ export class Preroller {
       this.config,
       listener.getClient(),
       this.logger.child({
-        component: `stream[${this.streamId}]:ad_operator[${adId}]`
+        component: `stream[${this.streamId}]:ad_operator[#${adId}]`
       })
     );
 

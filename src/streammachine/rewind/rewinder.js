@@ -203,7 +203,7 @@ module.exports = class Rewinder extends Readable {
     }
   };
 
-  disconnect() {
+  _destroy() {
     this.rewind.removeRewinder(this);
     this.removeAllListeners();
   }

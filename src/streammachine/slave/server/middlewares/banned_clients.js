@@ -13,7 +13,7 @@ module.exports = function bannedClientsMiddleware(blockedUserAgents, logger) {
     logger.debug(`request from banned user-agent: ${ua}`, {
       ip: req.ip,
       url: req.url,
-      stream: req.stream ? req.stream.key : null
+      stream: req.stream ? req.stream.getId() : null
     });
 
     res.status(403).end("Invalid User Agent.");

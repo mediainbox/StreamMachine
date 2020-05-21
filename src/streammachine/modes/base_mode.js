@@ -1,3 +1,4 @@
+const {EventsHub} = require('../events');
 var BaseMode, _, createLogger, nconf;
 
 nconf = require("nconf");
@@ -13,6 +14,7 @@ module.exports = BaseMode = class BaseMode extends require("events").EventEmitte
     this.ctx = {
       config: this.config,
       logger: createLogger(this.config),
+      events: new EventsHub(),
       providers: {}
     };
     this.logger = this.ctx.logger.child({

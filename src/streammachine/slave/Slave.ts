@@ -1,31 +1,35 @@
+import {InputConfig, SlaveConfig_V1, SlaveCtx, SlaveStatus, StreamStatus} from "./types";
+import {Stream} from "./streams/Stream";
+import { StreamsCollection } from "./streams/StreamsCollection";
 const _ = require("lodash");
-const Stream = require("./streams/stream");
 const ListenServer = require("./server/listen_server");
 const MasterConnection = require("./master_io/master_connection");
 const { Events, EventsHub } = require('../events');
-const StreamsCollection = require("./streams/streams_collection");
-const { EventEmitter } = require("events");
+import { EventEmitter } from "events";
+import {Logger} from "winston";
 const ListenersHandler = require("./listeners/handler");
 
 module.exports = class Slave extends EventEmitter {
-  constructor(ctx) {
+  private connected = false;
+  private configured = false;
+  private readonly config: SlaveConfig_V1;
+  private readonly logger: Logger;
+  private readonly streams = new StreamsCollection()
+  private readonly masterConnection: any;
+  private readonly listenersHandler: any;
+  private readonly server: any;
+
+  constructor(private readonly ctx: SlaveCtx) {
     super();
 
-    this.ctx = ctx;
-    this.connected = false
-    this.configured = false;
     this.config = this.ctx.config;
-
     this.logger = this.ctx.logger.child({
       component: "slave"
     });
     this.logger.info("initialize slave");
 
-    this.ctx.events = new EventsHub(); // TODO: move to mode?
-    this.streams = new StreamsCollection();
     this.masterConnection = new MasterConnection(this.ctx);
     this.listenersHandler = new ListenersHandler({ ctx });
-
     this.server = new ListenServer({
       streams: this.streams,
       ctx: this.ctx,
@@ -50,16 +54,19 @@ module.exports = class Slave extends EventEmitter {
       process.exit(1);
     });
 
-    this.ctx.events.on(Events.Link.CONFIG, config => {
+    this.ctx.events.on(Events.Link.CONFIG, (config: InputConfig) => {
       this.configureStreams(config.streams);
     });
 
-    this.ctx.events.on(Events.Link.SLAVE_STATUS, cb => {
-      this.getStreamStatus(cb);
+    this.ctx.events.on(Events.Link.SLAVE_STATUS, async (cb: (status: SlaveStatus) => void) => {
+      cb(this.getStreamStatus());
     });
   }
 
-  configureStreams(activeStreams) {
+  /**
+   * Add, reconfigure or remove streams
+   */
+  configureStreams(activeStreams: InputConfig['streams']) {
     this.logger.info(`configure updated ${activeStreams.length} streams received from master`, {
       updatedStreams: activeStreams
     });
@@ -87,7 +94,7 @@ module.exports = class Slave extends EventEmitter {
       });
 
       const stream = this.streams.get(key);
-      stream.configure(config);
+      stream!.configure(config);
     });
 
     // run through new streams
@@ -114,26 +121,28 @@ module.exports = class Slave extends EventEmitter {
     return this.emit(Events.Slave.STREAMS_UPDATE_OK, this.streams);
   }
 
-  // Get a status snapshot by looping through each stream to return buffer
-  // stats. Lets master know that we're still listening and current
-  getStreamStatus(cb) {
-    const result = {};
+  /**
+   * Get a status snapshot by looping through each stream to return buffer
+   * stats. Lets master know that we're still listening and current
+   */
+  getStreamStatus(): SlaveStatus {
+    const result: {[k:string]: StreamStatus} = {};
     let totalKBytes = 0;
     let totalConnections = 0;
 
-    this.streams.toArray().map(stream => {
+    this.streams.toArray().map((stream: Stream) => {
       const status = stream.status();
-      result[stream.key] = status;
-      totalKBytes += status.kbytes_sent;
-      totalConnections += status.connections;
+      result[stream.getId()] = status;
+      totalKBytes += status.stats.kbytesSent;
+      totalConnections += status.stats.connections;
     })
 
-    cb(null, {
+    return {
       ...result,
       _stats: {
         kbytes_sent: totalKBytes,
         connections: totalConnections
       }
-    });
+    } as SlaveStatus;
   }
 }
