@@ -11,6 +11,7 @@ export interface IListener extends EventEmitter {
   readonly options: ListenOptions;
 
   getQueuedBytes(): number;
+  getSentBytes(): number;
   send(source: OutputSource): void;
   disconnect(): void;
 }

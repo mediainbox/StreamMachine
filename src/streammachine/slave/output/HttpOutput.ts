@@ -61,6 +61,10 @@ export abstract class HttpOutput extends EventEmitter implements IOutput {
     return bufferSize + queuedBytes;
   }
 
+  getSentBytes() {
+    return this.socket.bytesWritten;
+  }
+
   send(source: OutputSource) {
     if (this.disconnected) {
       this.logger.warn('send() was called after disconnect');

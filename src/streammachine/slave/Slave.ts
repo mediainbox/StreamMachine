@@ -7,6 +7,7 @@ import {Logger} from "winston";
 import {ListenersConnector} from "./listeners/ListenersConnector";
 import {ListenServer} from "./server/ListenServer";
 import {MasterConnection} from "./master_io/MasterConnection";
+import {AnalyticsReporter} from "./analytics/AnalyticsReporter";
 
 module.exports = class Slave extends EventEmitter {
   private connected = false;
@@ -14,9 +15,10 @@ module.exports = class Slave extends EventEmitter {
   private readonly config: SlaveConfig_V1;
   private readonly logger: Logger;
   private readonly streams = new StreamsCollection()
-  private readonly masterConnection: any;
-  private readonly listenersConnector: any;
-  private readonly server: any;
+  private readonly masterConnection: MasterConnection;
+  private readonly listenersConnector: ListenersConnector;
+  private readonly server: ListenServer;
+  private readonly analyticsReporter: AnalyticsReporter;
 
   constructor(private readonly ctx: SlaveCtx) {
     super();
@@ -32,6 +34,10 @@ module.exports = class Slave extends EventEmitter {
     this.server = new ListenServer(
       this.streams,
       ctx,
+    );
+    this.analyticsReporter = new AnalyticsReporter(
+      this.masterConnection,
+      ctx.events,
     );
 
     this.hookEvents();

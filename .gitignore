@@ -9,3 +9,4 @@ dump/*
 logs
 greenlock.d
 build
+*.log

@@ -22,8 +22,16 @@ export class AnalyticsReporter {
       });
     });
 
-    this.events.on(Events.Listener.LISTEN, data => {
-      this.masterConnection.send(Events.Listener.LISTEN, data);
+    this.events.on(Events.Listener.LISTEN, (listener: IListener) => {
+      this.masterConnection.send(Events.Listener.LISTEN, {
+        stream: listener.streamId,
+        listener: {
+          connectedAt: listener.connectedAt,
+          connectedTime: Date.now() - listener.connectedAt,
+          sentBytes: listener.getSentBytes(),
+          client: listener.client.toJson(),
+        }
+      });
     });
   }
 }

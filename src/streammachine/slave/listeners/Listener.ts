@@ -71,6 +71,10 @@ export class Listener extends EventEmitter implements IListener {
     return this.output.getQueuedBytes();
   }
 
+  getSentBytes() {
+    return this.output.getSentBytes();
+  }
+
   send(source: OutputSource) {
     this.hookEvents();
 
