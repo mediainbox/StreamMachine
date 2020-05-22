@@ -7,7 +7,7 @@ module.exports = class SlaveMode extends require("./base_mode") {
   constructor(config, cb) {
     super(config);
     process.title = "SM:SLAVE";
-    this.logger.debug("slave mode start");
+    this.logger.info("slave mode start");
     this._handle = null;
     this._haveHandle = false;
     this._shuttingDown = false;

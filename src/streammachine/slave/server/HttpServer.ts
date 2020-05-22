@@ -1,8 +1,11 @@
-const path = require('path');
-const http = require("http");
+import express from "express";
+import {SlaveCtx} from "../types";
+import * as http from "http";
+import * as path from "path";
+import { Server } from "http";
 const greenlock = require("greenlock-express");
 
-module.exports = function setupHttpServer({ app, ctx }) {
+export function setupHttpServer({ app, ctx }: { app: express.Application, ctx: SlaveCtx }): Server {
   const config = ctx.config;
   const logger = ctx.logger.child({
     component: 'http_server',
@@ -10,9 +13,7 @@ module.exports = function setupHttpServer({ app, ctx }) {
 
   if (process.env.NO_GREENLOCK) {
     logger.info("setup http server on port " + config.http_port);
-    server = http.createServer(app);
-    server.listen(config.http_port || 80);
-    return;
+    return http.createServer(app).listen(config.http_port || 80);
   }
 
   logger.info(`init Greenlock http/https servers with ${config.cluster} workers`);
@@ -25,16 +26,16 @@ module.exports = function setupHttpServer({ app, ctx }) {
     cluster: true,
     workers: config.cluster,
     maintainerEmail: "contact@mediainbox.io"
-  }).ready(function(glx) {
-    var plainAddr, plainPort, plainServer;
-    plainServer = glx.httpServer(app);
-    plainAddr = config.http_ip || '0.0.0.0';
-    plainPort = config.http_port || 80;
+  }).ready(function(glx: any) {
+    const plainServer = glx.httpServer(app);
+    const plainAddr = config.http_ip || '0.0.0.0';
+    const plainPort = config.http_port || 80;
+
     return plainServer.listen(plainPort, plainAddr, function() {
-      var secureAddr, securePort, secureServer;
-      secureServer = glx.httpsServer(null, app);
-      secureAddr = config.https_ip || '0.0.0.0';
-      securePort = config.https_port || 443;
+      const secureServer = glx.httpsServer(null, app);
+      const secureAddr = config.https_ip || '0.0.0.0';
+      const securePort = config.https_port || 443;
+
       return secureServer.listen(securePort, secureAddr, function() {
         plainServer.removeAllListeners('error');
         secureServer.removeAllListeners('error');

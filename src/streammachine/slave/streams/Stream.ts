@@ -1,19 +1,29 @@
-import {StreamConfig, StreamVitals, StreamStats, ListenEvent, StreamStatus} from "../types";
-import {StreamMetadata} from "../types";
-import { Readable } from "stream";
+import {
+  Format, ListenEvent, ListenOptions,
+  SlaveCtx,
+  StreamConfig_V1,
+  StreamMetadata,
+  StreamStats,
+  StreamStatus,
+  StreamVitals
+} from "../types";
 import {DEFAULT_AD_IMPRESSION_DELAY, DEFAULT_AD_REQUEST_TIMEOUT} from "../consts";
-import { ListenersCollection } from "../listeners/ListenersCollection";
+import {ListenersCollection} from "../listeners/ListenersCollection";
 import {Chunk, Err} from "../../../types";
-const { Preroller } = require('../preroll/Preroller');
-const { Events, BetterEventEmitter } = require('../../events');
-const _ = require("lodash");
+import {OutputSource} from "../output/OutputSource";
+import {ListenersCleaner} from "../listeners/ListenersCleaner";
+import {BetterEventEmitter, Events} from "../../events";
+import {toTime} from "../../../helpers/datetime";
+import {Preroller} from "../preroll/Preroller";
+import {MasterConnection} from "../master_io/MasterConnection";
+import {PrerollerConfig} from "../preroll/types";
+import {Logger} from "winston";
+import {IListener} from "../listeners/IListener";
+import {NullPreroller} from "../preroll/NullPreroller";
+import {IPreroller} from "../preroll/IPreroller";
+
 const RewindBuffer = require("../../rewind/rewind_buffer");
 const {createRewindLoader} = require("../../rewind/loader");
-const ListenersCleaner = require("../listeners/cleaner");
-const Listeners = require("../listeners/ListenersCollection");
-const {PassThrough} = require('stream');
-const {toTime} = require('../../../helpers/datetime');
-const MultiStream = require('multistream');
 
 
 const StreamEvents = {
@@ -22,6 +32,15 @@ const StreamEvents = {
   DISCONNECT: "DISCONNECT"
 };
 
+interface InternalConfig {
+  readonly format: Format;
+  readonly maxBufferSize: number;
+  readonly maxSeconds: number;
+  readonly initialBurst: number;
+  readonly listenEventInterval: number;
+  readonly preroll: PrerollerConfig;
+}
+
 /**
  * Stream is the componenent where that listeners connect to.
  * Loads data from rewind buffer and pushes them to clients
@@ -29,63 +48,74 @@ const StreamEvents = {
 export class Stream extends BetterEventEmitter {
   static Events = StreamEvents;
 
-  private readonly id: string
-  private readonly config: StreamConfig;
+  private readonly config: InternalConfig;
   private readonly metadata: StreamMetadata;
   private readonly stats: StreamStats = {
     connections: 0, // total counter, not active count
     kbytesSent: 0,
   };
-  private readonly listeners = new ListenersCollection();
+  private readonly listenersCol = new ListenersCollection();
   private vitals: Partial<StreamVitals>;
 
-  constructor({ key, config, masterConnection, ctx }: any) {
+  private readonly logger: Logger;
+  private readonly listenersCleaner: ListenersCleaner;
+  private preroller: IPreroller;
+  private rewindBuffer: any;
+
+  constructor(
+    private readonly id: string,
+    private readonly passedConfig: StreamConfig_V1,
+    private readonly masterConnection: MasterConnection,
+    private readonly ctx: SlaveCtx
+  ) {
     super();
 
     // remove max listener limit
     this.setMaxListeners(0);
 
-    this.masterConnection = masterConnection;
-    this.ctx = ctx;
     this.logger = ctx.logger.child({
-      component: `stream[${key}]`
+      component: `stream[${id}]`
     })
 
-    this.id = key;
+    this.id = id;
     this.config = {
       // convert master config format
-      initialBurst: config.burst,
-      maxSeconds: config.seconds,
-      maxBufferSize: config.max_buffer,
+      format: passedConfig.format,
+      initialBurst: 0, // passedConfig.burst,
+      maxSeconds: passedConfig.seconds,
+      maxBufferSize: passedConfig.max_buffer,
+      listenEventInterval: passedConfig.log_interval,
 
       // ads config
       preroll: {
+        enabled: !!passedConfig.preroll,
         streamId: this.id,
         streamKey: '', // completed by vitals
-        prerollKey: config.preroll_key || this.id,
+        prerollKey: passedConfig.preroll_key || this.id,
         timeout: DEFAULT_AD_REQUEST_TIMEOUT, // TODO: fixme
-        adUrl: config.preroll,
-        transcoderUrl: config.transcoder,
-        impressionDelay: config.impression_delay || DEFAULT_AD_IMPRESSION_DELAY,
+        adUrl: passedConfig.preroll,
+        transcoderUrl: passedConfig.transcoder!,
+        impressionDelay: passedConfig.impression_delay || DEFAULT_AD_IMPRESSION_DELAY,
       }
     };
 
     this.metadata = {
-      title: config.metaTitle,
-      url: config.metaUrl,
+      title: passedConfig.metaTitle,
+      url: passedConfig.metaUrl,
     };
 
     this.vitals = {
-      format: config.format,
-      codec: config.codec,
+      format: passedConfig.format,
+      codec: passedConfig.codec,
     };
 
-    this.listenersCleaner = new ListenersCleaner({
-      listeners: this.listeners,
-      ctx,
-      key,
-      maxBufferSize: this.config.maxBufferSize
-    })
+    this.listenersCleaner = new ListenersCleaner(
+      this.listenersCol,
+      this.config.maxBufferSize,
+      ctx.logger.child({
+        component: `listeners_cleaner[${this.id}]`
+      }),
+    );
 
     this.hookEvents();
     this.configure();
@@ -93,6 +123,14 @@ export class Stream extends BetterEventEmitter {
 
   getId() {
     return this.id;
+  }
+
+  getFormat() {
+    return this.config.format;
+  }
+
+  getConfig() {
+    return this.config;
   }
 
   hookEvents() {
@@ -126,7 +164,7 @@ export class Stream extends BetterEventEmitter {
     this.masterConnection.getStreamVitals(this.id, (err: Error | null, vitals: any) => {
       // TODO: handle error
 
-      this.logger.info('received vitals from master', { vitals });
+      this.logger.info('received vitals from master', {vitals});
       this.vitals = {
         ...this.vitals,
         streamKey: vitals.streamKey,
@@ -145,20 +183,23 @@ export class Stream extends BetterEventEmitter {
   }
 
   initPreroller() {
-    if (!this.config.preroll.adUrl) {
-      this.logger.warn('no preroll url configured, skipping ads config');
-      return;
+    const { enabled } = this.config.preroll;
+
+    if (enabled) {
+      this.logger.info('ads are enabled, init preroller');
+    } else {
+      this.logger.info('ads are disabled');
     }
 
-    this.logger.info('init preroller', { config: this.config.preroll });
-
-    this.preroller = new Preroller(
-      this.id,
-      this.config.preroll,
-      this.logger.child({
-        component: `stream[${this.id}]:preroller`
-      }),
-    );
+    this.preroller = enabled ?
+      new Preroller(
+        this.id,
+        this.config.preroll,
+        this.logger.child({
+          component: `preroller[${this.id}]`
+        }),
+      )
+      : new NullPreroller();
   }
 
   initRewindBuffer() {
@@ -174,61 +215,57 @@ export class Stream extends BetterEventEmitter {
     });
 
     // fetch current buffer from master and preload rewind
-    this.masterConnection.getRewind(this.id, (err: Err | null, res: Readable) => {
-      if (err) {
-        this.logger.error(`could not load rewind from master, error: ${err.code}`, {
-          err
+    this
+      .masterConnection
+      .getRewind(this.id)
+      .then(readable => {
+        this.rewindBuffer.preload(createRewindLoader(readable), () => {
+          this.logger.info('rewind buffer loaded, allow listener connections to start');
+          this.emit(StreamEvents.REWIND_LOADED);
+        });
+      })
+      .catch((error: Err) => {
+        this.logger.error(`could not load rewind from master, error: ${error.code}`, {
+          error
         });
         this.emit(StreamEvents.REWIND_LOADED);
-        return;
-      }
-
-      this.rewindBuffer.preload(createRewindLoader(res), () => {
-        this.logger.info('rewind buffer loaded, allow listener connections to start');
-        this.emit(StreamEvents.REWIND_LOADED);
-      });
-    });
+      })
   }
 
-  listen({ listener, opts }: any, cb: any) {
-    // don't ask for a rewinder while our source is going through init,
-    // since we don't want to fail an offset request that should be valid
-    this.runOrWait(StreamEvents.REWIND_LOADED, () => {
-      const listenerId = this.stats.connections++;
+  listen(listener: IListener): Promise<OutputSource> {
+    return new Promise((resolve, reject) => {
+      // don't ask for a rewinder while our source is going through init,
+      // since we don't want to fail an offset request that should be valid
+      this.runOrWait(StreamEvents.REWIND_LOADED, async () => {
+        this.stats.connections++;
 
-      listener.setId(listenerId);
-      this.listeners.add(listener.id, listener);
-      this.logger.debug(`new listener #${listener.id} for stream, assign rewinder`);
+        this.listenersCol.add(listener.id, listener);
+        this.logger.debug(`new listener #${listener.id} for stream, assign rewinder`);
 
-      const adOperator = this.preroller.getAdOperator(listener);
+        const adOperator = this.preroller.getAdOperator(listener);
 
-      listener.once('disconnect', () => {
-        this.logger.debug(`listener #${listener.id} disconnected, remove from list`);
-        this.listeners.remove(listener.id);
-        adOperator.abort();
-      });
-
-      Promise.all([
-        adOperator.build(),
-        this.rewindBuffer.getRewinder(listener.id, opts)
-      ])
-        .then(([preroll, rewinder]) => {
-          this.logger.debug(`got preroll and rewinder for listener #${listener.id}`);
-
-          const output = new MultiStream([
-            preroll,
-            rewinder,
-          ]);
-
-          cb(null, output);
-      })
-        .catch(err => {
-          this.logger.error(`error ocurred while loading rewinder for listener #${listener.id}`, {
-            err,
-            opts,
-          });
-          cb(err);
+        listener.once('disconnect', () => {
+          // on disconnection, remove from current list and abort any current
+          // preroll/rewind loading in progress
+          this.logger.debug(`remove listener #${listener.id}`);
+          this.listenersCol.remove(listener.id);
+          adOperator.abort();
         });
+
+        try {
+          const [preroll, rewinder] = await Promise.all([
+            adOperator.build(),
+            this.rewindBuffer.getRewinder(listener.id, listener.options)
+          ]);
+          this.logger.debug(`got preroll and rewinder for listener #${listener.id}`);
+          resolve(new OutputSource(preroll, rewinder));
+        } catch (error) {
+          this.logger.error(`error ocurred while loading rewinder for listener #${listener.id}`, {
+            error,
+          });
+          reject(error);
+        }
+      });
     });
   }
 
@@ -237,7 +274,7 @@ export class Stream extends BetterEventEmitter {
       key: this.id,
       bufferStatus: this.rewindBuffer.getStatus(),
       stats: {
-        listeners: this.listeners.count(),
+        listeners: this.listenersCol.count(),
         connections: this.stats.connections,
         kbytesSent: this.stats.kbytesSent
       }
@@ -245,9 +282,9 @@ export class Stream extends BetterEventEmitter {
   }
 
   disconnect() {
-    this.listeners.disconnectAll();
+    this.listenersCol.disconnectAll();
     this.rewindBuffer.disconnect();
-    this.listenersCleaner.disconnect();
+    this.listenersCleaner.destroy();
 
     this.emit(StreamEvents.DISCONNECT);
     this.removeAllListeners();

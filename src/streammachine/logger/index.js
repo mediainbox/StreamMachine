@@ -60,8 +60,8 @@ module.exports = {
         timestamp(),
         json()
       ),
-      level: 'debug',
-      //level: 'silly',
+      level: 'info',
+      //level: 'debug',
       transports: transports
     });
 

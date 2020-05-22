@@ -1,31 +1,13 @@
-import {PrerollerConfig} from "./preroll/types";
-import { Logger } from "winston";
-import { EventEmitter } from "events";
+import {Logger} from "winston";
+import {EventEmitter} from "events";
+import {Stream} from "./streams/Stream";
+import express from "express";
 
 export type Format = 'mp3' | 'aac';
-
-export interface Client {
-  readonly sessionId: string;
-  readonly ip: string;
-  readonly ua: string;
-}
-
-export interface IListener {
-  getId(): string;
-  getClient(): Client;
-  disconnect(): void;
-}
 
 export interface StreamMetadata {
   readonly title: string;
   readonly url: string;
-}
-
-export interface StreamConfig {
-  readonly maxBufferSize: number;
-  readonly maxSeconds: number;
-  readonly initialBurst: number;
-  readonly preroll: PrerollerConfig;
 }
 
 export interface StreamVitals {
@@ -39,11 +21,6 @@ export interface StreamVitals {
 export interface StreamStats {
   connections: 0;
   kbytesSent: 0;
-}
-
-export interface ListenEvent {
-  readonly streamKey: string;
-  readonly kbytesSent: number;
 }
 
 export interface StreamStatus {
@@ -74,6 +51,10 @@ export type SlaveStatus = {
 
 export interface SlaveConfig_V1 {
   readonly mode: "slave";
+  readonly slave: {
+    readonly master: string[];
+    readonly timeout?: number;
+  }
   readonly cluster: number;
   readonly log: {
     readonly stackdriver: boolean;
@@ -83,27 +64,65 @@ export interface SlaveConfig_V1 {
     readonly limit_full_index: boolean;
   };
   readonly debug_incoming_requests: boolean;
-  readonly http_port: number;
-  readonly https_port: number;
-  readonly ua_skip: boolean;
+  readonly http_ip: string | null;
+  readonly http_port: number | null;
+  readonly https_ip: string | null;
+  readonly https_port: number | null;
+  readonly ua_skip?: string[];
   readonly behind_proxy: boolean;
   readonly cors: {
     enabled: boolean;
+    origin?: string;
   }
 }
 
-export interface SourceConfig {
+export interface InputConfig {
+  readonly streams: {
+    readonly [k: string]: StreamConfig_V1;
+  };
+  readonly sources: {
+    readonly [k: string]: SourceConfig_V1;
+  }
+}
+
+export interface StreamConfig_V1 {
+  readonly key: string;
+  readonly burst: number;
+  readonly seconds: number;
+  readonly max_buffer: number;
+  readonly preroll_key?: string;
+  readonly preroll: string;
+  readonly transcoder?: string;
+  readonly impression_delay?: number;
+  readonly metaTitle: string;
+  readonly metaUrl: string;
+  readonly format: Format;
+  readonly codec: string;
+  readonly log_interval: number;
+}
+
+export interface SourceConfig_V1 {
   readonly monitored: boolean;
   readonly password: boolean;
   readonly source_password: string;
   readonly format: Format;
 }
 
-export interface InputConfig {
-  readonly streams: {
-    readonly [k: string]: StreamConfig;
-  };
-  readonly sources: {
-    readonly [k: string]: SourceConfig;
-  }
+
+export interface ListenOptions {
+  offset?: number;
+  pump?: boolean;
+}
+
+// Events
+
+export interface ListenEvent {
+  readonly streamKey: string;
+  readonly kbytesSent: number;
+}
+
+export interface ListenerLandedEvent {
+  readonly stream: Stream;
+  readonly req: express.Request;
+  readonly res: express.Response;
 }

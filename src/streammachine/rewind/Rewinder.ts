@@ -1,5 +1,6 @@
-const _ = require("lodash");
-const {Readable} = require("stream");
+import {Readable} from "stream";
+import {Logger} from "winston";
+import {Chunk} from "../../types";
 
 // Rewinder is the general-purpose listener stream.
 // Arguments:
@@ -15,15 +16,33 @@ const {Readable} = require("stream");
 // * pumpOnly: Boolean, default false
 //   - Don't hook the Rewinder up to incoming data. Pump whatever data is
 //     requested and then send EOF
-module.exports = class Rewinder extends Readable {
-
-  stats = {
+export class Rewinder extends Readable {
+  private stats = {
     bytesSent: 0,
     secondsSent: 0,
-    contentTime: null,
+    contentTime: 0,
   };
 
-  constructor(rewind, opts = {}) {
+  // keep track of the duration of the segments we have pushed
+  // Note that for non-pump requests, these will be reset periodically
+  // as we report listening segments
+  private offsetSeconds = null;
+  private pumpOnly = false;
+  private offset = 0;
+  private readonly queue: Chunk[] = [];
+  private queuedBytes = 0;
+  private reading = false;
+  private pumpSecs: number;
+
+  constructor(
+    private readonly rewind: any,
+    private readonly opts: {
+      offset?: number;
+      pump?: boolean;
+      pumpOnly?: boolean;
+    } = {},
+    private readonly logger: Logger,
+  ) {
     super({
       highWaterMark: 256 * 1024 // 256 KB
     });
@@ -32,27 +51,13 @@ module.exports = class Rewinder extends Readable {
     // RewindBuffer will be calling _insert at regular ticks to put content
     // into our queue, and _read takes the task of buffering and sending
     // that out to the listener.
-    this.rewind = rewind;
-
-    // keep track of the duration of the segments we have pushed
-    // Note that for non-pump requests, these will be reset periodically
-    // as we report listening segments
-    this.offsetSeconds = null;
-    this._pumpOnly = false;
-    this.offset = 0;
-    this.queue = [];
-    this.queuedBytes = 0;
-    this.reading = false;
 
     this.pumpSecs = opts.pump === true ? this.rewind.initialBurst : opts.pump;
-    this.opts = opts;
   }
 
   start() {
-    var finalizeFunc, oFunc, offset;
-
     return new Promise((resolve, reject) => {
-      oFunc = (offset) => {
+      const oFunc = (offset: number) => {
         this.offset = offset;
         /*debug("Rewinder: creation with ", {
           opts: opts,
@@ -61,8 +66,8 @@ module.exports = class Rewinder extends Readable {
         // -- What are we sending? -- #
         if (this.opts != null ?this.opts.pumpOnly : void 0) {
           // we're just giving one pump of data, then EOF
-          this._pumpOnly = true;
-          return this.rewind.pumpFrom(this, this.offset, this.rewind.secsToOffset(this.pumpSecs), false, (err, info) => {
+          this.pumpOnly = true;
+          return this.rewind.pumpFrom(this, this.offset, this.rewind.secsToOffset(this.pumpSecs), false, (err: Error, info: any) => {
             if (err) {
               return reject(err);
             }
@@ -78,7 +83,7 @@ module.exports = class Rewinder extends Readable {
           } else {
             // we're offset, so we'll pump from the offset point forward instead of
             // back from live
-            return this.rewind.burstFrom(this, this.offset, this.pumpSecs, (err, newoffset) => {
+            return this.rewind.burstFrom(this, this.offset, this.pumpSecs, (err: Error, newoffset: number) => {
               if (err) {
                 return reject(err);
               }
@@ -92,16 +97,16 @@ module.exports = class Rewinder extends Readable {
       };
 
       //offset = opts.offsetSecs ? this.rewind.validateSecondsOffset(opts.offsetSecs) : opts.offset ? this.rewind.validateOffset(opts.offset) : 0;
-      offset = this.opts.offset ? this.rewind.validateSecondsOffset(this.opts.offset) : 0;
+      const offset = this.opts.offset ? this.rewind.validateSecondsOffset(this.opts.offset) : 0;
       oFunc(offset);
     });
   }
 
-  _read = (size) => {
+  _read = (size: number): void => {
     // we only want one queue read going on at a time, so go ahead and
     // abort if we're already reading
     if (this.reading) {
-      return false;
+      return;
     }
     // -- push anything queued up to size -- #
 
@@ -121,7 +126,7 @@ module.exports = class Rewinder extends Readable {
       // to signal that we've reached the end and nothing more will
       // follow.
       const handleEmpty = () => {
-        if (this._pumpOnly) {
+        if (this.pumpOnly) {
           this.push(null);
         } else {
           this.push('');
@@ -136,11 +141,12 @@ module.exports = class Rewinder extends Readable {
       }
 
       // grab a chunk off of the queued up buffer
-      const nextChunk = this.queue.shift();
+      const nextChunk: Chunk | undefined = this.queue.shift();
       if (!nextChunk) {
         this.logger.error("Shifted queue but got null", {
           length: this.queue.length
         });
+        return;
       }
 
       this.queuedBytes -= nextChunk.data.length;
@@ -187,15 +193,15 @@ module.exports = class Rewinder extends Readable {
     pushQueue();
   };
 
-  _insert = (b) => {
-    this.queue.push(b);
-    this.queuedBytes += b.data.length;
+  _insert = (chunk: Chunk) => {
+    this.queue.push(chunk);
+    this.queuedBytes += chunk.data.length;
 
     if (!this.stats.contentTime) {
       // we set contentTime the first time we find it unset, which will be
       // either on our first insert or on our first insert after logging
       // has happened
-      this.stats.contentTime = b.ts;
+      this.stats.contentTime = chunk.ts;
     }
 
     if (!this.reading) {
@@ -206,6 +212,7 @@ module.exports = class Rewinder extends Readable {
   _destroy() {
     this.rewind.removeRewinder(this);
     this.removeAllListeners();
+    this.logger.debug('rewinder destroyed');
   }
 
   // returns the current offset in chunks
@@ -221,7 +228,7 @@ module.exports = class Rewinder extends Readable {
     this.stats = {
       bytesSent: 0,
       secondsSent: 0,
-      contentTime: null,
+      contentTime: 0,
     };
   }
-};
+}

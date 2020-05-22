@@ -1,13 +1,12 @@
 import {InputConfig, SlaveConfig_V1, SlaveCtx, SlaveStatus, StreamStatus} from "./types";
 import {Stream} from "./streams/Stream";
-import { StreamsCollection } from "./streams/StreamsCollection";
-const _ = require("lodash");
-const ListenServer = require("./server/listen_server");
-const MasterConnection = require("./master_io/master_connection");
-const { Events, EventsHub } = require('../events');
-import { EventEmitter } from "events";
+import {StreamsCollection} from "./streams/StreamsCollection";
+import {Events} from '../events';
+import {EventEmitter} from "events";
 import {Logger} from "winston";
-const ListenersHandler = require("./listeners/handler");
+import {ListenersConnector} from "./listeners/ListenersConnector";
+import {ListenServer} from "./server/ListenServer";
+import {MasterConnection} from "./master_io/MasterConnection";
 
 module.exports = class Slave extends EventEmitter {
   private connected = false;
@@ -16,7 +15,7 @@ module.exports = class Slave extends EventEmitter {
   private readonly logger: Logger;
   private readonly streams = new StreamsCollection()
   private readonly masterConnection: any;
-  private readonly listenersHandler: any;
+  private readonly listenersConnector: any;
   private readonly server: any;
 
   constructor(private readonly ctx: SlaveCtx) {
@@ -28,12 +27,12 @@ module.exports = class Slave extends EventEmitter {
     });
     this.logger.info("initialize slave");
 
-    this.masterConnection = new MasterConnection(this.ctx);
-    this.listenersHandler = new ListenersHandler({ ctx });
-    this.server = new ListenServer({
-      streams: this.streams,
-      ctx: this.ctx,
-    });
+    this.masterConnection = new MasterConnection(ctx);
+    this.listenersConnector = new ListenersConnector(ctx);
+    this.server = new ListenServer(
+      this.streams,
+      ctx,
+    );
 
     this.hookEvents();
   }
@@ -101,16 +100,14 @@ module.exports = class Slave extends EventEmitter {
     this.logger.info(`${streamsToCreate.length} streams to create (${streamsToCreate.join(' / ')})`);
     streamsToCreate.forEach(key => {
       const config = activeStreams[key];
-      this.logger.info(`create new stream ${key}`, {
-        config
-      });
+      this.logger.info(`create new stream ${key}`);
 
-      const stream = new Stream({
+      const stream = new Stream(
         key,
         config,
-        masterConnection: this.masterConnection,
-        ctx: this.ctx,
-      });
+        this.masterConnection,
+        this.ctx,
+      );
 
       this.streams.add(key, stream);
     });
@@ -126,7 +123,7 @@ module.exports = class Slave extends EventEmitter {
    * stats. Lets master know that we're still listening and current
    */
   getStreamStatus(): SlaveStatus {
-    const result: {[k:string]: StreamStatus} = {};
+    const result: { [k: string]: StreamStatus } = {};
     let totalKBytes = 0;
     let totalConnections = 0;
 

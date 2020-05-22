@@ -54,7 +54,10 @@ module.exports = class SlaveServer extends require("events").EventEmitter {
 
   listen(server) {
     // fire up a socket listener on our slave port
-    this.io = SocketIO.listen(server);
+    this.io = SocketIO.listen(server, {
+      pingInterval: 15000,
+      pingTimeout: 30000,
+    });
     this.logger.info("master now listening for ws slave connections");
     // add our authentication
     this.io.use((socket, next) => {

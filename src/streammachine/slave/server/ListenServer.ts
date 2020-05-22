@@ -1,39 +1,46 @@
-const express = require('express');
-const cors = require("cors");
-const { EventEmitter } = require('events');
-const bannedClientsMiddleware = require('./middlewares/banned_clients');
-const rootStreamRewrite = require('./middlewares/root_stream');
-const trackingMiddleware = require('./middlewares/tracking');
-const utilityController = require('./utility_controller');
-const setupHttpServer = require('./http_server');
-const { get } = require('lodash');
-const cookieParser = require('cookie-parser');
-const {Events} = require('../../events');
+import {StreamsCollection} from "../streams/StreamsCollection";
+import {SlaveConfig_V1, SlaveCtx} from "../types";
+import express from "express";
+import {rootStreamRewrite} from "./middlewares/RootStream";
+import {trackingMiddleware} from "./middlewares/Tracking";
+import {banClientsMiddleware} from "./middlewares/BanClients";
+import {utilityController} from "./utilityController";
+import {Events} from "../../events";
+import {setupHttpServer} from "./HttpServer";
+import {Server} from "http";
+import {EventEmitter} from 'events';
+import {Logger} from "winston";
 
-module.exports = class ListenServer extends EventEmitter {
-  constructor({ streams, ctx }) {
+const cors = require("cors");
+const cookieParser = require('cookie-parser');
+
+export class ListenServer extends EventEmitter {
+  private server: Server;
+  private readonly logger: Logger;
+  private readonly config: SlaveConfig_V1;
+  private readonly app: express.Application;
+
+  constructor(
+    private readonly streams: StreamsCollection,
+    private readonly ctx: SlaveCtx,
+  ) {
     super();
 
-    this.ctx = ctx;
-    this.streams = streams;
     const config = this.config = ctx.config;
-
     this.logger = ctx.logger.child({
       component: "listen_server",
     })
 
     const app = this.app = express();
     app.set("x-powered-by", false);
-    app.httpAllowHalfOpen = true;
-    app.useChunkedEncodingByDefault = false;
     app.use((req, res, next) => {
       res.set('Server', 'StreamMachine/MediaInbox');
       next();
     });
     app.use(cookieParser());
 
-    if (get(config, 'cors.enabled')) {
-      this.logger.debug("enable cors");
+    if (config.cors?.enabled) {
+      this.logger.info("enable cors");
       app.use(cors({
         origin: config.cors.origin || true,
         methods: "GET,HEAD"
@@ -41,7 +48,7 @@ module.exports = class ListenServer extends EventEmitter {
     }
 
     if (config.behind_proxy) {
-      this.logger.debug("enable 'trust proxy' for express");
+      this.logger.info("enable 'trust proxy' for express");
       app.set("trust proxy", true);
     }
 
@@ -71,7 +78,7 @@ module.exports = class ListenServer extends EventEmitter {
 
     // check user agent for banned clients
     if (this.config.ua_skip) {
-      app.use(bannedClientsMiddleware(this.config.ua_skip, this.logger))
+      app.use(banClientsMiddleware(this.config.ua_skip, this.logger))
     }
 
     // utility routes

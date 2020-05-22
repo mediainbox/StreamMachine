@@ -1,8 +1,7 @@
-var EventEmitter, Events;
+import {EventEmitter} from "events";
+import {BetterEventEmitter } from './BetterEventEmitter';
 
-({EventEmitter} = require("events"));
-
-Events = {
+const Events = {
   Master: {
     CONFIG_UPDATE: "config_update",
     STREAMS_UPDATE: "streams",
@@ -30,7 +29,7 @@ Events = {
   },
 };
 
-function passthrough(_events, source, target) {
+function passthrough(_events: string | string[], source: EventEmitter, target: EventEmitter) {
   const events = Array.isArray(_events) ? _events : [_events];
 
   events.forEach(event => {
@@ -38,9 +37,9 @@ function passthrough(_events, source, target) {
   });
 }
 
-module.exports = {
-  EventsHub: EventEmitter,
-  Events: Events,
-  BetterEventEmitter: require('./better_event_emitter'),
+export {
+  EventEmitter as EventsHub,
+  Events,
+  BetterEventEmitter,
   passthrough
-};
+}

@@ -1,4 +1,6 @@
-module.exports = {
+import express from "express";
+
+export const utilityController: Record<string, express.RequestHandler> = {
   index: (req, res) => {
     res.set("content-type", "text/html");
     res.set("connection", "close");

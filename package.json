@@ -70,6 +70,7 @@
     "@types/express": "^4.17.6",
     "@types/lodash": "^4.14.152",
     "@types/multistream": "^2.1.1",
+    "@types/socket.io-client": "^1.4.33",
     "@types/xml2js": "^0.4.5",
     "@types/xmldom": "^0.1.29",
     "chai": "~2.3.0",

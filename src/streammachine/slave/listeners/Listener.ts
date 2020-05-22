@@ -1,99 +1,104 @@
-import {Client, IListener} from "../types";
-const { EventEmitter } = require('events');
+import { ListenOptions} from "../types";
+import { EventEmitter } from 'events';
+import {Logger} from "winston";
+import {IOutput} from "../output/IOutput";
+import { Client } from "./Client";
+import {OutputSource} from "../output/OutputSource";
+import {Events, EventsHub} from "../../events";
+import {Mutable} from "../../../helpers/types";
+import {IListener} from "./IListener";
 
 export class Listener extends EventEmitter implements IListener {
-  private id: string;
+  readonly connectedAt = Date.now();
+  readonly client: Client;
+  readonly options: ListenOptions;
+
   private disconnected = false;
 
+  private readonly output: IOutput;
+  private readonly logger: Logger;
+  private readonly events: EventsHub;
+
+  private readonly listenInterval: number;
+  private listenIntervalHandle: NodeJS.Timeout;
+
   constructor(
-    private readonly client: Client,
-    private readonly output: any,
-    private readonly opts: any,
+    readonly streamId: string,
+    readonly id: string,
   ) {
     super();
+  }
 
-    this.connectedAt = Date.now();
-    this.client = client;
-    //this.rewinder = rewinder; // remove ref to output?
-    this.output = output;
-    this.opts = opts;
+  setClient(client: Client): this {
+    (this.client as Mutable<Client>) = client;
+    return this;
+  }
 
-    this.hookEvents();
+  setOutput(output: IOutput): this {
+    (this.output as Mutable<IOutput>) = output;
+    return this;
+  }
+
+  setOptions(options: ListenOptions): this {
+    (this.options as Mutable<ListenOptions>) = options;
+    return this;
+  }
+
+  setLogger(logger: Logger): this {
+    (this.logger as Mutable<Logger>) = logger;
+    return this;
+  }
+
+  setEvents(events: EventsHub): this {
+    (this.events as Mutable<EventsHub>) = events;
+    return this;
+  }
+
+  setListenInterval(listenInterval: number): this {
+    (this.listenInterval as Mutable<number>) = listenInterval;
+    return this;
   }
 
   hookEvents() {
-    this.output.once('disconnect', () => {
-      this.disconnect();
-    });
+    this.output.once('disconnect', this.disconnect);
 
-    /*
-    if (!this._pumpOnly) {
-      // for non-pump requests, we want to set a timer that will
-      // log a segment every 30 seconds. This allows us to use the
-      // same analytics pipeline as we do for HLS pumped data
-      this._segTimer = setInterval(() => {
-        var obj;
-        obj = {
-          //id: this.conn_id,
-          bytes: this.bytesSent,
-          seconds: this.secondsSent,
-          contentTime: this.contentTime
-        };
-        this.emit("listen", obj);
-
-        //this.rewind.recordListen(obj);
-
-        // reset our stats
-        this.bytesSent = 0;
-        this.secondsSent = 0;
-        return this.contentTime = null;
-      }, opts.logInterval || 30 * 1000);
-    }
-     */
-  }
-
-  setId(id: string) {
-    this.id = id;
-  }
-
-  getId() {
-    return this.id;
-  }
-
-  getClient() {
-    return this.client;
+    this.listenIntervalHandle = setInterval(() => {
+      this.events.emit(Events.Listener.LISTEN, this);
+    }, this.listenInterval);
   }
 
   getQueuedBytes() {
     return this.output.getQueuedBytes();
   }
 
-  disconnect() {
+  send(source: OutputSource) {
+    this.hookEvents();
 
-/*
-    // Record either a) our full listening session (pump requests) or
-    // b) the portion of the request that we haven't already recorded
-    // (non-pump requests)
-    obj = {
-      //id: this.conn_id,
-      bytes: this.bytesSent,
-      seconds: this.secondsSent,
-      offsetSeconds: this._offsetSeconds,
-      contentTime: this.contentTime
-    };
-    this.emit("listen", obj);
-*/
+    if (this.disconnected) {
+      this.logger.debug(`listener disconnected before send, destroy source`);
+      source.destroy();
+      return;
+    }
 
+    this.events.emit(Events.Listener.SESSION_START, this);
+    this.output.send(source);
+  }
 
-
+  disconnect = () => {
     if (this.disconnected) {
       return;
     }
 
+    this.logger.debug(`listener disconnected`);
     this.disconnected = true;
 
+    this.output.removeListener('disconnect', this.disconnect);
+    clearInterval(this.listenIntervalHandle);
     this.output.disconnect();
-    this.removeAllListeners();
+
     this.emit('disconnect');
+    this.removeAllListeners();
+
+    this.events.emit(Events.Listener.DISCONNECT, this);
   }
 }

@@ -1,6 +1,7 @@
 import { Readable } from "stream";
 
 export interface PrerollerConfig {
+  readonly enabled: boolean;
   readonly streamId: string;
   readonly streamKey: string;
   readonly prerollKey: string;

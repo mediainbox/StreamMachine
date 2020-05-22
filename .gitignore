@@ -8,3 +8,4 @@ dump/*
 *.dump
 logs
 greenlock.d
+build

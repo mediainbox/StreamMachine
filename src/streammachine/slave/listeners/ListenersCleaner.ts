@@ -1,16 +1,19 @@
+import {ListenersCollection} from "./ListenersCollection";
+import {Logger} from "winston";
+
 const CLEAN_INTERVAL = 60000;
 
 // We disconnect clients that have fallen too far behind on their
 // buffers. Buffer size can be configured via the "max_buffer" setting,
 // which takes bits
-module.exports = class ListenersCleaner {
-  constructor({ listeners, ctx, key, maxBufferSize }) {
-    this.listeners = listeners;
-    this.logger = ctx.logger.child({
-      component: `listeners-cleaner[${key}]`
-    });
-    this.maxBufferSize = maxBufferSize;
+export class ListenersCleaner {
+  private cleanupHandle: NodeJS.Timeout;
 
+  constructor(
+    private readonly listeners: ListenersCollection,
+    private readonly maxBufferSize: number,
+    private readonly logger: Logger,
+  ) {
     this.scheduleCheck();
   }
 
@@ -28,7 +31,7 @@ module.exports = class ListenersCleaner {
         }
 
         this.logger.info("connection exceeded max buffer size.", {
-          client: listener.client,
+          client: listener.id,
           queuedBytes
         });
 
@@ -39,7 +42,7 @@ module.exports = class ListenersCleaner {
     }, CLEAN_INTERVAL);
   }
 
-  disconnect() {
+  destroy() {
     clearInterval(this.cleanupHandle);
   }
 }

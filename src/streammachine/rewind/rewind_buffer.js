@@ -1,5 +1,5 @@
 const _ = require("lodash");
-const Rewinder = require("./rewinder");
+const {Rewinder} = require("./Rewinder");
 const MemoryStore = require("./store/memory_store");
 const RewindWriter = require('./rewind_writer');
 const {toTime} = require('../../helpers/datetime');
@@ -57,7 +57,7 @@ module.exports = class RewindBuffer extends BetterEventEmitter {
     super();
 
     this.logger = logger.child({
-      component: `stream[${streamKey}]:rewind_buffer`
+      component: `rewind_buffer[${streamKey}]`
     });
 
     this.id = id;
@@ -164,7 +164,9 @@ module.exports = class RewindBuffer extends BetterEventEmitter {
   }
 
   async getRewinder(id, opts) {
-    const rewind = new Rewinder(this, opts);
+    const rewind = new Rewinder(this, opts, this.logger.child({
+      component: `stream[${this.streamKey}]:rewinder[#${id}]`,
+    }));
 
     if (!opts.pumpOnly) {
       // add it to our list of listeners
@@ -331,7 +333,7 @@ module.exports = class RewindBuffer extends BetterEventEmitter {
   }
 
   removeRewinder(rewinder) {
-    this.rewinders = this.rewinders.slice(0).filter(l => l !== rewinder);
+    this.rewinders = this.rewinders.filter(l => l !== rewinder);
   }
 
   disconnect() {

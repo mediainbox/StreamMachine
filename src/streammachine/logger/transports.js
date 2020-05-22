@@ -25,10 +25,9 @@ class DebugTransport extends Transport {
   }
 
   log(info, callback) {
-    var component, fn, level, message, meta, metaToLog, workerId;
-    ({level, message, component, workerId, ...meta} = info);
-    fn = this.getDebugFn(info);
-    metaToLog = _.pickBy(meta, function(value, key) {
+    const {level, message, component, workerId, timestamp, ...meta} = info;
+    const fn = this.getDebugFn(info);
+    const metaToLog = _.pickBy(meta, function(value, key) {
       return typeof key !== 'symbol';
     });
 

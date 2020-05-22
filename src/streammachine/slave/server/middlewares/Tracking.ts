@@ -1,17 +1,17 @@
-const uuid = require("uuid");
+import {StreamsCollection} from "../../streams/StreamsCollection";
 
-module.exports = function trackingMiddleware(streams) {
-  function getSessionId(req) {
+const uuid = require("uuid");
+import express from "express";
+
+export function trackingMiddleware(streams: StreamsCollection): express.RequestHandler {
+  function getSessionId(req: express.Request) {
     return req.get('x-playback-session-id') ||
       req.query.session_id ||
       uuid.v4();
   }
 
   return function _trackingMiddleware(req, res, next) {
-    req.tracking = {};
-
     // NOTE: session_id refers to the listening session, not the browser one
-    req.tracking.session_id = getSessionId(req);
 
     let uniqListenerId = req.cookies.unique_listener_id;
     if (!uniqListenerId) {
@@ -21,7 +21,10 @@ module.exports = function trackingMiddleware(streams) {
       });
     }
 
-    req.tracking.unique_listener_id = uniqListenerId;
+    req.tracking = {
+      session_id: getSessionId(req),
+      unique_listener_id: uniqListenerId,
+    };
 
     next();
   };

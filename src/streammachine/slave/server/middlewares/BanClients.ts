@@ -1,4 +1,7 @@
-module.exports = function bannedClientsMiddleware(blockedUserAgents, logger) {
+import {Logger} from "winston";
+import express from "express";
+
+export function banClientsMiddleware(blockedUserAgents: string[], logger: Logger): express.RequestHandler {
   const blockedRegex = RegExp(`${blockedUserAgents.join("|")}`);
 
   return function _bannedClientsMiddleware(req, res, next) {

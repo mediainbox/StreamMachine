@@ -4,6 +4,9 @@ require('@google-cloud/trace-agent').start
     keyFilename: process.env.GCLOUD_KEY_FILENAME
 */
 
+require('./ambient');
+require('./debug_fix')
+
 process.env.NEW_RELIC_NO_CONFIG_FILE = 'true';
 if (process.env.NEW_RELIC_APP_NAME && process.env.NEW_RELIC_LICENSE_KEY) {
   console.log('[integrations] loading NewRelic');

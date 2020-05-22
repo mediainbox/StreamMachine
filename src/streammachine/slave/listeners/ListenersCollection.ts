@@ -1,5 +1,5 @@
-import {IListener} from "../types";
 import { Collection } from "../../util/Collection";
+import {IListener} from "./IListener";
 
 export class ListenersCollection extends Collection<IListener> {
   disconnectAll() {
@@ -8,7 +8,7 @@ export class ListenersCollection extends Collection<IListener> {
     });
   }
 
-  disconnectListener(id: string) {
+  disconnect(id: string) {
     const listener = this.get(id);
 
     if (!listener) {

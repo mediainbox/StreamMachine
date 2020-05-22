@@ -2,10 +2,10 @@ import {Logger} from "winston";
 import * as http from "http";
 import {IAdOperator, PrerollerConfig} from "./types";
 import {AdOperator} from "./AdOperator";
-import {IListener,} from "../types";
+import {IListener} from "../listeners/IListener";
+import {IPreroller} from "./IPreroller";
 
-
-export class Preroller {
+export class Preroller implements IPreroller {
   private adRequests = 0;
   private agent: http.Agent;
 
@@ -33,28 +33,13 @@ export class Preroller {
   getAdOperator(listener: IListener): IAdOperator {
     const adId = ++this.adRequests;
 
-    /*output.once("disconnect", () => {
-      adRequest->abort
-    });*/
-
-    const handler = new AdOperator(
+    return new AdOperator(
       String(adId),
       this.config,
-      listener.getClient(),
+      listener.client,
       this.logger.child({
-        component: `stream[${this.streamId}]:ad_operator[#${adId}]`
+        component: `stream[${this.streamId}]:ad_operator[#${listener.id}]`
       })
     );
-
-    /*
-    handler.on('error', () => {
-      this.logger.error(`ad handler error for listener ${listener.id}`, {
-        listener,
-        adId,
-      });
-    });
-     */
-
-    return handler;
   }
 }

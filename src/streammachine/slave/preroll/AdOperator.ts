@@ -1,12 +1,12 @@
 import {EventEmitter} from "events";
 import {Logger} from "winston";
 import {AdInstance} from "./AdInstance";
-import axios, {Cancel} from 'axios';
+import axios from 'axios';
 import {IAdOperator, PrerollerConfig} from "./types";
 import {Readable} from "stream";
-import {Client} from "../types";
 import {parseAdResponse} from "./responseParser";
 import {EmptyReadable} from "../../util/EmptyReadable";
+import { Client } from "../listeners/Client";
 
 /**
  * Class that will create an Ad instance, get its creative,
@@ -14,7 +14,7 @@ import {EmptyReadable} from "../../util/EmptyReadable";
  * If any error ocurrs during build, it should log and
  * return and empty preroll.
  */
-export class AdOperator extends EventEmitter implements IAdOperator {
+export class AdOperator implements IAdOperator {
   private readonly adUrl: string;
 
   private ad: AdInstance;
@@ -33,17 +33,19 @@ export class AdOperator extends EventEmitter implements IAdOperator {
     private readonly client: Client,
     private readonly logger: Logger,
   ) {
-    super();
-
     this.adUrl = config.adUrl
       .replace("!KEY!", config.streamKey)
       .replace("!STREAM!", config.streamId)
       .replace("!IP!", client.ip)
       .replace("!UA!", encodeURIComponent(client.ua))
-      .replace("!UUID!", client.sessionId);
+      .replace("!UUID!", client.session_id);
   }
 
   async build(): Promise<Readable> {
+    if (!this.config?.enabled) {
+      return new EmptyReadable();
+    }
+
     this.abortTimeout = this.abortOnTimeout();
 
     try {
@@ -71,6 +73,8 @@ export class AdOperator extends EventEmitter implements IAdOperator {
 
       return creativeResponse;
     } catch (error) {
+      clearTimeout(this.abortTimeout);
+
       if (!axios.isCancel(error)) {
         this.logger.error('error ocurred during ad build', { error });
       }
@@ -136,7 +140,7 @@ export class AdOperator extends EventEmitter implements IAdOperator {
   // if the preroll request can't be completed in time, abort
   private abortOnTimeout(): NodeJS.Timeout {
     return setTimeout(() => {
-      this.logger.warn(`ad got build timeout, abort`)
+      this.logger.warn(`ad build timeout, abort`)
       this.abort();
     }, this.config.timeout);
   }
