@@ -49,7 +49,10 @@ module.exports = MasterIO = (function(_super) {
   };
 
   MasterIO.prototype.listen = function(server) {
-    this.io = require("socket.io").listen(server);
+    this.io = require("socket.io").listen(server, {
+      pingInterval: 45000,
+      pingTimeout: 15000
+    });
     this.log.info("Master now listening for slave connections.");
     this.io.use((function(_this) {
       return function(socket, next) {

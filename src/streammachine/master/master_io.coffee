@@ -30,7 +30,9 @@ module.exports = class MasterIO extends require("events").EventEmitter
 
     listen: (server) ->
         # fire up a socket listener on our slave port
-        @io = require("socket.io").listen server
+        @io = require("socket.io").listen server,
+            pingInterval: 45000
+            pingTimeout: 15000
 
         @log.info "Master now listening for slave connections."
 
