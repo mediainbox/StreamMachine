@@ -8,7 +8,7 @@ nconf = require("nconf");
 
 Logger = require("../logger");
 
-Master = require("../master");
+Master = require("../master/Master");
 
 debug = require("debug")("sm:modes:master");
 

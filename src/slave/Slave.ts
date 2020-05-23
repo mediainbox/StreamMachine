@@ -1,27 +1,40 @@
 import {InputConfig, SlaveConfig_V1, SlaveCtx, SlaveStatus, StreamStatus} from "./types";
 import {Stream} from "./stream/Stream";
 import {StreamsCollection} from "./streams/StreamsCollection";
-import {Events} from '../events';
+import {Events, EventsHub} from '../events';
 import {EventEmitter} from "events";
 import {Logger} from "winston";
 import {ListenersConnector} from "./listeners/ListenersConnector";
 import {ListenServer} from "./server/ListenServer";
 import {MasterConnection} from "./master_io/MasterConnection";
 import {AnalyticsReporter} from "./analytics/AnalyticsReporter";
+import { createLogger } from "src/logger";
 
 module.exports = class Slave extends EventEmitter {
   private connected = false;
   private configured = false;
-  private readonly config: SlaveConfig_V1;
+
   private readonly logger: Logger;
   private readonly streams = new StreamsCollection()
   private readonly masterConnection: MasterConnection;
   private readonly listenersConnector: ListenersConnector;
   private readonly server: ListenServer;
   private readonly analyticsReporter: AnalyticsReporter;
+  private readonly ctx: SlaveCtx;
 
-  constructor(private readonly ctx: SlaveCtx) {
+  constructor(private readonly config: SlaveConfig_V1) {
     super();
+
+    this.ctx = {
+      config: this.config,
+      logger: createLogger(config),
+      events: new EventsHub(),
+      providers: {}
+    };
+
+    this.logger = this.ctx.logger.child({
+      component: this.config.mode + '-mode'
+    });
 
     this.config = this.ctx.config;
     this.logger = this.ctx.logger.child({
@@ -29,15 +42,15 @@ module.exports = class Slave extends EventEmitter {
     });
     this.logger.info("initialize slave");
 
-    this.masterConnection = new MasterConnection(ctx);
-    this.listenersConnector = new ListenersConnector(ctx);
+    this.masterConnection = new MasterConnection(this.ctx);
+    this.listenersConnector = new ListenersConnector(this.ctx);
     this.server = new ListenServer(
       this.streams,
-      ctx,
+      this.ctx,
     );
     this.analyticsReporter = new AnalyticsReporter(
       this.masterConnection,
-      ctx.events,
+      this.ctx.events,
     );
 
     this.hookEvents();

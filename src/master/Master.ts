@@ -1,31 +1,29 @@
-const _ = require("lodash");
-const temp = require("temp");
-const net = require("net");
-const fs = require("fs");
-const express = require("express");
-const Throttle = require("throttle");
-const debug = require("debug")("sm:master:index");
-const Redis = require("../stores/redis_store");
-const MasterConfigRedisStore = require("./config/redis_config");
-const MasterAPI = require("./admin/api");
-const Stream = require("./streams/stream");
-const SourceIn = require("./sources/source_in");
-const Alerts = require("../alerts/alerts");
-const Analytics = require("../analytics");
-const Monitoring = require("./monitoring");
-const SlaveServer = require("./slave_io/slave_server");
-const SourceMount = require("./sources/source_mount");
-const RewindDumpRestore = require("../rewind/dump_restore");
-const {Events, EventsHub} = require('../events');
-const StreamDataBroadcaster = require('./streams/stream_data_broadcaster');
-const { EventEmitter } = require('events');
+import _ from "lodash";
+import Redis from "../stores/RedisStore";
+import MasterConfigRedisStore from "./config/RedisConfigProvider";
+import MasterAPI from "./admin/MasterAPI";
+import Stream from "./streams/stream";
+import SourceIn from "./sources/SourceIn";
+import Monitoring from "./Monitoring";
+import SlaveServer from "./slave_io/SlaveServer";
+import SourceMount from "./sources/SourceMount";
+import RewindDumpRestore from "../rewind/dump_restore";
+import {Events, EventsHub} from '../events';
+import StreamDataBroadcaster from './streams/AudioBroadcaster';
+import {EventEmitter} from 'events';
+import debug from "debug"
+import {MasterCtx} from "./types";
 
-// A Master handles configuration, slaves, incoming sources, logging and the admin interface
-module.exports = class Master extends EventEmitter {
-  constructor(ctx) {
-    var ref;
+)("sm:master:index";
+
+/**
+ * Master handles configuration, slaves, incoming sources,
+ * logging and the admin interface
+ */
+export class Master extends EventEmitter {
+  constructor(private readonly ctx: MasterCtx) {
     super();
-    this.ctx = ctx;
+
     this._configured = false;
     this.source_mounts = {};
     this.streams = {};
@@ -67,41 +65,39 @@ module.exports = class Master extends EventEmitter {
         return this.configure(this.config);
       });
     }
-    this.once(Events.Master.STREAMS_UPDATE, () => {
-      return this._configured = true;
-    });
+
     // -- create a server to provide the API -- #
     this.api = new MasterAPI(this.ctx);
+
     // -- create a backend server for stream requests -- #
     this.transport = new StreamTransport(this);
+
     // -- start the source listener -- #
     this.sourcein = new SourceIn(this.ctx);
-    // -- create an alerts object -- #
-    this.alerts = new Alerts({
-      logger: this.logger.child({
-        module: "alerts"
-      })
-    });
-    // -- create a listener for slaves -- #
-    if (this.config.master) {
-      this.slaveServer = new SlaveServer(this.ctx);
-      this.on(Events.Master.STREAMS_UPDATE, () => {
-        return this.slaveServer.updateConfig(this.getStreamsAndSourceConfig());
-      });
-    }
 
-    // -- Analytics -- #
-    //this.analytics = new Analytics(this.ctx);
+    // -- create a listener for slaves -- #
+    this.slaveServer = new SlaveServer(this.ctx);
+
 
     // -- Rewind Dump and Restore -- #
     if (this.config.rewind_dump && false) {
       this.rewind_dr = new RewindDumpRestore(this, this.config.rewind_dump);
     }
+
     // -- Set up our monitoring module -- #
     this.monitoring = new Monitoring(this.ctx);
   }
 
-  //----------
+  hookEvents() {
+    this.once(Events.Master.STREAMS_UPDATE, () => {
+      return this._configured = true;
+    });
+
+    this.on(Events.Master.STREAMS_UPDATE, () => {
+      return this.slaveServer.updateConfig(this.getStreamsAndSourceConfig());
+    });
+  }
+
   once_configured(cb) {
     if (this._configured) {
       return cb();
@@ -112,7 +108,6 @@ module.exports = class Master extends EventEmitter {
     }
   }
 
-  //----------
   loadRewinds(cb) {
     return this.once(Events.Master.STREAMS_UPDATE, () => {
       var ref;
@@ -120,7 +115,6 @@ module.exports = class Master extends EventEmitter {
     });
   }
 
-  //----------
   getStreamsAndSourceConfig() {
     var config, k, ref, ref1, s;
     config = {
@@ -140,7 +134,6 @@ module.exports = class Master extends EventEmitter {
     return config;
   }
 
-  //----------
 
   // configre can be called on a new core, or it can be called to
   // reconfigure an existing core.  we need to support either one.
@@ -215,7 +208,6 @@ module.exports = class Master extends EventEmitter {
     }) : void 0;
   }
 
-  //----------
   _startSourceMount(key, opts) {
     var mount;
     mount = new SourceMount(key, this.logger, opts);
@@ -228,7 +220,6 @@ module.exports = class Master extends EventEmitter {
     }
   }
 
-  //----------
   _startStream(key, mount, opts) {
     var stream, streamArgs, streamConfig;
     streamConfig = _.extend(opts, {
@@ -257,7 +248,6 @@ module.exports = class Master extends EventEmitter {
     }
   }
 
-  //----------
   createStream(opts, cb) {
     var mount_key, stream;
     this.logger.debug("createStream called with ", opts);
@@ -290,7 +280,6 @@ module.exports = class Master extends EventEmitter {
     }
   }
 
-  //----------
   updateStream(stream, opts, cb) {
     this.logger.info("updateStream called for ", {
       key: stream.key,
@@ -319,7 +308,6 @@ module.exports = class Master extends EventEmitter {
     });
   }
 
-  //----------
   removeStream(stream, cb) {
     this.logger.info("removeStream called for ", {
       key: stream.key
@@ -331,7 +319,6 @@ module.exports = class Master extends EventEmitter {
     return typeof cb === "function" ? cb(null, "OK") : void 0;
   }
 
-  //----------
   createMount(opts, cb) {
     var mount;
     this.logger.info(`createMount called for ${opts.key}`, {
@@ -357,7 +344,6 @@ module.exports = class Master extends EventEmitter {
     }
   }
 
-  //----------
   updateMount(mount, opts, cb) {
     this.logger.info(`updateMount called for ${mount.key}`, {
       opts: opts
@@ -382,7 +368,6 @@ module.exports = class Master extends EventEmitter {
     });
   }
 
-  //----------
   removeMount(mount, cb) {
     this.logger.info(`removeMount called for ${mount.key}`);
     // it's illegal to remove a mount that still has streams hooked up to it
@@ -396,21 +381,9 @@ module.exports = class Master extends EventEmitter {
     return cb(null, "OK");
   }
 
-  //----------
   streamsInfo() {
     var k, obj, ref, results;
     ref = this.streams;
-    results = [];
-    for (k in ref) {
-      obj = ref[k];
-      results.push(obj.status());
-    }
-    return results;
-  }
-
-  groupsInfo() {
-    var k, obj, ref, results;
-    ref = this.stream_groups;
     results = [];
     for (k in ref) {
       obj = ref[k];
@@ -430,7 +403,6 @@ module.exports = class Master extends EventEmitter {
     return results;
   }
 
-  //----------
   vitals(stream, cb) {
     var s;
     if (s = this.streams[stream]) {
@@ -440,26 +412,13 @@ module.exports = class Master extends EventEmitter {
     }
   }
 
-  //----------
-  getHLSSnapshot(stream, cb) {
-    var s;
-    if (s = this.streams[stream]) {
-      return s.getHLSSnapshot(cb);
-    } else {
-      return cb("Invalid Stream");
-    }
-  }
-
-  //----------
   status() {
     return {
       streams: this.streamsInfo(),
-      groups: this.groupsInfo(),
       sources: this.sourcesInfo()
     };
   }
 
-  //----------
 
   // Get a status snapshot by looping through each stream to get buffer stats
   _rewindStatus() {
@@ -473,7 +432,6 @@ module.exports = class Master extends EventEmitter {
     return status;
   }
 
-  //----------
   slavesInfo() {
     var k, s;
     if (this.slaveServer) {
@@ -503,183 +461,6 @@ module.exports = class Master extends EventEmitter {
     }
   }
 
-  //----------
-  sendHandoffData(rpc, cb) {
-    var fFunc;
-    fFunc = _.after(2, () => {
-      this.logger.info("Rewind buffers and sources sent.");
-      return cb(null);
-    });
-    // -- Source Mounts -- #
-    rpc.once("sources", (msg, handle, cb) => {
-      var _sendMount, mounts;
-      this.logger.info("Received request for sources.");
-      // iterate through each source mount, sending each of its sources
-      mounts = _.values(this.source_mounts);
-      _sendMount = () => {
-        var _sendSource, mount, sources;
-        mount = mounts.shift();
-        if (!mount) {
-          cb(null);
-          return fFunc();
-        }
-        sources = mount.sources.slice();
-        _sendSource = () => {
-          var source;
-          source = sources.shift();
-          if (!source) {
-            return _sendMount();
-          }
-          this.logger.info(`Sending source ${mount.key}/${source.uuid}`);
-          return rpc.request("source", {
-            mount: mount.key,
-            type: source.HANDOFF_TYPE,
-            opts: {
-              format: source.opts.format,
-              uuid: source.uuid,
-              source_ip: source.opts.source_ip,
-              connectedAt: source.connectedAt
-            }
-          }, source.opts.sock, (err, reply) => {
-            if (err) {
-              this.logger.error(`Error sending source ${mount.key}/${source.uuid}: ${err}`);
-            }
-            return _sendSource();
-          });
-        };
-        return _sendSource();
-      };
-      return _sendMount();
-    });
-    // -- Stream Rewind Buffers -- #
-    return rpc.once("stream_rewinds", (msg, handle, cb) => {
-      var _sendStream, streams;
-      this.logger.info("Received request for rewind buffers.");
-      streams = _(this.streams).values();
-      _sendStream = () => {
-        var _next, sock, spath, stream;
-        stream = streams.shift();
-        if (!stream) {
-          cb(null);
-          return fFunc();
-        }
-        _next = _.once(() => {
-          return _sendStream();
-        });
-        if (stream.rewind.bufferedSecs() > 0) {
-          // set up a socket to accept the buffer on
-          spath = temp.path({
-            suffix: ".sock"
-          });
-          this.logger.info(`Asking to send rewind buffer for ${stream.key} over ${spath}.`);
-          sock = net.createServer();
-          return sock.listen(spath, () => {
-            sock.once("connection", (c) => {
-              return stream.getRewind((err, writer) => {
-                if (err) {
-                  this.logger.error(`Failed to get rewind buffer for ${stream.key}`);
-                  _next();
-                }
-                writer.pipe(c);
-                return writer.once("end", () => {
-                  return this.logger.info(`RewindBuffer for ${stream.key} written to socket.`);
-                });
-              });
-            });
-            return rpc.request("stream_rewind", {
-              key: stream.key,
-              path: spath
-            }, null, {
-              timeout: 10000
-            }, (err) => {
-              if (err) {
-                this.logger.error(`Error sending rewind buffer for ${stream.key}: ${err}`);
-              } else {
-                this.logger.info(`Rewind buffer sent and ACKed for ${stream.key}`);
-              }
-              // cleanup...
-              return sock.close(() => {
-                return fs.unlink(spath, (err) => {
-                  this.logger.info("RewindBuffer socket unlinked.", {
-                    error: err
-                  });
-                  return _next();
-                });
-              });
-            });
-          });
-        } else {
-          // no need to send a buffer for an empty stream
-          return _next();
-        }
-      };
-      return _sendStream();
-    });
-  }
-
-  //----------
-  loadHandoffData(rpc, cb) {
-    var af;
-    // -- set up a listener for stream rewinds and sources -- #
-    rpc.on("source", (msg, handle, cb) => {
-      var mount, source;
-      mount = this.source_mounts[msg.mount];
-      source = new (require(`./src/sources`))(_.extend({}, msg.opts, {
-        sock: handle,
-        logger: mount.log
-      }));
-      mount.addSource(source);
-      this.logger.info(`Added mount source: ${mount.key}/${source.uuid}`);
-      return cb(null);
-    });
-    rpc.on("stream_rewind", (msg, handle, cb) => {
-      var sock, stream;
-      stream = this.streams[msg.key];
-      this.logger.info(`Stream Rewind will load over ${msg.path}.`);
-      return sock = net.connect(msg.path, (err) => {
-        this.logger.info(`Reader socket connected for rewind buffer ${msg.key}`, {
-          error: err
-        });
-        if (err) {
-          return cb(err);
-        }
-        return stream.rewind.loadBuffer(sock, (err, stats) => {
-          if (err) {
-            this.logger.error(`Error loading rewind buffer: ${err}`);
-            cb(err);
-          }
-          return cb(null);
-        });
-      });
-    });
-    af = _.after(2, () => {
-      return cb(null);
-    });
-    // -- Request Sources -- #
-    rpc.request("sources", {}, null, {
-      timeout: 10000
-    }, (err) => {
-      if (err) {
-        this.logger.error(`Failed to get sources from handoff initiator: ${err}`);
-      } else {
-        this.logger.info("Received sources from handoff initiator.");
-      }
-      return af();
-    });
-    // -- Request Stream Rewind Buffers -- #
-    return rpc.request("stream_rewinds", {}, null, {
-      timeout: 10000
-    }, (err) => {
-      if (err) {
-        this.logger.error(`Failed to get stream rewinds from handoff initiator: ${err}`);
-      } else {
-        this.logger.info("Received stream rewinds from handoff initiator.");
-      }
-      return af();
-    });
-  }
-
-  //----------
   _attachIOProxy(stream) {
     if (!this.slaveServer) {
       this.logger.warning(`no slaves found to attach stream broadcast for ${stream.key}`);
@@ -705,50 +486,4 @@ module.exports = class Master extends EventEmitter {
       return delete this.dataBroadcasters[stream.key];
     });
   }
-
-};
-
-
-class StreamTransport {
-  constructor(master) {
-    this.master = master;
-    this.app = express();
-    // -- Param Handlers -- #
-    this.app.param("stream", (req, res, next, key) => {
-      var s;
-      // make sure it's a valid stream key
-      if ((key != null) && (s = this.master.streams[key])) {
-        req.stream = s;
-        return next();
-      } else {
-        return res.status(404).end("Invalid stream.\n");
-      }
-    });
-    // -- Validate slave id -- #
-    this.app.use((req, res, next) => {
-      var sock_id;
-      sock_id = req.get('stream-slave-id');
-      if (sock_id && this.master.slaveServer.slaveConnections[sock_id]) {
-        //req.slave_socket = @master.slaveServer[ sock_id ]
-        return next();
-      } else {
-        this.master.logger.debug("Rejecting StreamTransport request with missing or invalid socket ID.", {
-          sock_id: sock_id
-        });
-        return res.status(401).end("Missing or invalid socket ID.\n");
-      }
-    });
-    // -- Routes -- #
-    this.app.get("/:stream/rewind", (req, res) => {
-      this.master.logger.debug(`Rewind Buffer request from slave on ${req.stream.key}.`);
-      res.status(200).write('');
-      return req.stream.getRewind((err, writer) => {
-        writer.pipe(new Throttle(100 * 1024 * 1024)).pipe(res);
-        return res.on("end", () => {
-          return this.master.logger.debug("Rewind dumpBuffer finished.");
-        });
-      });
-    });
-  }
-
-};
+}

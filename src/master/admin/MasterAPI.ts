@@ -16,7 +16,7 @@ Throttle = require("throttle");
 
 Users = require("./users");
 
-module.exports = MasterAPI = class MasterAPI {
+export class MasterAPI {
   constructor(ctx) {
     var corsFunc;
     this.ctx = ctx;
@@ -312,5 +312,4 @@ StreamMachine Master API
       });
     });
   }
-
-};
+}

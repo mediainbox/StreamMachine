@@ -1,56 +1,35 @@
-const {toTime} = require('../helpers/datetime');
-var Icy, UrlSource, _, domain, moment, url, util,
-  boundMethodCheck = function(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new Error('Bound instance method accessed before binding'); } };
+import url from 'url';
+import domain from "domain";
+import moment from "moment";
+import _ from "lodash";
+import {BaseSource} from "./base/BaseSource";
+import {Format} from "../slave/types";
+import {Logger} from "winston";
+const Icy = require('icy');
 
-Icy = require('icy');
+interface Config {
+  readonly url: string;
+  readonly format: Format;
+  readonly isFallback: boolean;
+  readonly logger: Logger;
+}
 
-util = require('util');
+export class UrlSource extends BaseSource {
+  constructor(private readonly config: Config) {
+    super(config);
 
-url = require('url');
-
-domain = require("domain");
-
-moment = require("moment");
-
-_ = require("lodash");
-
-module.exports = UrlSource = class UrlSource extends require("./base/base_source") {
-  TYPE() {
-    return `Proxy (${this.url})`;
-  }
-
-  // opts should include:
-  // format:   Format for Parser (aac or mp3)
-  // url:      URL for original stream
-  // fallback: Should we set the isFallback flag? (default false)
-  // logger:   Logger (optional)
-  constructor(opts) {
-    super(opts, {
-      useHeartbeat: false
-    });
-    //----------
-    this._niceError = this._niceError.bind(this);
-    //----------
-    this.status = this.status.bind(this);
-    //----------
-    this.connect = this.connect.bind(this);
-    //----------
-    this.broadcastData = this.broadcastData.bind(this);
-    //----------
-    this._logChunk = this._logChunk.bind(this);
-    //----------
-    this.checkStatus = this.checkStatus.bind(this);
-    //----------
-    this.reconnect = this.reconnect.bind(this);
     this.url = this.opts.url;
-    this.logger = this.opts.logger.child({
-      component: `source_url[${opts.key}]`
-    });
-    this.logger.debug(`url source created for ${this.url}`);
-    this.isFallback = this.opts.fallback || false;
+
+    /*this.logger = this.opts.logger.child({
+      component: `source_url[${config.key}]`
+    });*/
+
+    //this.logger.debug(`url source created for ${this.url}`);
+
     this.defaultHeaders = this.opts.headers || {
       "user-agent": "StreamMachine 0.1.0"
     };
+
     this.connected = false;
     this.framesPerSec = null;
     this.connected_at = null;
@@ -65,16 +44,19 @@ module.exports = UrlSource = class UrlSource extends require("./base/base_source
     this.StreamUrl = null;
     this.d = domain.create();
     this.d.on("error", (err) => {
-      return this._niceError(err);
+      return this.niceError(err);
     });
     this.d.run(() => {
       return this.connect();
     });
   }
 
-  _niceError(err) {
+  TYPE() {
+    return `Proxy (${this.url})`;
+  }
+
+  niceError = (err: Error & { syscall: string }) => {
     var nice_err, ref;
-    boundMethodCheck(this, UrlSource);
     this.logger.debug(`Caught error: ${err}`, err.stack);
     nice_err = (function() {
       switch (err.syscall) {
@@ -86,12 +68,12 @@ module.exports = UrlSource = class UrlSource extends require("./base/base_source
           return "Error making connection to Icecast proxy";
       }
     })();
-    return (ref = this.log) != null ? ref.error(`ProxySource encountered an error: ${nice_err}`, err) : void 0;
-  }
 
-  status() {
+    return (ref = this.log) != null ? ref.error(`ProxySource encountered an error: ${nice_err}`, err) : void 0;
+  };
+
+  status = () => {
     var ref;
-    boundMethodCheck(this, UrlSource);
     return {
       source: (ref = typeof this.TYPE === "function" ? this.TYPE() : void 0) != null ? ref : this.TYPE,
       connected: this.connected,
@@ -102,11 +84,10 @@ module.exports = UrlSource = class UrlSource extends require("./base/base_source
       last_ts: this.last_ts,
       connected_at: this.connected_at
     };
-  }
+  };
 
-  connect() {
+  connect = () => {
     var url_opts;
-    boundMethodCheck(this, UrlSource);
     this.createParser();
     this.logger.debug(`connect to Icecast on ${this.url}`);
     url_opts = url.parse(this.url);
@@ -156,29 +137,26 @@ module.exports = UrlSource = class UrlSource extends require("./base/base_source
     });
     this.ireq.once("error", (err) => {
       this.logger.debug(`Got icecast stream error ${err}, reconnecting`);
-      this._niceError(err);
+      this.niceError(err);
       return this.reconnect(true);
     });
     // outgoing -> Stream
     this.on("_chunk", this.broadcastData);
     this.logChunk = this._logChunk.bind(this);
     return this.on("_chunk", this.logChunk);
-  }
+  };
 
-  broadcastData(chunk) {
-    boundMethodCheck(this, UrlSource);
+  broadcastData = (chunk) => {
     this.chunksCount++;
     this.last_ts = chunk.ts;
     return this.emit("data", chunk);
-  }
+  };
 
-  _logChunk(chunk) {
-    boundMethodCheck(this, UrlSource);
+  _logChunk = (chunk) => {
     return this.logger.silly(`received chunk from parser (time: ${toTime(chunk.ts)}, total: ${this.chunksCount})`);
-  }
+  };
 
-  checkStatus() {
-    boundMethodCheck(this, UrlSource);
+  checkStatus = () => {
     if (!this.connected) {
       this.logger.debug("status check: not connected, skipping");
       return;
@@ -192,11 +170,10 @@ module.exports = UrlSource = class UrlSource extends require("./base/base_source
       return this.reconnect();
     }
     return setTimeout(this.checkStatus, 30000);
-  }
+  };
 
-  reconnect(ignoreConnectionStatus = false) {
+  reconnect = (ignoreConnectionStatus = false) => {
     var msWaitToConnect, ref, ref1, ref2, ref3;
-    boundMethodCheck(this, UrlSource);
     if (!this.connected && !ignoreConnectionStatus) {
       return;
     }
@@ -224,6 +201,5 @@ module.exports = UrlSource = class UrlSource extends require("./base/base_source
     this.parser = null;
     this.chunker = null;
     return setTimeout(this.connect, msWaitToConnect);
-  }
-
-};
+  };
+}

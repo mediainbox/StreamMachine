@@ -1,16 +1,15 @@
-var BaseSource, Debounce, FrameChunker, nconf, uuid;
+import uuid from "uuid";
+import {FrameChunker} from "./FrameChunker";
+import Debounce from "../../util/Debounce";
 
-uuid = require("uuid");
+interface SourceConfig {
+  readonly uuid: string;
+  readonly connectedAt: Date;
+  readonly chunkDuration: number;
+}
 
-nconf = require("nconf");
-
-FrameChunker = require("./_frame_chunker");
-
-Debounce = require("../../util/debounce");
-
-module.exports = BaseSource = class BaseSource extends require("events").EventEmitter {
-  //----------
-  constructor(opts, source_opts = {}) {
+export class BaseSource extends EventEmitter {
+  constructor(opts: SourceConfig, source_opts = {}) {
     var ref;
     super();
     this.opts = opts;
@@ -50,7 +49,6 @@ module.exports = BaseSource = class BaseSource extends require("events").EventEm
     }
   }
 
-  //----------
   createParser() {
     var ref;
     if ((ref = this.log) != null) {
@@ -100,7 +98,6 @@ module.exports = BaseSource = class BaseSource extends require("events").EventEm
     });
   }
 
-  //----------
   getStreamKey(cb) {
     if (this.streamKey) {
       return typeof cb === "function" ? cb(this.streamKey) : void 0;
@@ -111,13 +108,11 @@ module.exports = BaseSource = class BaseSource extends require("events").EventEm
     }
   }
 
-  //----------
   _setVitals(vitals) {
     this._vitals = vitals;
     return this.emit("vitals", this._vitals);
   }
 
-  //----------
   vitals(cb) {
     var _vFunc;
     _vFunc = (v) => {
@@ -130,8 +125,7 @@ module.exports = BaseSource = class BaseSource extends require("events").EventEm
     }
   }
 
-  //----------
-  disconnect(cb) {
+  disconnect() {
     var ref, ref1, ref2, ref3;
     if ((ref = this.log) != null) {
       ref.debug("Setting _isDisconnected");
@@ -145,7 +139,4 @@ module.exports = BaseSource = class BaseSource extends require("events").EventEm
     }
     return (ref3 = this._pingData) != null ? ref3.kill() : void 0;
   }
-
-};
-
-//----------
+}

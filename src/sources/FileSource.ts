@@ -1,12 +1,10 @@
-var FileSource, _, fs;
-
-fs = require("fs");
-
-_ = require("lodash");
+// @ts-nocheck
 
 // FileSource emulates a stream source by reading a local audio file in a
 // loop at the correct audio speed.
-module.exports = FileSource = class FileSource extends require("./base") {
+import {BaseSource} from "./base/BaseSource";
+
+export class FileSource extends BaseSource {
   TYPE() {
     return `File (${this.opts.filePath})`;
   }

@@ -1,13 +1,6 @@
-var IcecastSource, IcyParser, SourceIn, express, net,
-  boundMethodCheck = function(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new Error('Bound instance method accessed before binding'); } };
-
-net = require("net");
-
-express = require("express");
-
-IcecastSource = require("../../sources/icecast_source");
-
-IcyParser = require("./icy_parser");
+import net from "net";
+import IcecastSource from "../../sources/IcecastSource";
+import IcyParser from "./IcyParser";
 
 module.exports = SourceIn = class SourceIn extends require("events").EventEmitter {
   constructor(ctx) {

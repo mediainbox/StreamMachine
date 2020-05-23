@@ -1,12 +1,10 @@
-var Monitoring, _;
-
-_ = require("lodash");
+import { EventEmitter } from "events";
 
 // Monitoring component
 // - checks if a stream has no active sources
 // - checks if a slave is responsive/unresponsive
 // - checks if a slave buffer is out of sync with masters'
-module.exports = Monitoring = class Monitoring extends require("events").EventEmitter {
+export class Monitoring extends EventEmitter {
   constructor(ctx) {
     super();
     this.ctx = ctx;
@@ -114,5 +112,4 @@ module.exports = Monitoring = class Monitoring extends require("events").EventEm
       });
     }, 10 * 1000);
   }
-
-};
+}

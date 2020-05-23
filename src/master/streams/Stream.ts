@@ -1,7 +1,7 @@
 const _ = require("lodash");
 const URL = require("url");
 const RewindBuffer = require('../../rewind/rewind_buffer');
-const ProxySource = require('../../sources/url_source');
+const ProxySource = require('../../sources/UrlSource');
 const { EventEmitter } = require('events');
 
 const DEFAULT_OPTIONS = {

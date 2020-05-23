@@ -84,7 +84,7 @@ class Streamer {
       case "master":
         return new StreamMachine.Modes.MasterMode(this.config.options);
       case "slave":
-        return new StreamMachine.Modes.SlaveMode(this.config.options);
+        return new Slave(this.config.options);
       default:
         return new StreamMachine.Modes.StandaloneMode(this.config.options);
     }

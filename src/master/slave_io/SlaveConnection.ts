@@ -2,7 +2,7 @@ var Events, SlaveConnection;
 
 ({Events} = require('../../events'));
 
-module.exports = SlaveConnection = class SlaveConnection extends require("events").EventEmitter {
+export class SlaveConnection extends EventEmitter {
   constructor(ctx, socket) {
     super();
     this.ctx = ctx;

@@ -1,14 +1,21 @@
-var FrameChunker, Transform;
+import { Transform, TransformCallback } from "stream";
 
-Transform = require("stream").Transform;
+export class FrameChunker extends Transform {
 
-module.exports = FrameChunker = class FrameChunker extends Transform {
-  constructor(duration1, initialTime = new Date()) {
+  private duration: number;
+  private initialTime: number;
+  private _chunk_queue: any[] = [];
+  private _queue_duration = 0;
+  private _remainders = 0;
+  private _target: number;
+  private _last_ts: Date | number | null;
+
+  constructor(duration1: number, initialTime = new Date()) {
     super({
       objectMode: true
     });
     this.duration = duration1;
-    this.initialTime = initialTime;
+    this.initialTime = initialTime.valueOf();
     this._chunk_queue = [];
     this._queue_duration = 0;
     this._remainders = 0;
@@ -16,15 +23,13 @@ module.exports = FrameChunker = class FrameChunker extends Transform {
     this._last_ts = null;
   }
 
-  //----------
-  resetTime(ts) {
+  resetTime(ts: number) {
     this._last_ts = null;
     this._remainders = 0;
-    return this.initialTime = ts;
+    this.initialTime = ts;
   }
 
-  //----------
-  _transform(obj, encoding, cb) {
+  _transform(obj: any, encoding: BufferEncoding, cb: TransformCallback) {
     var buf, duration, frames, i, len, len1, o, ref, simple_dur, simple_rem, ts;
     this._chunk_queue.push(obj);
     this._queue_duration += obj.header.duration;
@@ -41,7 +46,7 @@ module.exports = FrameChunker = class FrameChunker extends Transform {
       // how many frames?
       frames = this._chunk_queue.length;
       // make one buffer
-      buf = Buffer.concat((function() {
+      buf = Buffer.concat((() => {
         var j, len2, ref1, results;
         ref1 = this._chunk_queue;
         results = [];
@@ -50,7 +55,7 @@ module.exports = FrameChunker = class FrameChunker extends Transform {
           results.push(o.frame);
         }
         return results;
-      }).call(this));
+      })());
       duration = this._queue_duration;
       // reset queue
       this._chunk_queue.length = 0;
@@ -76,5 +81,4 @@ module.exports = FrameChunker = class FrameChunker extends Transform {
     }
     return cb();
   }
-
-};
+}

@@ -1,15 +1,13 @@
-var Debounce, now;
-
-now = function() {
+const now = function() {
   return Number(new Date());
 };
 
-module.exports = Debounce = class Debounce {
-  constructor(wait, cb) {
-    this.wait = wait;
-    this.cb = cb;
-    this.last = null;
-    this.timeout = null;
+export class Debounce {
+  private timeout: NodeJS.Timeout | null;
+  private last: number;
+  private _t: () => void;
+
+  constructor(private wait: number, private cb: null | ((ts: number) => void)) {
     this._t = () => {
       var ago;
       ago = now() - this.last;
@@ -17,7 +15,7 @@ module.exports = Debounce = class Debounce {
         return this.timeout = setTimeout(this._t, this.wait - ago);
       } else {
         this.timeout = null;
-        return this.cb(this.last);
+        return this.cb && this.cb(this.last);
       }
     };
   }
@@ -36,5 +34,4 @@ module.exports = Debounce = class Debounce {
     }
     return this.cb = null;
   }
-
-};
+}
