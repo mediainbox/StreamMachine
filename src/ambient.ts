@@ -1,4 +1,4 @@
-import {Stream} from "./slave/streams/Stream";
+import {Stream} from "./slave/stream/Stream";
 
 export {};
 

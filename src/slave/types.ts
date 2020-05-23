@@ -1,6 +1,6 @@
 import {Logger} from "winston";
 import {EventEmitter} from "events";
-import {Stream} from "./streams/Stream";
+import {Stream} from "./stream/Stream";
 import express from "express";
 import {IListener} from "./listeners/IListener";
 

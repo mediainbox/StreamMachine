@@ -1,6 +1,6 @@
 import {IOutput} from "./IOutput";
 import express from "express";
-import {Stream} from "../streams/Stream";
+import {Stream} from "../stream/Stream";
 import {Logger} from "winston";
 import {RawOutput} from "./RawOutput";
 

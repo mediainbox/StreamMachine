@@ -1,5 +1,5 @@
 import {InputConfig, SlaveConfig_V1, SlaveCtx, SlaveStatus, StreamStatus} from "./types";
-import {Stream} from "./streams/Stream";
+import {Stream} from "./stream/Stream";
 import {StreamsCollection} from "./streams/StreamsCollection";
 import {Events} from '../events';
 import {EventEmitter} from "events";

@@ -26,7 +26,7 @@ import {createListenerSource} from "./sourceFactory";
 import {ISource} from "../output/ISource";
 
 const RewindBuffer = require("../../rewind/rewind_buffer");
-const {createRewindLoader} = require("../../rewind/loader");
+const {createRewindLoader} = require("../../rewind/RewindLoader");
 
 
 const StreamEvents = {

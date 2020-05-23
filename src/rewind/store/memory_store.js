@@ -136,7 +136,7 @@ module.exports = MemoryStore = class MemoryStore extends require("./base_store")
     // it's probable that insert() was called again using the same chunk
     // Often related to dangling event handlers that were not properly removed
     } else if (cts === fb || cts === lb || this.buffer.find(b => b.ts.valueOf() === cts)) {
-      debug(`Chunk timestamp already found in the buffer! [cts: ${cts}, fb: ${fb}, lb: ${lb}]`);
+      //debug(`Chunk timestamp already found in the buffer! [cts: ${cts}, fb: ${fb}, lb: ${lb}]`);
     } else {
       // need to insert in the middle.
       debug(`Push in the middle not implemented! [cts: ${cts}, fb: ${fb}, lb: ${lb}]`);
