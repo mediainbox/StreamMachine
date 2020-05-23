@@ -21,9 +21,7 @@
     },
     "debug_incoming_requests": true,
     "log": {
-      "json": {
-        "file": "/dev/stream-machine/logs/log.txt"
-      },
+      "json": false,
       "stackdriver": true
     },
     "source_port": 8080,
@@ -37,7 +35,7 @@
         "key": "cadena3.mp3",
         "_preroll": "http://demo.deliveryengine.adswizz.com/vast/4.0/request/alias/cad3testpub",
         "transcoder": "http://masterdo5.mediainbox.net:15000/encoding",
-        "log_interval": 30000,
+        "log_interval": 60000,
         "meta_interval": 32768,
         "max_buffer": 4194304,
         "seconds": 300,

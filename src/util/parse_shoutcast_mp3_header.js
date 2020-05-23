@@ -1,6 +1,6 @@
 var Icy, MP3, _, firstHeader, headerCount, icyreader, mp3;
 
-MP3 = require("../streammachine/parsers/mp3");
+MP3 = require("../parsers/mp3");
 
 _ = require("lodash");
 

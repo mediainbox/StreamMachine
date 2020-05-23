@@ -4,7 +4,7 @@ path = require("path");
 
 fs = require("fs");
 
-FakeAdServer = require("../streammachine/util/fake_ad_server");
+FakeAdServer = require("./util/fake_ad_server");
 
 this.args = require("yargs").usage("Usage: $0 --template ./test/files/ads/vast.xml --port 8002").describe({
   template: "XML Ad Template",

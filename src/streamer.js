@@ -17,7 +17,7 @@ const _ = require("lodash");
 const nconf = require("nconf");
 const axios = require("axios");
 const debug = require("debug")("sm:streamer");
-const StreamMachine = require("./streammachine");
+const StreamMachine = require("./index");
 
 class Streamer {
   constructor(config1) {
@@ -33,7 +33,7 @@ class Streamer {
 
   readConfig(callback) {
     if (this.config.client) {
-      debug(`using local config: ${this.config.config}`);
+      console.log(`[streamer] using local config: ${this.config.config}`);
       callback(this.config);
       return;
     }

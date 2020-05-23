@@ -11,11 +11,11 @@
         "ws://localhost:8020?password=polkmn1!c3"
       ]
     },
-    "cluster": 1,
+    "cluster": 4,
     "http_port": 9002,
     "log": {
-      "stdout": {
-        "ignore": "request,interaction"
+      "json": {
+        "file": "./logs/slave.log"
       }
     },
     "behind_proxy": true,

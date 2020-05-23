@@ -1,3 +1,7 @@
+- /listeners no responde
+- analytics cpu
+- +5k listeners
+
 # StreamMachine
 
 StreamMachine is an open-source streaming audio server aimed at pushing

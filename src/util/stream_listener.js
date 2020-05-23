@@ -1,6 +1,6 @@
 var StreamListener, argv, listener, ref;
 
-StreamListener = require("../streammachine/util/stream_listener");
+StreamListener = require("./util/stream_listener");
 
 argv = require("yargs").usage("Usage: $0 --host localhost --port 8001 --stream foo --shoutcast").help('h').alias('h', 'help').describe({
   host: "Server",

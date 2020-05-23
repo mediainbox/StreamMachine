@@ -1,6 +1,6 @@
 var IcecastSource, filepath, fs, path, ref, ref1, source;
 
-IcecastSource = require("../streammachine/util/icecast_source");
+IcecastSource = require("./util/icecast_source");
 
 path = require("path");
 

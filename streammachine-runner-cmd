@@ -1,7 +1,0 @@
-#!/usr/bin/env node
-
-var path = require('path');
-var fs   = require('fs');
-var src  = path.dirname(fs.realpathSync(__filename));
-
-require(src + "/js/runner.js")

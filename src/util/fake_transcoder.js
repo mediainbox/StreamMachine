@@ -4,7 +4,7 @@ path = require("path");
 
 fs = require("fs");
 
-FakeTranscoder = require("../streammachine/util/fake_transcoder");
+FakeTranscoder = require("./util/fake_transcoder");
 
 this.args = require("yargs").usage("Usage: $0 --dir ./test/files/mp3 --port 8001").describe({
   dir: "Directory with audio files",

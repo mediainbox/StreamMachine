@@ -1,6 +1,6 @@
 var AAC, _, aac, ema, ema_alpha, firstHeader, headerCount;
 
-AAC = require("../streammachine/parsers/aac");
+AAC = require("../parsers/aac");
 
 _ = require("lodash");
 
