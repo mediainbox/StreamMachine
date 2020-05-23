@@ -5,7 +5,7 @@ import {Logger} from "winston";
 import {Socket} from "net";
 import {Err} from "../../types";
 import {EventEmitter} from "events";
-import {OutputSource} from "./OutputSource";
+import {ISource} from "./ISource";
 
 const _ = require("lodash");
 
@@ -14,7 +14,7 @@ export abstract class HttpOutput extends EventEmitter implements IOutput {
   protected isStreaming = false;
 
   protected socket: Socket;
-  protected source: OutputSource;
+  protected source: ISource;
 
   constructor(
     protected readonly req: express.Request,
@@ -52,7 +52,7 @@ export abstract class HttpOutput extends EventEmitter implements IOutput {
 
   getQueuedBytes() {
     if (!this.isStreaming) {
-      return false;
+      return 0;
     }
 
     const bufferSize = this.socket.bufferSize || 0;
@@ -69,7 +69,7 @@ export abstract class HttpOutput extends EventEmitter implements IOutput {
     return this.source.getSentSeconds();
   }
 
-  send(source: OutputSource) {
+  send(source: ISource) {
     if (this.disconnected) {
       this.logger.warn('send() was called after disconnect');
       return;
@@ -86,20 +86,21 @@ export abstract class HttpOutput extends EventEmitter implements IOutput {
     }
 
     this.disconnected = true;
+    // emit disconnect here so hooks can still read
+    // from source/socket state
     this.emit("disconnect");
 
     if (this.source) { // source = Rewinder
       this.source.unpipe();
       this.source.destroy();
-      this.source = null!;
     }
 
-    if (!this.socket?.destroyed) {
-      this.socket.removeListener("end", this.disconnect);
-      this.socket.removeListener("close", this.disconnect);
-      this.socket.removeListener("error", this.handleSocketError);
+    this.socket.removeListener("end", this.disconnect);
+    this.socket.removeListener("close", this.disconnect);
+    this.socket.removeListener("error", this.handleSocketError);
+
+    if (!this.socket.destroyed) {
       this.socket.destroy();
-      this.socket = null!;
     }
 
     this.logger.debug('output disconnected');

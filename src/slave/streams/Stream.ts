@@ -10,7 +10,7 @@ import {
 import {DEFAULT_AD_IMPRESSION_DELAY, DEFAULT_AD_REQUEST_TIMEOUT} from "../consts";
 import {ListenersCollection} from "../listeners/ListenersCollection";
 import {Chunk, Err} from "../../types";
-import {OutputSource} from "../output/OutputSource";
+import {CombinedSource} from "../output/CombinedSource";
 import {ListenersCleaner} from "../listeners/ListenersCleaner";
 import {BetterEventEmitter, Events} from "../../events";
 import {toTime} from "../../helpers/datetime";
@@ -21,6 +21,9 @@ import {Logger} from "winston";
 import {IListener} from "../listeners/IListener";
 import {NullPreroller} from "../preroll/NullPreroller";
 import {IPreroller} from "../preroll/IPreroller";
+import {ListenersReporter} from "../listeners/ListenersReporter";
+import {createListenerSource} from "./sourceFactory";
+import {ISource} from "../output/ISource";
 
 const RewindBuffer = require("../../rewind/rewind_buffer");
 const {createRewindLoader} = require("../../rewind/loader");
@@ -59,6 +62,8 @@ export class Stream extends BetterEventEmitter {
 
   private readonly logger: Logger;
   private readonly listenersCleaner: ListenersCleaner;
+  private readonly listenersReporter: ListenersReporter;
+
   private preroller: IPreroller;
   private rewindBuffer: any;
 
@@ -81,7 +86,7 @@ export class Stream extends BetterEventEmitter {
     this.config = {
       // convert master config format
       format: passedConfig.format,
-      initialBurst: 0, // passedConfig.burst,
+      initialBurst: 5, // passedConfig.burst,
       maxSeconds: passedConfig.seconds,
       maxBufferSize: passedConfig.max_buffer,
       listenEventInterval: passedConfig.log_interval,
@@ -117,6 +122,13 @@ export class Stream extends BetterEventEmitter {
       }),
     );
 
+    this.listenersReporter = new ListenersReporter(
+      this.listenersCol,
+      ctx.logger.child({
+        component: `listeners_reporter[${this.id}]`
+      }),
+    );
+
     this.hookEvents();
     this.configure();
   }
@@ -139,6 +151,8 @@ export class Stream extends BetterEventEmitter {
       this.ctx.events.on(`audio:${this.id}`, (chunk: Chunk) => {
         this.logger.silly(`push received audio chunk ${toTime(chunk.ts)}`);
         this.rewindBuffer.push(chunk);
+        // TODO: fixme
+        this.listenersCol.pushLatest(this.rewindBuffer.buffer);
       });
     });
 
@@ -232,7 +246,7 @@ export class Stream extends BetterEventEmitter {
       })
   }
 
-  listen(listener: IListener): Promise<OutputSource> {
+  listen(listener: IListener): Promise<ISource> {
     return new Promise((resolve, reject) => {
       // don't ask for a rewinder while our source is going through init,
       // since we don't want to fail an offset request that should be valid
@@ -240,25 +254,23 @@ export class Stream extends BetterEventEmitter {
         this.stats.connections++;
 
         this.listenersCol.add(listener.id, listener);
-        this.logger.debug(`new listener #${listener.id} for stream, assign rewinder`);
-
-        const adOperator = this.preroller.getAdOperator(listener);
+        this.logger.debug(`add listener #${listener.id}, create source`);
 
         listener.once('disconnect', () => {
-          // on disconnection, remove from current list and abort any current
-          // preroll/rewind loading in progress
           this.logger.debug(`remove listener #${listener.id}`);
           this.listenersCol.remove(listener.id);
-          adOperator.abort();
         });
 
         try {
-          const [preroll, rewinder] = await Promise.all([
-            adOperator.build(),
-            this.rewindBuffer.getRewinder(listener.id, listener.options)
-          ]);
-          this.logger.debug(`got preroll and rewinder for listener #${listener.id}`);
-          resolve(new OutputSource(preroll, rewinder));
+          const source = await createListenerSource({
+            listener,
+            preroller: this.preroller,
+            rewindBuffer: this.rewindBuffer,
+          });
+
+          this.logger.debug(`built audio source for listener #${listener.id}`);
+
+          resolve(source);
         } catch (error) {
           this.logger.error(`error ocurred while loading rewinder for listener #${listener.id}`, {
             error,

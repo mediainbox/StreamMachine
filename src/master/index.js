@@ -91,7 +91,7 @@ module.exports = class Master extends EventEmitter {
     }
 
     // -- Analytics -- #
-    this.analytics = new Analytics(this.ctx);
+    //this.analytics = new Analytics(this.ctx);
 
     // -- Rewind Dump and Restore -- #
     if (this.config.rewind_dump && false) {

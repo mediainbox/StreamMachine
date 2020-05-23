@@ -56,11 +56,11 @@ module.exports = MemoryStore = class MemoryStore extends require("./base_store")
     }
   }
 
-  at(offset, cb) {
+  at(offset) {
     if (offset instanceof Date) {
       offset = this._findTimestampOffset(offset);
       if (offset === -1) {
-        return cb(new Error("Timestamp not found in RewindBuffer"));
+        return null;
       }
     } else {
       if (offset > this.buffer.length) {
@@ -70,7 +70,8 @@ module.exports = MemoryStore = class MemoryStore extends require("./base_store")
         offset = 0;
       }
     }
-    return cb(null, this.buffer[this.buffer.length - 1 - offset]);
+
+    return this.buffer[this.buffer.length - 1 - offset];
   }
 
   range(offset, length, cb) {
@@ -91,7 +92,7 @@ module.exports = MemoryStore = class MemoryStore extends require("./base_store")
     if (length > offset) {
       length = offset;
     }
-    start = this.buffer.length - 1 - offset;
+    start = this.buffer.length - offset;
     end = start + length;
     return cb(null, this.buffer.slice(start, end));
   }

@@ -1,5 +1,4 @@
 const _ = require("lodash");
-const {Rewinder} = require("./Rewinder");
 const MemoryStore = require("./store/memory_store");
 const RewindWriter = require('./rewind_writer');
 const {toTime} = require('../helpers/datetime');
@@ -37,7 +36,6 @@ module.exports = class RewindBuffer extends BetterEventEmitter {
   buffer = new MemoryStore();
   maxChunks = null;
   preloading = false;
-  rewinders = [];
 
   /**
    * args: {
@@ -83,14 +81,6 @@ module.exports = class RewindBuffer extends BetterEventEmitter {
 
     this.logger.silly(`insert chunk ${toTime(chunk.ts)} in buffer`);
     this.buffer.insert(chunk);
-
-    this.rewinders.forEach(rewinder => {
-      // we'll give them whatever is at length - offset
-      // FIXME: This lookup strategy is horribly inefficient
-      this.buffer.at(rewinder.getOffset(), (err, b) => {
-        return rewinder._insert(b);
-      });
-    });
   };
 
   // TODO: check
@@ -161,20 +151,6 @@ module.exports = class RewindBuffer extends BetterEventEmitter {
     }
 
     this.logger.info(`buffer adjusted, max length is ${this.maxSeconds} seconds (${this.maxChunks} chunks)`);
-  }
-
-  async getRewinder(id, opts) {
-    const rewind = new Rewinder(this, opts, this.logger.child({
-      component: `stream[${this.streamKey}]:rewinder[#${id}]`,
-    }));
-
-    if (!opts.pumpOnly) {
-      // add it to our list of listeners
-      this.addRewinder(rewind);
-    }
-
-    await rewind.start();
-    return rewind;
   }
 
   // Load a RewindBuffer.  Buffer should arrive newest first, which means
@@ -320,20 +296,6 @@ module.exports = class RewindBuffer extends BetterEventEmitter {
         return typeof cb === "function" ? cb(err, 0) : void 0;
       });
     }
-  }
-
-  addRewinder(rewinder) {
-    if (rewinder.getOffset() < 0) {
-      // FIXME: ??? see -1 in rewinder
-      this.logger.error(`can not add rewinder with negative offset`);
-      return;
-    }
-
-    this.rewinders.push(rewinder);
-  }
-
-  removeRewinder(rewinder) {
-    this.rewinders = this.rewinders.filter(l => l !== rewinder);
   }
 
   disconnect() {

@@ -13,7 +13,7 @@ export function setupHttpServer({ app, ctx }: { app: express.Application, ctx: S
   });
 
   if (process.env.NO_GREENLOCK) {
-    if (cluster.isMaster) {
+    if (cluster.isMaster && config.cluster > 1) {
       console.log(`Master ${process.pid} is running`);
 
       // Fork workers.

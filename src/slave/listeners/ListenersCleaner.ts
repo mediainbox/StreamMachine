@@ -38,7 +38,7 @@ export class ListenersCleaner {
         listener.disconnect();
       });
 
-      this.logger.debug(`total ${count} queued listeners buffers size: ${totalBufferSize}`);
+      this.logger.debug(`total queued buffer size: ${totalBufferSize}`);
     }, CLEAN_INTERVAL);
   }
 

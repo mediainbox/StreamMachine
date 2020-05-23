@@ -1,12 +1,12 @@
 import {ListenEvent, ListenOptions} from "../types";
-import { EventEmitter } from 'events';
+import {EventEmitter} from 'events';
 import {Logger} from "winston";
 import {IOutput} from "../output/IOutput";
-import { Client } from "./Client";
-import {OutputSource} from "../output/OutputSource";
+import {Client} from "./Client";
 import {Events, EventsHub} from "../../events";
 import {Mutable} from "../../helpers/types";
 import {IListener} from "./IListener";
+import {ISource} from "../output/ISource";
 
 export class Listener extends EventEmitter implements IListener {
   readonly connectedAt = Date.now();
@@ -15,6 +15,7 @@ export class Listener extends EventEmitter implements IListener {
 
   private disconnected = false;
 
+  private readonly source: ISource;
   private readonly output: IOutput;
   private readonly logger: Logger;
   private readonly events: EventsHub;
@@ -92,7 +93,15 @@ export class Listener extends EventEmitter implements IListener {
     return this.output.getSentBytes();
   }
 
-  send(source: OutputSource) {
+  getSentSeconds() {
+    return this.output.getSentSeconds();
+  }
+
+  getSource() {
+    return this.source;
+  }
+
+  send(source: ISource) {
     this.hookEvents();
 
     if (this.disconnected) {
@@ -101,6 +110,7 @@ export class Listener extends EventEmitter implements IListener {
       return;
     }
 
+    (this.source as Mutable<ISource>) = source;
     this.events.emit(Events.Listener.SESSION_START, this);
     this.output.send(source);
   }

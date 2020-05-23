@@ -1,6 +1,7 @@
 import {Readable} from "stream";
-import {Logger} from "winston";
 import {Chunk} from "../types";
+
+const HIGH_WATERMARK = 256 * 1024 // 256 KB;
 
 // Rewinder is the general-purpose listener stream.
 // Arguments:
@@ -23,13 +24,14 @@ export class Rewinder extends Readable {
     contentTime: 0,
   };
 
+  private readonly queue: Chunk[] = [];
+
   // keep track of the duration of the segments we have pushed
   // Note that for non-pump requests, these will be reset periodically
   // as we report listening segments
   private offsetSeconds = null;
   private pumpOnly = false;
-  private offset = 0;
-  private readonly queue: Chunk[] = [];
+  private offset = 0; // offset requested in chunks
   private queuedBytes = 0;
   private reading = false;
   private pumpSecs: number;
@@ -41,10 +43,9 @@ export class Rewinder extends Readable {
       pump?: boolean;
       pumpOnly?: boolean;
     } = {},
-    private readonly logger: Logger,
   ) {
     super({
-      highWaterMark: 256 * 1024 // 256 KB
+      highWaterMark: HIGH_WATERMARK
     });
 
     // Implement the guts of the Readable stream. For a normal stream,
@@ -55,51 +56,61 @@ export class Rewinder extends Readable {
     this.pumpSecs = opts.pump === true ? this.rewind.initialBurst : opts.pump;
   }
 
-  start() {
+  pump(): Promise<void> {
     return new Promise((resolve, reject) => {
-      const oFunc = (offset: number) => {
-        this.offset = offset;
-        /*debug("Rewinder: creation with ", {
-          opts: opts,
-          offset: this.offset
-        });*/
-        // -- What are we sending? -- #
-        if (this.opts != null ?this.opts.pumpOnly : void 0) {
-          // we're just giving one pump of data, then EOF
-          this.pumpOnly = true;
-          return this.rewind.pumpFrom(this, this.offset, this.rewind.secsToOffset(this.pumpSecs), false, (err: Error, info: any) => {
+      this.offset = this.opts.offset ? this.rewind.validateSecondsOffset(this.opts.offset) : 0;
+
+      if (this.opts.pumpOnly) {
+        // we're just giving one pump of data, then EOF
+        this.pumpOnly = true;
+        return this.rewind.pumpFrom(this, this.offset, this.rewind.secsToOffset(this.pumpSecs), false, (err: Error, info: any) => {
+          if (err) {
+            return reject(err);
+          }
+          // return pump information
+          return resolve(info);
+        });
+        return;
+      }
+
+      if (this.opts.pump) {
+        if (this.offset === 0) {
+          // pump some data before we start regular listening
+          //debug(`Rewinder: Pumping ${this.rewind.burst} seconds.`);
+          this.rewind.pumpSeconds(this, this.pumpSecs, true);
+          return resolve();
+        } else {
+          // we're offset, so we'll pump from the offset point forward instead of
+          // back from live
+          return this.rewind.burstFrom(this, this.offset, this.pumpSecs, (err: Error, newoffset: number) => {
             if (err) {
               return reject(err);
             }
-            // return pump information
-            return resolve(info);
-          });
-        } else if (this.opts != null ? this.opts.pump : void 0) {
-          if (this.offset === 0) {
-            // pump some data before we start regular listening
-            //debug(`Rewinder: Pumping ${this.rewind.burst} seconds.`);
-            this.rewind.pumpSeconds(this, this.pumpSecs, true);
+            this.offset = newoffset;
             return resolve();
-          } else {
-            // we're offset, so we'll pump from the offset point forward instead of
-            // back from live
-            return this.rewind.burstFrom(this, this.offset, this.pumpSecs, (err: Error, newoffset: number) => {
-              if (err) {
-                return reject(err);
-              }
-              this.offset = newoffset;
-              return resolve();
-            });
-          }
-        } else {
-          return resolve();
+          });
         }
-      };
+      }
 
-      //offset = opts.offsetSecs ? this.rewind.validateSecondsOffset(opts.offsetSecs) : opts.offset ? this.rewind.validateOffset(opts.offset) : 0;
-      const offset = this.opts.offset ? this.rewind.validateSecondsOffset(this.opts.offset) : 0;
-      oFunc(offset);
+      return resolve();
     });
+  }
+
+  // -- Handle an empty queue -- #
+  // In normal operation, you can think of the queue as infinite,
+  // but not speedy.  If we've sent everything we have, we'll send
+  // out an empty string to signal that more will be coming.  On
+  // the other hand, in pump mode we need to send a null character
+  // to signal that we've reached the end and nothing more will
+  // follow.
+  handleEmpty() {
+    if (this.pumpOnly) {
+      this.push(null);
+    } else {
+      this.push('');
+    }
+
+    this.reading = false;
   }
 
   _read = (size: number): void => {
@@ -118,34 +129,17 @@ export class Rewinder extends Readable {
     // times until we get to the size requested (or the end of what we
     // have ready)
     const pushQueue = () => {
-      // -- Handle an empty queue -- #
-      // In normal operation, you can think of the queue as infinite,
-      // but not speedy.  If we've sent everything we have, we'll send
-      // out an empty string to signal that more will be coming.  On
-      // the other hand, in pump mode we need to send a null character
-      // to signal that we've reached the end and nothing more will
-      // follow.
-      const handleEmpty = () => {
-        if (this.pumpOnly) {
-          this.push(null);
-        } else {
-          this.push('');
-        }
-        this.reading = false;
-      };
-
       // See if the queue is empty to start with
       if (this.queue.length === 0) {
-        handleEmpty();
+        this.handleEmpty();
         return;
       }
 
       // grab a chunk off of the queued up buffer
       const nextChunk: Chunk | undefined = this.queue.shift();
+
       if (!nextChunk) {
-        this.logger.error("Shifted queue but got null", {
-          length: this.queue.length
-        });
+        this.emit('error', "Shifted queue but got null");
         return;
       }
 
@@ -176,7 +170,7 @@ export class Rewinder extends Readable {
 
         // no more chunks
         if (this.queue.length === 0) {
-          handleEmpty();
+          this.handleEmpty();
           return;
         }
 
@@ -197,38 +191,21 @@ export class Rewinder extends Readable {
     this.queue.push(chunk);
     this.queuedBytes += chunk.data.length;
 
-    if (!this.stats.contentTime) {
-      // we set contentTime the first time we find it unset, which will be
-      // either on our first insert or on our first insert after logging
-      // has happened
-      this.stats.contentTime = chunk.ts;
-    }
-
     if (!this.reading) {
       this.read(0);
     }
   };
 
   _destroy() {
-    this.rewind.removeRewinder(this);
+    this.emit('destroy');
     this.removeAllListeners();
-    this.logger.debug('rewinder destroyed');
   }
 
-  // returns the current offset in chunks
   getOffset() {
     return this.offset;
   }
 
   getStats() {
     return this.stats;
-  }
-
-  resetStats() {
-    this.stats = {
-      bytesSent: 0,
-      secondsSent: 0,
-      contentTime: 0,
-    };
   }
 }

@@ -11,7 +11,7 @@
         "ws://localhost:8020?password=polkmn1!c3"
       ]
     },
-    "cluster": 4,
+    "cluster": 1,
     "http_port": 9002,
     "log": {
       "json": {

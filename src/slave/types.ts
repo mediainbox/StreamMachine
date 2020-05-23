@@ -117,7 +117,7 @@ export interface SourceConfig_V1 {
 
 
 export interface ListenOptions {
-  offset?: number;
+  offset: number;
   pump?: boolean;
 }
 

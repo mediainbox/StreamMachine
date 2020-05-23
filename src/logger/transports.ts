@@ -29,7 +29,11 @@ export class DebugTransport extends Transport {
       return typeof key !== 'symbol';
     });
 
-    fn(`[${level}] ${message}`, metaToLog);
+    if (Object.keys(metaToLog).length) {
+      fn(`[${level}] ${message}`, metaToLog);
+    } else {
+      fn(`[${level}] ${message}`);
+    }
 
     return callback(null, true);
   }

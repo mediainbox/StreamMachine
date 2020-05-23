@@ -1,7 +1,7 @@
 import {EventEmitter} from "events";
 import {Client} from "./Client";
 import {ListenOptions} from "../types";
-import {OutputSource} from "../output/OutputSource";
+import {ISource} from "../output/ISource";
 
 export interface IListener extends EventEmitter {
   readonly id: string;
@@ -12,6 +12,8 @@ export interface IListener extends EventEmitter {
 
   getQueuedBytes(): number;
   getSentBytes(): number;
-  send(source: OutputSource): void;
+  getSentSeconds(): number;
+  getSource(): ISource;
+  send(source: ISource): void;
   disconnect(): void;
 }
