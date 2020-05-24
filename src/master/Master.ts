@@ -1,32 +1,24 @@
 import _ from "lodash";
-import Redis from "../stores/RedisStore";
-import MasterConfigRedisStore from "./config/RedisConfigProvider";
-import MasterAPI from "./admin/MasterAPI";
-import Stream from "./streams/stream";
-import SourceIn from "./sources/SourceIn";
-import Monitoring from "./Monitoring";
-import SlaveServer from "./slave_io/SlaveServer";
-import SourceMount from "./sources/SourceMount";
-import RewindDumpRestore from "../rewind/dump_restore";
-import {Events, EventsHub} from '../events';
-import StreamDataBroadcaster from './streams/AudioBroadcaster';
 import {EventEmitter} from 'events';
-import debug from "debug"
-import {MasterCtx} from "./types";
-
-)("sm:master:index";
+import {MasterConfig} from "./types";
+import {StreamsCollection} from "./streams/StreamsCollection";
+import { Stream } from "./streams/Stream";
+import {Logger} from "winston";
 
 /**
  * Master handles configuration, slaves, incoming sources,
  * logging and the admin interface
  */
 export class Master extends EventEmitter {
-  constructor(private readonly ctx: MasterCtx) {
+  private readonly streams: StreamsCollection;
+
+  private readonly logger: Logger;
+
+  constructor(private readonly config: MasterConfig) {
     super();
 
     this._configured = false;
     this.source_mounts = {};
-    this.streams = {};
     this.stream_groups = {};
     this.dataBroadcasters = {};
     this.config = this.ctx.config;
@@ -36,56 +28,28 @@ export class Master extends EventEmitter {
     this.ctx.events = new EventsHub();
     this.ctx.master = this;
     this.logger.debug("initialize master");
-    if (this.config.redis != null) {
-      // -- load our streams configuration from redis -- #
 
-      // we store streams and sources into Redis, but not our full
-      // config object. Other stuff still loads from the config file
-      this.logger.debug("initialize Redis connection");
-      this.ctx.providers.redis = new Redis(this.config.redis);
-      this.configStore = new MasterConfigRedisStore(ctx);
-      this.configStore.on("config", (config) => {
-        if (config) {
-          // stash the configuration
-          this.config = _.defaults(config, this.config);
-          // (re-)configure our master stream objects
-          return this.configure(this.config);
-        }
-      });
-      // Persist changed configuration to Redis
-      this.logger.debug("registering config_update listener");
-      this.on(Events.Master.CONFIG_UPDATE, () => {
-        return this.configStore._update(this.getStreamsAndSourceConfig(), (err) => {
-          return this.logger.info(`Redis config update saved: ${err}`);
-        });
-      });
-    } else {
-      // -- look for hard-coded configuration -- #
-      process.nextTick(() => {
-        return this.configure(this.config);
-      });
-    }
 
-    // -- create a server to provide the API -- #
+
     this.api = new MasterAPI(this.ctx);
-
-    // -- create a backend server for stream requests -- #
-    this.transport = new StreamTransport(this);
-
-    // -- start the source listener -- #
     this.sourcein = new SourceIn(this.ctx);
-
-    // -- create a listener for slaves -- #
     this.slaveServer = new SlaveServer(this.ctx);
 
 
-    // -- Rewind Dump and Restore -- #
-    if (this.config.rewind_dump && false) {
-      this.rewind_dr = new RewindDumpRestore(this, this.config.rewind_dump);
-    }
+    //this.configure(this.config);
 
-    // -- Set up our monitoring module -- #
-    this.monitoring = new Monitoring(this.ctx);
+
+    //if (this.config.rewind_dump && false) {
+    //  this.rewind_dr = new RewindDumpRestore(this, this.config.rewind_dump);
+    //}
+
+    //this.server.use("/s", this.master.transport.app);
+    //this.server.use("/api", this.master.api.app);
+
+    //this.loadRewinds();
+    //@handle = @server.listen @opts.master.port
+    //@master.slaves.listen(@handle)
+    //@master.sourcein.listen()
   }
 
   hookEvents() {
@@ -98,20 +62,9 @@ export class Master extends EventEmitter {
     });
   }
 
-  once_configured(cb) {
-    if (this._configured) {
-      return cb();
-    } else {
-      return this.once(Events.Master.STREAMS_UPDATE, () => {
-        return cb();
-      });
-    }
-  }
-
-  loadRewinds(cb) {
+  loadRewinds() {
     return this.once(Events.Master.STREAMS_UPDATE, () => {
-      var ref;
-      return (ref = this.rewind_dr) != null ? ref.load(cb) : void 0;
+      this.rewind_dr.load();
     });
   }
 
@@ -134,42 +87,30 @@ export class Master extends EventEmitter {
     return config;
   }
 
-
   // configre can be called on a new core, or it can be called to
   // reconfigure an existing core.  we need to support either one.
-  configure(options, cb) {
-    var all_keys, k, key, mount, mount_key, new_sources, new_streams, obj, opts, ref, ref1;
-    this.logger.debug("configure sources and streams");
-    all_keys = {};
-    // -- Sources -- #
-    new_sources = (options != null ? options.sources : void 0) || {};
-    for (k in new_sources) {
-      opts = new_sources[k];
-      all_keys[k] = 1;
-      this.logger.debug(`configure source ${k}`);
-      if (this.source_mounts[k]) {
-        // existing...
-        this.source_mounts[k].configure(opts);
-      } else {
-        this._startSourceMount(k, opts);
-      }
-    }
-    // -- Streams -- #
+  configureStreams(streamsConfig: MasterConfig['streams']) {
 
-    // are any of our current streams missing from the new options? if so,
-    // disconnect them
-    new_streams = (options != null ? options.streams : void 0) || {};
-    ref = this.streams;
-    for (k in ref) {
-      obj = ref[k];
-      if (!(new_streams != null ? new_streams[k] : void 0)) {
-        this.logger.debug("calling destroy on ", k);
-        obj.destroy();
-        delete this.streams[k];
-      }
-    }
-// run through the streams we've been passed, initializing sources and
-// creating rewind buffers
+    streamsConfig!.forEach(config => {
+
+      const stream = new Stream(
+        config.id,
+        config, // TODO: inherit config from master
+        this.logger.child({
+          component: `stream[${config.id}]`
+        })
+      );
+
+      this.streams.add(config.id, stream);
+
+
+      //this._attachIOProxy(stream);
+      //return this.emit(Events.Master.STREAMS_UPDATE, this.streams);
+      //this.emit(Events.Master.NEW_STREAM, stream);
+    });
+
+
+
     for (key in new_streams) {
       opts = new_streams[key];
       this.logger.debug(`parsing stream for ${key}`);
@@ -208,45 +149,6 @@ export class Master extends EventEmitter {
     }) : void 0;
   }
 
-  _startSourceMount(key, opts) {
-    var mount;
-    mount = new SourceMount(key, this.logger, opts);
-    if (mount) {
-      this.source_mounts[key] = mount;
-      this.emit(Events.Master.NEW_SOURCE_MOUNT, mount);
-      return mount;
-    } else {
-      return false;
-    }
-  }
-
-  _startStream(key, mount, opts) {
-    var stream, streamArgs, streamConfig;
-    streamConfig = _.extend(opts, {
-      preroll: opts.preroll != null ? opts.preroll : this.config.preroll,
-      //transcoder: if opts.transcoder? then opts.transcoder else @config.transcoder
-      log_interval: opts.log_interval != null ? opts.log_interval : this.config.log_interval
-    });
-    streamArgs = {
-      key: key,
-      mount: mount,
-      config: streamConfig
-    };
-    stream = new Stream(this.ctx, streamArgs);
-    if (stream) {
-      // attach a listener for configs
-      stream.on("config", () => {
-        this.emit(Events.Master.CONFIG_UPDATE);
-        return this.emit(Events.Master.STREAMS_UPDATE, this.streams);
-      });
-      this.streams[key] = stream;
-      this._attachIOProxy(stream);
-      this.emit(Events.Master.NEW_STREAM, stream);
-      return stream;
-    } else {
-      return false;
-    }
-  }
 
   createStream(opts, cb) {
     var mount_key, stream;

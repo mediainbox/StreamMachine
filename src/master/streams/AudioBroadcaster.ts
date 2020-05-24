@@ -1,7 +1,6 @@
-// broadcasts data from a stream to all the slaves
-var StreamDataBroadcaster;
 
-module.exports = StreamDataBroadcaster = class StreamDataBroadcaster extends require("events").EventEmitter {
+// broadcasts data from a stream to all the slaves
+export class StreamDataBroadcaster extends EventEmitter {
   constructor(opts) {
     super();
     this.key = opts.key;
@@ -19,5 +18,4 @@ module.exports = StreamDataBroadcaster = class StreamDataBroadcaster extends req
     this.emit("destroy");
     return this.removeAllListeners();
   }
-
-};
+}

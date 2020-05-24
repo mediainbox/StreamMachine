@@ -1,4 +1,4 @@
-import {InputConfig, SlaveCtx, SlaveStatus, StreamVitals} from "../types";
+import {InputConfig, SlaveCtx, SlaveStatus, _SourceVitals} from "../types";
 import {Logger} from "winston";
 import {WsAudioMessage} from "../../types";
 import {toTime} from "../../helpers/datetime";
@@ -42,7 +42,7 @@ export class MasterConnection {
   }
 
   // TODO: vitals to configuration
-  getStreamVitals(key: string, cb: (err: Error | null, vitals: StreamVitals) => void) {
+  getStreamVitals(key: string, cb: (err: Error | null, vitals: _SourceVitals) => void) {
     this.ws.emit(Events.Link.STREAM_VITALS, key, cb);
   }
 

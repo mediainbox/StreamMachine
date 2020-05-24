@@ -1,49 +1,23 @@
-const _ = require("lodash");
-const URL = require("url");
+import {Logger} from "winston";
+import _ from "lodash";
+import {Readable} from "stream";
+import { DEFAULT_CONFIG } from "./config";
+import {StreamConfig} from "../types";
+
 const RewindBuffer = require('../../rewind/rewind_buffer');
-const ProxySource = require('../../sources/UrlSource');
-const { EventEmitter } = require('events');
 
-const DEFAULT_OPTIONS = {
-  meta_interval: 32768,
-  max_buffer: 4194304, // 4 megabits (64 seconds of 64k audio)
-  key: null,
-  seconds: 60 * 60 * 4, // 4 hours
-  burst: 30,
-  source_password: null,
-  host: null,
-  fallback: null,
-  acceptSourceMeta: false,
-  log_minutes: true,
-  monitored: false,
-  metaTitle: "",
-  metaUrl: "",
-  format: "mp3",
-  preroll: "",
-  preroll_key: "",
-  transcoder: "",
-  root_route: false,
-  group: null,
-  bandwidth: 0,
-  codec: null,
-  ffmpeg_args: null,
-  stream_key: null,
-  impression_delay: 5000,
-  log_interval: 30000,
-  geolock: null
-};
+export class Stream extends EventEmitter {
+  private readonly source: IStreamSource;
 
-
-module.exports = class Stream extends EventEmitter {
-  constructor(ctx, args) {
-    var config, newsource, uri;
+  constructor(
+    private readonly id: string,
+    private readonly config: StreamConfig,
+    private readonly logger: Logger,
+  ) {
     super();
-    this.ctx = ctx;
-    ({key: this.key, mount: this.mount, config} = args);
-    this.logger = this.ctx.logger.child({
-      component: `stream[${this.key}]`
-    });
-    this.config = _.defaults(config || {}, DEFAULT_OPTIONS);
+
+    this.config = _.defaults(config || {}, DEFAULT_CONFIG);
+
     // We have three options for what source we're going to use:
     // a) Internal: Create our own source mount and manage our own sources.
     //    Basically the original stream behavior.
@@ -54,187 +28,62 @@ module.exports = class Stream extends EventEmitter {
     //    certain format as our input.
     this.destroying = false;
     this.source = null;
-    if (this.config.ffmpeg_args) {
-      // Source Mount w/ transcoding
-      this._initTranscodingSource();
-    } else {
-      // Source Mount directly
-      this.source = this.mount;
-    }
+
     // Cache the last stream vitals we've seen
     this._vitals = null;
     this.emitDuration = 0;
-    this.STATUS = "Initializing";
-    this.logger.info({
-      key: this.key,
-      config: this.config,
-      message: `initialize stream handler for ${this.key}`
-    });
-    // -- Initialize Master Rewinder -- #
 
-    // set up a rewind buffer, for use in bringing new slaves up to speed
-    // or to transfer to a new master when restarting
+
+    // set up a rewind buffer, for use in bringing new slaves up to date
+    // TODO: initialize only on vitals
     this.rewind = new RewindBuffer({
-      id: `master__${this.key}`,
-      streamKey: this.key,
+      id: `master__${this.streamId}`,
+      streamKey: this.streamId,
       maxSeconds: this.config.seconds,
       initialBurst: this.config.burst,
       logger: this.logger
     });
+
     // Rewind listens to us, not to our source
-    this.rewind.connectSource(this)
-    //this.rewind.emit("source", this);
+    // this.rewind.connectSource(this)
+    // this.rewind.emit("source", this);
+
     // Pass along buffer loads
     this.rewind.on("buffer", (c) => {
       return this.emit("buffer", c);
     });
-    // -- Set up data functions -- #
-    this._meta = {
-      StreamTitle: this.config.metaTitle,
-      StreamUrl: ""
-    };
-    this.sourceMetaFunc = (meta) => {
-      if (this.config.acceptSourceMeta) {
-        return this.setMetadata(meta);
-      }
-    };
+
+
     this.dataFunc = (data) => {
       // inject our metadata into the data object
       return this.emit("data", _.extend({}, data, {
         meta: this._meta
       }));
     };
+
     this.vitalsFunc = (vitals) => {
       this._vitals = vitals;
       return this.emit("vitals", vitals);
     };
+
+    // create source
     this.source.on("data", this.dataFunc);
     this.source.on("vitals", this.vitalsFunc);
-    // -- Hardcoded Source -- #
-
-    // This is an initial source like a proxy that should be connected from
-    // our end, rather than waiting for an incoming connection
-    if (this.config.fallback != null) {
-      // what type of a fallback is this?
-      uri = URL.parse(this.config.fallback);
-      newsource = (function () {
-        switch (uri.protocol) {
-          case "file:":
-            return new FileSource({
-              key: this.key,
-              format: this.config.format,
-              filePath: uri.path,
-              logger: this.logger
-            });
-          case "http:":
-          case "https:":
-            return new ProxySource({
-              key: this.key,
-              format: this.config.format,
-              url: this.config.fallback,
-              headers: this.config.headers,
-              fallback: true,
-              logger: this.logger
-            });
-          default:
-            return null;
-        }
-      }).call(this);
-      if (newsource) {
-        newsource.once("connect", () => {
-          return this.addSource(newsource, (err) => {
-            if (err) {
-              return this.logger.error("Connection to fallback source failed.");
-            } else {
-              return this.logger.debug("Fallback source connected.");
-            }
-          });
-        });
-        newsource.on("error", (err) => {
-          return this.logger.error(`Fallback source error: ${err}`, {
-            error: err
-          });
-        });
-      } else {
-        this.logger.error(`Unable to determine fallback source type for ${this.config.fallback}`);
-      }
-    }
   }
 
-  _initTranscodingSource() {
-    var tsource;
-    this.logger.debug(`Setting up transcoding source for ${this.key}`);
-    // -- create a transcoding source -- #
-    tsource = new TranscodingSource({
-      stream: this.mount,
-      ffmpeg_args: this.config.ffmpeg_args,
-      format: this.config.format,
-      logger: this.logger
-    });
-    this.source = tsource;
-    // if our transcoder goes down, restart it
-    return tsource.once("disconnect", () => {
-      this.logger.error(`Transcoder disconnected for ${this.key}.`);
-      if (!this.destroying) {
-        return process.nextTick((() => {
-          return this._initTranscodingSource();
-        }));
-      }
-    });
-  }
-
-  addSource(source, cb) {
-    return this.source.addSource(source, cb);
-  }
-
-
-  // Return our configuration
   getConfig() {
     return this.config;
-  }
-
-  vitals(cb) {
-    var _vFunc;
-    _vFunc = (v) => {
-      return typeof cb === "function" ? cb(null, v) : void 0;
-    };
-    if (this._vitals) {
-      return _vFunc(this._vitals);
-    } else {
-      return this.once("vitals", _vFunc);
-    }
-  }
-
-  getStreamKey(cb) {
-    if (this._vitals) {
-      return typeof cb === "function" ? cb(this._vitals.streamKey) : void 0;
-    } else {
-      return this.once("vitals", () => {
-        return typeof cb === "function" ? cb(this._vitals.streamKey) : void 0;
-      });
-    }
   }
 
   status() {
     return {
       // id is DEPRECATED in favor of key
-      key: this.key,
-      id: this.key,
+      key: this.streamId,
+      id: this.streamId,
       vitals: this._vitals,
       source: this.source.status(),
       rewind: this.rewind.getStatus()
     };
-  }
-
-  setMetadata(opts, cb) {
-    if ((opts.StreamTitle != null) || (opts.title != null)) {
-      this._meta.StreamTitle = opts.StreamTitle || opts.title;
-    }
-    if ((opts.StreamUrl != null) || (opts.url != null)) {
-      this._meta.StreamUrl = opts.StreamUrl || opts.url;
-    }
-    this.emit("meta", this._meta);
-    return typeof cb === "function" ? cb(null, this._meta) : void 0;
   }
 
   configure(new_opts, cb) {
@@ -251,8 +100,8 @@ module.exports = class Stream extends EventEmitter {
         this.config[k] = Number(this.config[k]);
       }
     }
-    if (this.key !== this.config.key) {
-      this.key = this.config.key;
+    if (this.streamId !== this.config.key) {
+      this.streamId = this.config.key;
     }
     // did they update the metaTitle?
     if (new_opts.metaTitle) {
@@ -266,18 +115,23 @@ module.exports = class Stream extends EventEmitter {
     return typeof cb === "function" ? cb(null, this.config()) : void 0;
   }
 
-  getRewind(cb) {
-    return this.rewind.dumpBuffer((err, writer) => {
-      return typeof cb === "function" ? cb(null, writer) : void 0;
+  getRewind(): Promise<Readable> {
+    return new Promise((resolve, reject) => {
+      return this.rewind.dumpBuffer((err: Error | null, _rewind: Readable) => {
+        if (err) {
+          reject(err);
+          return;
+        }
+
+        resolve(_rewind);
+      });
     });
   }
 
   destroy() {
     // shut down our sources and go away
     this.destroying = true;
-    if (this.source instanceof TranscodingSource) {
-      this.source.disconnect();
-    }
+
     this.rewind.disconnect();
     this.source.removeListener("data", this.dataFunc);
     this.source.removeListener("vitals", this.vitalsFunc);
@@ -285,5 +139,18 @@ module.exports = class Stream extends EventEmitter {
     };
     this.emit("destroy");
     return true;
+  }
+
+
+
+  _startSourceMount(key, opts) {
+    var mount;
+    mount = new SourceMount(key, this.logger, opts);
+    if (mount) {
+      this.source_mounts[key] = mount;
+      return mount;
+    } else {
+      return false;
+    }
   }
 }

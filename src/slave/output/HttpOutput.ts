@@ -1,9 +1,8 @@
 import express from "express";
-import {Format} from "../types";
 import {IOutput} from "./IOutput";
 import {Logger} from "winston";
 import {Socket} from "net";
-import {Err} from "../../types";
+import {Err, Format} from "../../types";
 import {EventEmitter} from "events";
 import {ISource} from "./ISource";
 

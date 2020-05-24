@@ -3,15 +3,9 @@ import {EventEmitter} from "events";
 import {Stream} from "./stream/Stream";
 import express from "express";
 import {IListener} from "./listeners/IListener";
+import {Format} from "../types";
 
-export type Format = 'mp3' | 'aac';
-
-export interface StreamMetadata {
-  readonly title: string;
-  readonly url: string;
-}
-
-export interface StreamVitals {
+export interface _SourceVitals {
   readonly format: Format;
   readonly codec: string;
   readonly streamKey: string;

@@ -1,15 +1,14 @@
 import {
-  Format, ListenEvent, ListenOptions,
+  ListenEvent, ListenOptions,
   SlaveCtx,
   StreamConfig_V1,
-  StreamMetadata,
   StreamStats,
   StreamStatus,
-  StreamVitals
+  _SourceVitals
 } from "../types";
 import {DEFAULT_AD_IMPRESSION_DELAY, DEFAULT_AD_REQUEST_TIMEOUT} from "../consts";
 import {ListenersCollection} from "../listeners/ListenersCollection";
-import {Chunk, Err} from "../../types";
+import {Chunk, Err, Format, StreamMetadata} from "../../types";
 import {CombinedSource} from "../output/CombinedSource";
 import {ListenersCleaner} from "../listeners/ListenersCleaner";
 import {BetterEventEmitter, Events} from "../../events";
@@ -58,7 +57,7 @@ export class Stream extends BetterEventEmitter {
     sentBytes: 0,
   };
   private readonly listenersCol = new ListenersCollection();
-  private vitals: Partial<StreamVitals>;
+  private vitals: Partial<_SourceVitals>;
 
   private readonly logger: Logger;
   private readonly listenersCleaner: ListenersCleaner;
