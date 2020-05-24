@@ -1,5 +1,4 @@
 import {InputConfig, SlaveCtx, SlaveStatus, StreamVitals} from "../types";
-import {EventEmitter} from "events";
 import {Logger} from "winston";
 import {WsAudioMessage} from "../../types";
 import {toTime} from "../../helpers/datetime";
@@ -11,6 +10,7 @@ import {Events} from "../../events";
 
 const REWIND_REQUEST_TIMEOUT = 15 * 1000;
 const ALIVE_INTERVAL = 5000;
+const RECONNECT_WAIT = 5000;
 
 /**
  * Interface communicaions to Master
@@ -25,7 +25,6 @@ export class MasterConnection {
   private ws: SocketIOClient.Socket;
   private id: string;
   private connected = false;
-  private attempts = 0;
   private masterUrlIndex = 0;
   private aliveInterval: NodeJS.Timeout;
 
@@ -50,17 +49,22 @@ export class MasterConnection {
   connect() {
     const masterWsUrl = this.config.master[this.masterUrlIndex];
 
-    this.logger.info(`connect to master at ${masterWsUrl}`);
+    this.logger.info(`connect to master[${this.masterUrlIndex}] at ${masterWsUrl}`);
 
     this.ws = socketIO.connect(masterWsUrl, {
-      reconnection: true,
-      reconnectionAttempts: 3,
+      reconnection: false,
       timeout: this.config.timeout,
     });
 
     const onConnectError = (err: Error & { description: string; }) => {
-      this.logger.warn(`connect attempt to master[${this.masterUrlIndex}] failed: ${err.message} (${err.description})`)
-      this.attempts++;
+      this.logger.warn(`connect to master[${this.masterUrlIndex}] at ${this.config.master[this.masterUrlIndex]} failed (${err.message})`, {
+        err
+      });
+      this.logger.info(`reconnect in ${RECONNECT_WAIT}ms`);
+
+      setTimeout(() => {
+        this.tryFallbackConnection();
+      }, RECONNECT_WAIT);
     };
 
     this.ws.on("connect_error", onConnectError);
@@ -103,9 +107,7 @@ export class MasterConnection {
       this.connected = false;
       this.logger.info("disconnected from master");
 
-      this.masterUrlIndex = -1; // FIXME
       clearInterval(this.aliveInterval);
-
       this.tryFallbackConnection();
 
       return this.ctx.events.emit(Events.Slave.DISCONNECT);
@@ -132,10 +134,6 @@ export class MasterConnection {
       // emit globally, this event will be listened by stream sources
       return this.ctx.events.emit(`audio:${msg.stream}`, chunk);
     });
-
-    this.ws.on("reconnect_failed", () => {
-      this.tryFallbackConnection();
-    });
   }
 
   tryFallbackConnection() {
@@ -144,10 +142,7 @@ export class MasterConnection {
 
     this.masterUrlIndex++;
     if (this.masterUrlIndex >= masterUrls.length) {
-      // all master urls tried, emit error
-      this.logger.error('no more available master connections to try, emit error');
-      this.ctx.events.emit(Events.Slave.CONNECT_ERROR);
-      return;
+      this.masterUrlIndex = 0;
     }
 
     // else, try to connect to the next url

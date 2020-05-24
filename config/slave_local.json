@@ -8,7 +8,8 @@
     "mode": "slave",
     "slave": {
       "master": [
-        "ws://localhost:8020?password=polkmn1!c3"
+        "ws://localhost:8020?password=polkmn1!c3",
+        "ws://localhost:8021?password=polkmn1!c3"
       ]
     },
     "cluster": 1,
