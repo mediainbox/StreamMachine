@@ -1,4 +1,4 @@
-import { EventEmitter } from "events";
+import { EventEmitter } from "src/master/events";
 
 // Monitoring component
 // - checks if a stream has no active sources

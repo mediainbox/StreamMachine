@@ -1,0 +1,59 @@
+{
+  "rewind": {
+    "dump": {
+      "enabled": false,
+      "dir": "",
+      "frequency": 0
+    }
+  },
+  "log": {
+    "level": "debug",
+    "logRequests": false,
+    "transports": {
+      "json": false,
+      "stackdriver": false
+    }
+  },
+  "sourceIn": {
+    "port": 0,
+    "ip": ""
+  },
+  "server": {
+    "port": 8020
+  },
+  "slavesServer": {
+    "password": "polkmn1!c3"
+  },
+  "redis": {
+    "url": ""
+  },
+  "analytics": {
+    "listenInterval": 0
+  },
+  "ads": {
+    "adUrl": "",
+    "transcoderUrl": "",
+    "impressionDelay": 0
+  },
+  "streams": [
+    {
+      "clientId": "cadena3",
+      "id": "cadena3_main",
+      "meta": {
+        "title": "Cadena 3",
+        "url": "https://cadena3.com.ar"
+      },
+      "format": "mp3",
+      "rewind": {
+        "bufferSeconds": 300
+      },
+      "sources": [
+        {
+          "type": "icecast_url",
+          "priority": 100,
+          "url": "https://c3ny1.mediainbox.net/cadena3.mp3"
+        }
+      ]
+    }
+  ]
+}

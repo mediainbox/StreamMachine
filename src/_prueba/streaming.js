@@ -1,4 +1,4 @@
-const cluster = require('src/prueba/cluster');
+const cluster = require('src/_prueba/cluster');
 const http = require('http');
 const express = require('express');
 const fs = require('fs');

@@ -1,27 +1,27 @@
 export class Collection<T> {
-  map: Record<string, T> = {};
+  private _map: Record<string, T> = {};
 
   constructor() {}
 
-  toArray() {
-    return Object.values(this.map);
-  }
-
   get(key: string): T | null {
-    return this.map[key];
+    return this._map[key];
   }
 
   keys(): readonly string[] {
-    return Object.keys(this.map);
+    return Object.keys(this._map);
   }
 
   add(key: string, element: T) {
-    this.map[key] = element;
+    if (this._map[key]) {
+      throw new Error(`Key ${key} already exists`);
+    }
+
+    this._map[key] = element;
   }
 
   remove(key: string): T {
-    const element = this.map[key];
-    delete this.map[key];
+    const element = this._map[key];
+    delete this._map[key];
     return element;
   }
 
@@ -34,6 +34,14 @@ export class Collection<T> {
       return null;
     }
 
-    return this.map[this.keys()[0]];
+    return this._map[this.keys()[0]];
+  }
+
+  toArray() {
+    return Object.values(this._map);
+  }
+
+  map(mapFn: (value: T, index: number) => void) {
+    return this.toArray().map(mapFn);
   }
 }

@@ -1,147 +1,148 @@
-import {InputConfig, SlaveConfig_V1, SlaveCtx, SlaveStatus, StreamStatus} from "./types";
+import './types/ambient';
 import {Stream} from "./stream/Stream";
 import {StreamsCollection} from "./streams/StreamsCollection";
-import {Events, EventsHub} from '../events';
 import {EventEmitter} from "events";
 import {Logger} from "winston";
 import {ListenersConnector} from "./listeners/ListenersConnector";
 import {ListenServer} from "./server/ListenServer";
 import {MasterConnection} from "./master_io/MasterConnection";
 import {AnalyticsReporter} from "./analytics/AnalyticsReporter";
-import { createLogger } from "src/logger";
+import {buildHttpServer} from "./server/HttpServer";
+import express from "express";
+import {componentLogger, createLogger} from "../logger";
+import {SlaveConfig} from "./config/types";
+import {SlaveEvent, slaveEvents} from "./events";
+import {validateConfig} from "./types/config";
+import {SlaveStreamConfig, SlaveStreamsConfig} from "./types/streams";
+import _ from "lodash";
 
-module.exports = class Slave extends EventEmitter {
+export class Slave extends EventEmitter {
   private connected = false;
   private configured = false;
 
   private readonly logger: Logger;
-  private readonly streams = new StreamsCollection()
+  private readonly streams: StreamsCollection;
   private readonly masterConnection: MasterConnection;
   private readonly listenersConnector: ListenersConnector;
-  private readonly server: ListenServer;
+  private readonly listenServer: ListenServer;
   private readonly analyticsReporter: AnalyticsReporter;
-  private readonly ctx: SlaveCtx;
 
-  constructor(private readonly config: SlaveConfig_V1) {
+  private readonly app: express.Application;
+  private readonly config: SlaveConfig;
+
+  constructor(_config: SlaveConfig) {
     super();
 
-    this.ctx = {
-      config: this.config,
-      logger: createLogger(config),
-      events: new EventsHub(),
-      providers: {}
-    };
+    const config = this.config = validateConfig(_config);
 
-    this.logger = this.ctx.logger.child({
-      component: this.config.mode + '-mode'
+    createLogger('slave', config.log);
+    this.logger = componentLogger('slave');
+
+    this.logger.info("Initialize slave");
+
+    this.masterConnection = new MasterConnection({
+      slaveId: config.slaveId,
+      ...config.master
     });
 
-    this.config = this.ctx.config;
-    this.logger = this.ctx.logger.child({
-      component: "slave"
+    this.streams = new StreamsCollection();
+    this.listenersConnector = new ListenersConnector({
+      listenInterval: this.config.analytics.listenInterval! // FIXME
     });
-    this.logger.info("initialize slave");
+    this.analyticsReporter = new AnalyticsReporter(this.masterConnection);
 
-    this.masterConnection = new MasterConnection(this.ctx);
-    this.listenersConnector = new ListenersConnector(this.ctx);
-    this.server = new ListenServer(
+    this.listenServer = new ListenServer(
+      config.server,
       this.streams,
-      this.ctx,
     );
-    this.analyticsReporter = new AnalyticsReporter(
-      this.masterConnection,
-      this.ctx.events,
-    );
+
+    // setup server related components
+    this.app = express();
+    buildHttpServer(this.app, config);
+    this.app.use(this.listenServer.getApp())
 
     this.hookEvents();
   }
 
   hookEvents() {
-    this.ctx.events.on(Events.Slave.CONNECTED, () => {
+    slaveEvents().on(SlaveEvent.CONNECT, () => {
       this.connected = true;
-      this.logger.info("slave is connected to master");
+      this.logger.info("Slave connected to master");
     });
 
-    this.ctx.events.on(Events.Slave.DISCONNECT, () => {
+    slaveEvents().on(SlaveEvent.DISCONNECT, () => {
       this.connected = false;
-      this.logger.info("slave is disconnected from master");
+      this.logger.info("Slave disconnected from master");
     });
 
-    this.ctx.events.on(Events.Slave.CONNECT_ERROR, () => {
-      this.logger.error("could not connect to master, shutdown");
+    slaveEvents().on(SlaveEvent.CONNECT_ERROR, error => {
+      this.logger.error("Could not connect to master, shutdown", {
+        error
+      });
       process.exit(1);
     });
 
-    this.ctx.events.on(Events.Link.CONFIG, (config: InputConfig) => {
-      this.configureStreams(config.streams);
+    slaveEvents().on(SlaveEvent.CONFIGURE_STREAMS, (config: SlaveStreamsConfig) => {
+      this.configureStreams(config);
     });
 
-    this.ctx.events.on(Events.Link.SLAVE_STATUS, async (cb: (status: SlaveStatus) => void) => {
+    /*slaveEvents()().on(Events.Link.SLAVE_STATUS, async (cb: (status: SlaveStatus) => void) => {
       cb(this.getStreamStatus());
-    });
+    });*/
   }
 
   /**
    * Add, reconfigure or remove streams
    */
-  configureStreams(activeStreams: InputConfig['streams']) {
-    this.logger.info(`configure updated ${activeStreams.length} streams received from master`, {
-      updatedStreams: activeStreams
+  configureStreams(streamsConfig: SlaveStreamsConfig) {
+    this.logger.info(`configure ${streamsConfig.length} streams`, {
+      streamsConfig
     });
 
-    const activeStreamsKeys = this.streams.keys();
-    const streamsToRemove = activeStreamsKeys.filter(key => !activeStreams[key]);
-    const streamsToCreate = Object.keys(activeStreams).filter(key => !activeStreamsKeys.includes(key));
-    const streamsToReconfigure = Object.keys(activeStreams).filter(key => activeStreamsKeys.includes(key));
+    const activeStreamsIds = this.streams.keys();
+    const passedStreamsIds = streamsConfig.map(c => c.id);
 
-    // are any of our current streams missing from the new options? if so,
-    // disconnect them
-    this.logger.info(`${streamsToRemove.length} streams to remove (${streamsToRemove.join(' / ')})`);
-    streamsToRemove.forEach(key => {
-      this.logger.info(`disconnect old stream ${key}`);
-      const stream = this.streams.remove(key);
-      stream.disconnect();
+    streamsConfig.forEach(streamConfig => {
+      const toCreate = !activeStreamsIds.includes(streamConfig.id);
+
+      if (toCreate) {
+        this.logger.info(`create new stream ${streamConfig.id}`);
+
+        const stream = new Stream(
+          streamConfig.id,
+          streamConfig,
+          {
+            listenerMaxBufferSize: this.config.listener.maxBufferSize
+          },
+          this.masterConnection,
+        );
+
+        this.streams.add(streamConfig.id, stream);
+      } else {
+        this.logger.info(`reconfigure stream ${streamConfig.id}`);
+
+        const stream = this.streams.get(streamConfig.id);
+        //stream.reconfigure(config);
+      }
+    });
+
+    const idsToDelete = _.difference(activeStreamsIds, passedStreamsIds);
+    idsToDelete.forEach(id => {
+      this.logger.info(`delete stream ${id}`);
+
+      const stream = this.streams.remove(id);
+      stream.destroy();
     })
 
-    // run through active streams
-    this.logger.info(`${streamsToReconfigure.length} streams to reconfigure (${streamsToReconfigure.join(' / ')})`);
-    streamsToReconfigure.forEach(key => {
-      const config = activeStreams[key];
-      this.logger.info(`update active stream ${key} config`, {
-        config
-      });
-
-      const stream = this.streams.get(key);
-      stream!.configure(config);
-    });
-
-    // run through new streams
-    this.logger.info(`${streamsToCreate.length} streams to create (${streamsToCreate.join(' / ')})`);
-    streamsToCreate.forEach(key => {
-      const config = activeStreams[key];
-      this.logger.info(`create new stream ${key}`);
-
-      const stream = new Stream(
-        key,
-        config,
-        this.masterConnection,
-        this.ctx,
-      );
-
-      this.streams.add(key, stream);
-    });
-
     this.logger.info("streams configuration done");
-    this.configured = true;
-
-    return this.emit(Events.Slave.STREAMS_UPDATE_OK, this.streams);
+    //this.configured = true;
   }
 
   /**
    * Get a status snapshot by looping through each stream to return buffer
    * stats. Lets master know that we're still listening and current
    */
-  getStreamStatus(): SlaveStatus {
+  /*getStreamStatus(): SlaveStatus {
     const result: { [k: string]: StreamStatus } = {};
     let totalKBytes = 0;
     let totalConnections = 0;
@@ -160,5 +161,5 @@ module.exports = class Slave extends EventEmitter {
         connections: totalConnections
       }
     } as SlaveStatus;
-  }
+  }*/
 }

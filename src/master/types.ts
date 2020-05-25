@@ -1,24 +1,23 @@
 import {Logger} from "winston";
 import {EventEmitter} from "events";
-import {DeepReadonly} from "../helpers/types";
-import {Milliseconds, Seconds} from "../types/util";
-import {Format} from "../types";
+import {Seconds} from "../types/util";
+import {Chunk, Format, LoggerConfig} from "../types";
+import {Stream} from "./streams/Stream";
+import {Request} from "express";
+import {DeepReadonly} from "ts-essentials";
 
-export interface MasterCtx {
-  readonly config: MasterConfig_V1;
-  readonly logger: Logger;
-  readonly events: EventEmitter;
-  readonly providers: {}
-}
-
-export type StreamConfig = {
+export type StreamConfig = DeepReadonly<{
   clientId: string;
   id: string;
-  format: Format;
-  metadata: {
+  meta: {
     title: string;
     url: string;
   }
+  format: Format;
+  rewind: {
+    bufferSeconds: Seconds;
+    initialBurst: Seconds;
+  };
   sources: readonly SourceConfig[];
   ads?: {
     adUrl?: string;
@@ -31,16 +30,21 @@ export type StreamConfig = {
     countryCodes: readonly string[]
     fallback?: string;
   };
-};
+}>;
 
-type SourceConfig = {
+export enum SourceType {
+  ICECAST_URL = 'icecast_url',
+  ICECAST_IN = 'icecast_in',
+}
+
+export type SourceConfig = {
   priority: number;
 } & (
   | {
-  type: 'url';
+  type: SourceType.ICECAST_URL;
   url: string;
 } | {
-  type: 'source_in';
+  type: SourceType.ICECAST_IN;
   host: string;
   password: string;
 }
@@ -49,35 +53,34 @@ type SourceConfig = {
 export type MasterConfig = DeepReadonly<{
   rewind: {
     dump?: {
+      enabled?: boolean;
       dir: string;
       frequency: Seconds;
     };
   };
-  log: {
-    logRequests: boolean;
-    transports: {
-      json: false,
-      stackdriver: true
-    };
-  };
+  log: LoggerConfig;
   sourceIn?: {
     port?: number;
     ip?: string;
   };
-  slaveServer: {
+  server: {
     port?: number;
+  }
+  slavesServer: {
     password: string;
   };
   redis: {
     url: string;
   };
-  analytics: {
-    listenInterval: Seconds;
-  }
-  ads: {
-    adUrl?: string;
-    transcoderUrl?: string;
-    impressionDelay: number;
-  }
-  streams?: StreamConfig[];
+  streams: StreamConfig[];
+
+  //chunk_duration!
 }>;
+
+
+export interface StreamChunk {
+  readonly streamId: string;
+  readonly chunk: Chunk;
+}
+
+export type StreamRequest = Request & { stream?: Stream };

@@ -1,57 +1,33 @@
 import url from 'url';
 import moment from "moment";
-import {Logger} from "winston";
-import {BaseSource, SourceConfig} from "../base/BaseSource";
+import {BaseSource} from "../base/BaseSource";
 import {toTime} from "../../../helpers/datetime";
-import {Chunk, Format, StreamMetadata} from "../../../types";
+import {Chunk, StreamMetadata} from "../../../types";
 import {ClientRequest, IncomingMessage} from "http";
+import {SourceConfig} from "../base/ISource";
 
 const Icy = require('icy');
-
-interface Config extends SourceConfig {
-  readonly url: string;
-  readonly format: Format;
-  readonly isFallback: boolean;
-  readonly logger: Logger;
-}
 
 const CHECK_INTERVAL = 30000;
 const RECONNECT_WAIT = 5000;
 
-export class UrlSource extends BaseSource {
+interface Config extends SourceConfig {
+  readonly url: string;
+}
+
+export class IcecastUrlSource extends BaseSource {
   private icyRequest?: ClientRequest;
   private icyResponse?: IncomingMessage;
-  private lastChunkTs: number | null;
-  private redirectedUrl: string;
+  private lastChunkTs: number | null = null;
+  private redirectedUrl?: string;
 
   constructor(
     readonly config: Config,
-    readonly logger: Logger
   ) {
-    super(config, logger);
+    super(config);
 
-    this.logger.debug(`create url for ${config.url}`);
+    this.logger.info(`Create source from ${config.url}`);
   }
-
-  getType() {
-    return `Proxy (${this.config.url})`;
-  }
-
-  niceError = (err: Error & { syscall?: string }) => {
-    this.logger.debug(`Caught error: ${err}`, err.stack);
-    const nice_err = (function () {
-      switch (err.syscall) {
-        case "getaddrinfo":
-          return "Unable to look up DNS for Icecast proxy";
-        case "connect":
-          return "Unable to connect to Icecast proxy. Connection Refused";
-        default:
-          return "Error making connection to Icecast proxy";
-      }
-    })();
-
-    this.logger.error(`ProxySource encountered an error: ${nice_err}`, err);
-  };
 
   getStatus() {
     return {
@@ -66,42 +42,45 @@ export class UrlSource extends BaseSource {
   }
 
   connect = () => {
-    this.logger.debug(`connect to Icecast at ${this.config.url}`);
+    this.logger.info(`Connect to Icecast at ${this.config.url}`);
 
     this.lastChunkTs = null;
     this.chunker.resetTime(Date.now());
 
+    const parsedUrl = url.parse(this.redirectedUrl || this.config.url);
+
     this.icyRequest = Icy.get({
-      ...url.parse(this.redirectedUrl || this.config.url),
+      ...parsedUrl,
       headers: {
         "user-agent": "StreamMachine"
       }
     }, (res: IncomingMessage) => {
       this.icyResponse = res;
 
-      this.logger.debug(`connected successfully`);
+      this.logger.debug(`Connected successfully`);
+
       if (res.statusCode === 302) {
         this.redirectedUrl = res.headers.location!;
       }
 
       this.icyResponse.once("end", () => {
-        this.logger.debug("Received Icecast END event");
+        this.logger.warn("Got Icecast end event");
         this.reconnect();
       });
 
       this.icyResponse.once("close", () => {
-        this.logger.debug("Received Icecast CLOSE event");
+        this.logger.debug("Got Icecast close event");
         this.reconnect();
       });
 
       this.icyResponse.on("metadata", (data) => {
-        this.logger.debug("Received Icecast METADATA event");
+        this.logger.debug("Got Icecast metadata event");
         const meta = Icy.parse(data);
 
         this.emit("metadata", {
           title: meta.StreamTitle || "",
           url: meta.StreamUrl || ""
-        } as StreamMetadata);
+        });
       });
 
       // incoming -> Parser
@@ -112,28 +91,24 @@ export class UrlSource extends BaseSource {
       this.connected = true;
       this.connectedAt = new Date();
       this.emit("connect");
+
       setTimeout(this.checkStatus, CHECK_INTERVAL);
     });
 
-    this.icyRequest!.once("error", (err) => {
-      this.logger.debug(`Got icecast stream error ${err}, reconnecting`);
-      this.niceError(err);
+    this.icyRequest!.once("error", (error) => {
+      this.logger.error(`Got icecast stream error ${error}, reconnecting`, {
+        error
+      });
       this.reconnect(true);
     });
 
     // outgoing -> Stream
-    this.on("_chunk", this.broadcastData);
-
-    this.on("_chunk", this.logChunk);
-  };
-
-  broadcastData = (chunk: Chunk) => {
-    this.lastChunkTs = chunk.ts;
-    return this.emit("data", chunk);
+    this.on("chunk", this.logChunk);
   };
 
   logChunk = (chunk: Chunk) => {
-    return this.logger.silly(`received chunk from parser (time: ${toTime(chunk.ts)})`);
+    this.logger.silly(`received chunk from parser (time: ${toTime(chunk.ts)})`)
+    this.lastChunkTs = chunk.ts;
   };
 
   checkStatus = () => {
@@ -167,8 +142,7 @@ export class UrlSource extends BaseSource {
     this.connected = false;
 
 
-    this.removeListener("_chunk", this.broadcastData);
-    this.removeListener("_chunk", this.logChunk);
+    this.removeListener("chunk", this.logChunk);
 
 
     // clean icecast

@@ -150,9 +150,9 @@ export class Rewinder extends Readable {
 
       // Not all chunks will contain metadata, but go ahead and send
       // ours out if it does
-      if (nextChunk.meta) {
-        this.emit("meta", nextChunk.meta);
-      }
+      //if (nextChunk.meta) {
+        //this.emit("meta", nextChunk.meta);
+      //}
 
       // Push the chunk of data onto our reader. The return from push
       // will tell us whether to keep pushing, or whether we need to

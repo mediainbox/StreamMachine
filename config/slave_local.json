@@ -1,29 +1,24 @@
 {
-  "ping-standalone": 1,
-  "ping-slave": 1588038709015,
-  "ping-archiver": 1,
-  "client": "cadena3",
-  "ping-master": 1588038541791,
-  "options": {
-    "mode": "slave",
-    "slave": {
-      "master": [
-        "ws://localhost:8020?password=polkmn1!c3",
-        "ws://localhost:8021?password=polkmn1!c3"
-      ]
-    },
-    "cluster": 1,
-    "http_port": 9002,
-    "log": {
-      "json": {
-        "file": "./logs/slave.log"
-      }
-    },
-    "behind_proxy": true,
-    "geolock": {
-      "config_file": "./config/GeoLite2-Country.mmdb",
-      "enabled": false
-    }
+  "log": {
+    "transports": {}
   },
-  "name": "dev"
+  "master": {
+    "urls": [
+      "ws://localhost:8020?password=polkmn1!c3",
+      "ws://localhost:8021?password=polkmn1!c3"
+    ]
+  },
+  "cluster": {
+    "enabled": false,
+    "workers": 4
+  },
+  "server": {
+    "logRequests": false,
+    "blockUserAgents": [],
+    "behindProxy": false,
+    "cors": true
+  },
+  "ads": {
+    "enabled": false,
+  }
 }

@@ -6,16 +6,13 @@
     "baseUrl": ".",
     "rootDir": "src",
     "outDir": "./build",
-    "inlineSourceMap": true,
+    "sourceMap": true,
     "esModuleInterop": true,
     "noFallthroughCasesInSwitch": true,
     "noImplicitAny": true,
     "noImplicitThis": true,
     "skipLibCheck": true,
-    "strictBindCallApply": true,
-    "strictNullChecks": true,
-    "strictFunctionTypes": true,
-    "strictPropertyInitialization": false,
+    "strict": true,
     "paths": {
       "dom": [
         ".sink.d.ts"

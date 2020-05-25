@@ -1,20 +1,24 @@
 import {Logger} from "winston";
 import * as http from "http";
-import {IAdOperator, PrerollerConfig} from "./types";
+import {IAdOperator} from "./types";
 import {AdOperator} from "./AdOperator";
 import {IListener} from "../listeners/IListener";
 import {IPreroller} from "./IPreroller";
+import {AdsConfig} from "../config/types";
+import {componentLogger} from "../../logger";
 
 export class Preroller implements IPreroller {
   private adRequests = 0;
   private agent: http.Agent;
+  private readonly logger: Logger;
 
   constructor(
     private readonly streamId: string,
-    private readonly config: PrerollerConfig,
-    private readonly logger: Logger
+    private readonly config: AdsConfig,
   ) {
-    if (!config.adUrl) {
+    this.logger = componentLogger(`preroller[${streamId}]`);
+
+    if (!config.serverUrl) {
       throw new Error('Missing "adUrl" value in preroller config');
     }
 
@@ -33,13 +37,21 @@ export class Preroller implements IPreroller {
   getAdOperator(listener: IListener): IAdOperator {
     const adId = ++this.adRequests;
 
+    const adUrl = this.config.serverUrl
+        .replace("!KEY!", this.streamId) // FIXME
+        .replace("!STREAM!", this.streamId)
+        .replace("!IP!", listener.client.ip)
+        .replace("!UA!", encodeURIComponent(listener.client.ua))
+        .replace("!UUID!", listener.client.session_id);
+
     return new AdOperator(
       String(adId),
-      this.config,
-      listener.client,
-      this.logger.child({
-        component: `stream[${this.streamId}]:ad_operator[#${listener.id}]`
-      })
+      {
+        ...this.config,
+        adUrl,
+        streamKey: this.streamId,
+      },
+      componentLogger(`stream[${this.streamId}]:ad_operator[#${listener.id}]`)
     );
   }
 }

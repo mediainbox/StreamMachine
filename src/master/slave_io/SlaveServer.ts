@@ -1,9 +1,15 @@
 import express from "express";
-
-const _ = require("lodash");
-const SocketIO = require("socket.io");
-const SlaveConnection = require('./SlaveConnection');
-const {Events} = require('../../events');
+import {TypedEmitter} from "../../helpers/events";
+import {Logger} from "winston";
+import {componentLogger} from "../../logger";
+import {SlaveConnections} from "./SlaveConnections";
+import SocketIO from "socket.io";
+import * as http from "http";
+import {SlaveConnection} from "./SlaveConnection";
+import {StreamChunk, StreamRequest} from "../types";
+import {StreamsCollection} from "../streams/StreamsCollection";
+import Throttle from "throttle";
+import {MasterWsSocket, SlaveWsMessage} from "../../messages";
 
 // Socket.IO server that listens for Slave connections
 // Will create a SlaveConnection for each connected Slave
@@ -14,181 +20,133 @@ const {Events} = require('../../events');
 
 const CONFIG_UPDATE_DEBOUNCE = 200;
 
-module.exports = class SlaveServer extends require("events").EventEmitter {
-  constructor(ctx) {
-    var cUpdate;
-    super();
-    this.ctx = ctx;
-    this.master = this.ctx.master;
-    this.config = this.ctx.config;
-    this.logger = this.ctx.logger.child({
-      component: "slave_server"
-    });
-    this.io = null;
-    this.slaveConnections = {};
-    this._config = null;
-    cUpdate = _.debounce(() => {
-      var config, id, ref, results, s;
-      config = this.master.config();
-      ref = this.slaveConnections;
-      results = [];
-      for (id in ref) {
-        s = ref[id];
-        this.logger.debug(`emit config to slave ${id}`);
-        results.push(s.socket.emit(Events.Link.CONFIG, config));
-      }
-      return results;
-    }, CONFIG_UPDATE_DEBOUNCE);
-    this.master.on(Events.Master.CONFIG_UPDATE, cUpdate);
+interface Config {
+  readonly password: string;
+}
+
+export class SlaveServer {
+  private readonly logger: Logger;
+  private readonly connections: SlaveConnections;
+  private wsServer?: SocketIO.Server;
+
+  constructor(
+    private readonly config: Config,
+    private readonly streams: StreamsCollection,
+  ) {
+    this.logger = componentLogger("slave_server");
+
+    this.connections = new SlaveConnections();
+
+    //this.master.on(Events.Master.CONFIG_UPDATE, cUpdate); -> update slaves
+    // CONFIG_UPDATE_DEBOUNCE
   }
 
-  updateConfig(config) {
-    var id, ref, results, s;
-    this._config = config;
-    ref = this.slaveConnections;
-    results = [];
-    for (id in ref) {
-      s = ref[id];
-      results.push(s.socket.emit(Events.Link.CONFIG, config));
-    }
-    return results;
-  }
-
-  listen(server) {
+  listen(server: http.Server) {
     // fire up a socket listener on our slave port
-    this.io = SocketIO.listen(server, {
-      pingInterval: 15000,
+    this.wsServer = SocketIO.listen(server, {
+      pingInterval: 30000,
       pingTimeout: 30000,
     });
-    this.logger.info("master now listening for ws slave connections");
+
+    this.logger.info("Master now listening for slave connections");
+
     // add our authentication
-    this.io.use((socket, next) => {
-      var ref;
-      this.logger.debug("Authenticating slave connection.");
-      if (this.config.master.password === ((ref = socket.request._query) != null ? ref.password : void 0)) {
-        this.logger.debug("Slave password is valid.");
-        return next();
-      } else {
-        this.logger.warn("Slave password is incorrect.");
-        return next(new Error("Invalid slave password."));
+    this.wsServer.use((socket, next) => {
+      this.logger.debug("Check auth for slave connection");
+
+      const sentPassword = socket.request._query.password;
+      const slaveId = socket.request._query.slaveId;
+
+      if (this.config.password !== sentPassword) {
+        this.logger.error(`Slave auth is invalid (password ${sentPassword} is incorrect)`);
+        next(new Error("Invalid slave password"));
+        return;
+      } else if (!slaveId) {
+        this.logger.error(`Slave did not provide id`);
+        next(new Error("Missing slave id"));
+        return;
       }
+
+      this.logger.debug("Slave auth is valid");
+      return next();
     });
+
     // look for slave connections
-    return this.io.on("connect", (sock) => {
+    this.wsServer.on("connect", (socket: MasterWsSocket) => {
+      const slaveId = socket.request._query.slaveId;
       this.logger.debug("Master got connection");
+
       // a slave may make multiple connections to test transports. we're
       // only interested in the one that gives us the OK
-      return sock.once(Events.Link.CONNECTION_VALIDATE, (cb) => {
-        this.logger.debug(`Got OK from incoming slave connection at ${sock.id}`);
+      socket.once(SlaveWsMessage.CONNECTION_VALIDATE, (cb) => {
+        this.logger.debug(`Validated incoming slave connection at socket ${socket.id}`);
+
         // ping back to let the slave know we're here
         cb("OK");
-        this.logger.debug(`slave connection is ${sock.id}`);
-        if (this._config) {
-          sock.emit(Events.Link.CONFIG, this._config);
-        }
-        this.slaveConnections[sock.id] = new SlaveConnection(this.ctx, sock);
-        return this.slaveConnections[sock.id].on(Events.Link.DISCONNECT, () => {
-          delete this.slaveConnections[sock.id];
-          return this.emit("disconnect", sock.id);
-        });
+
+        this.logger.debug(`slave connection is ${socket.id}`);
+        //socket.emit(Events.Link.CONFIG, this._config);
+
+        this.connections.add(slaveId, new SlaveConnection(slaveId, socket));
+        /*this.slaveConnections[socket.id].on(Events.Link.DISCONNECT, () => {
+          return this.emit("disconnect", socket.id);
+        });*/
       });
     });
   }
 
-  broadcastAudio(k, chunk) {
-    var id, ref, results, s;
-    ref = this.slaveConnections;
-    results = [];
-    for (id in ref) {
-      s = ref[id];
-      results.push(s.socket.emit(Events.Link.AUDIO, {
-        stream: k,
-        chunk: chunk
-      }));
-    }
-    return results;
+  broadcastChunk(chunk: StreamChunk) {
+    this.connections.map(connection => {
+      connection.sendChunk(chunk);
+    })
   }
 
-  pollForSync(cb) {
-    var af, obj, ref, results, s, statuses;
-    statuses = [];
-    cb = _.once(cb);
-    af = _.after(Object.keys(this.slaveConnections).length, () => {
-      return cb(null, statuses);
-    });
-    ref = this.slaveConnections;
-    // -- now check the slaves -- #
-    results = [];
-    for (s in ref) {
-      obj = ref[s];
-      results.push(((s, obj) => {
-        var pollTimeout, saf, sstat;
-        saf = _.once(af);
-        sstat = {
-          id: obj.id,
-          UNRESPONSIVE: false,
-          ERROR: null,
-          status: {}
-        };
-        statuses.push(sstat);
-        pollTimeout = setTimeout(() => {
-          this.logger.error(`Slave ${s} failed to respond to status.`);
-          sstat.UNRESPONSIVE = true;
-          return saf();
-        }, 1000);
-        return obj.status((err, stat) => {
-          clearTimeout(pollTimeout);
-          if (err) {
-            this.logger.error(`Slave ${s} reported status error: ${err}`);
-          }
-          sstat.ERROR = err;
-          sstat.status = stat;
-          return saf();
-        });
-      })(s, obj));
-    }
-    return results;
+  pollForSync(): void {
   }
 
+  getRewindApi() {
+    const app = express();
 
-  rewindServer() {
-    this.master = master;
-    this.app = express();
-    // -- Param Handlers -- #
-    this.app.param("stream", (req, res, next, key) => {
-      var s;
-      // make sure it's a valid stream key
-      if ((key != null) && (s = this.master.streams[key])) {
-        req.stream = s;
-        return next();
-      } else {
-        return res.status(404).end("Invalid stream.\n");
+    app.param("stream", (req, res, next, key) => {
+      const stream = this.streams.get(key);
+
+      if (!stream) {
+        res.status(404).send("Invalid stream");
+        return;
       }
+
+      req.mStream = stream;
     });
-    // -- Validate slave id -- #
-    this.app.use((req, res, next) => {
-      var sock_id;
-      sock_id = req.get('stream-slave-id');
-      if (sock_id && this.master.slaveServer.slaveConnections[sock_id]) {
-        //req.slave_socket = @master.slaveServer[ sock_id ]
-        return next();
-      } else {
-        this.master.logger.debug("Rejecting StreamTransport request with missing or invalid socket ID.", {
-          sock_id: sock_id
-        });
-        return res.status(401).end("Missing or invalid socket ID.\n");
+
+    // validate password
+    app.use((req, res, next) => {
+      const sentPassword = req.query.password;
+
+      if (this.config.password !== sentPassword) {
+        this.logger.warn(`Slave auth is invalid (password ${sentPassword} is incorrect)`);
+        res.status(403).send("Invalid password");
+        return;
       }
+
+      this.logger.debug("Slave auth is valid");
+      next();
     });
-    // -- Routes -- #
-    this.app.get("/:stream/rewind", (req, res) => {
-      this.master.logger.debug(`Rewind Buffer request from slave on ${req.stream.key}.`);
+
+    app.get("/:stream/rewind", (req: StreamRequest, res) => {
+      this.logger.debug(`RewindBuffer request from slave on ${req.stream!}.`);
       res.status(200).write('');
-      return req.stream.getRewind((err, writer) => {
-        writer.pipe(new Throttle(100 * 1024 * 1024)).pipe(res);
-        return res.on("end", () => {
-          return this.master.logger.debug("Rewind dumpBuffer finished.");
+
+      req.stream!
+        .getRewind()
+        .then(rewindStream => {
+          rewindStream.pipe(new Throttle(100 * 1024 * 1024)).pipe(res);
+
+          res.on("end", () => {
+            this.logger.debug("RewindBuffer sent successfully");
+          });
         });
-      });
     });
+
+    return app;
   }
-};
+}

@@ -1,0 +1,16 @@
+{
+  "slaveId": "SLAVE_1",
+  "master": {
+    "password": "polkmn1!c3",
+    "urls": [
+      "ws://localhost:8020",
+      "ws://localhost:8021"
+    ]
+  },
+  "log": {
+    "level": "silly"
+  },
+  "server": {
+    "httpPort": 9002
+  }
+}

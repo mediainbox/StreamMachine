@@ -4,37 +4,46 @@ import * as http from "http";
 import * as path from "path";
 import { Server } from "http";
 import cluster from "cluster";
+import {componentLogger} from "../../logger";
+import _ from "lodash";
+import {SlaveConfig} from "../config/types";
 const greenlock = require("greenlock-express");
 
-export function setupHttpServer({ app, ctx }: { app: express.Application, ctx: SlaveCtx }): Server {
-  const config = ctx.config;
-  const logger = ctx.logger.child({
-    component: 'http_server',
-  });
+export function buildHttpServer(
+  app: express.Application,
+  config: SlaveConfig
+): Server {
+  const logger = componentLogger('http_server');
 
-  if (process.env.NO_GREENLOCK) {
-    if (cluster.isMaster && config.cluster > 1) {
+  const serverConfig = config.server;
+
+  if (!serverConfig.useGreenlock) {
+    if (cluster.isMaster && config.cluster.enabled) {
       console.log(`Master ${process.pid} is running`);
 
       // Fork workers.
-      for (let i = 0; i < config.cluster; i++) {
+      for (let i = 0; i < config.cluster.workers; i++) {
         cluster.fork();
       }
 
       cluster.on('exit', (worker, code, signal) => {
-        console.log(`worker ${worker.process.pid} died`);
+        logger.warn(`worker ${worker.process.pid} died with code ${code} and signal ${signal}`);
+        cluster.fork();
       });
-      return {} as any;
+
+      return http.createServer(app).listen(serverConfig.httpPort);
     } else {
-      logger.info("setup http server on port " + config.http_port);
+      logger.info(`Setup http server on port ${serverConfig.httpIp}:${serverConfig.httpPort}`);
 
       console.log(`Worker ${process.pid} started`);
-      return http.createServer(app).listen(config.http_port || 80);
+      return http.createServer(app).listen(serverConfig.httpPort);
     }
   }
 
-  logger.info(`init Greenlock http/https servers with ${config.cluster} workers`);
-  logger.info(`setup http/s server on ports ${config.http_port}/${config.https_port}`);
+  logger.info(`Init Greenlock http/https servers with ${config.cluster} workers`);
+  logger.info(`Setup http server on ${serverConfig.httpIp}:${serverConfig.httpPort}`);
+  logger.info(`Setup https server on ${serverConfig.httpsIp}:${serverConfig.httpsPort}`);
+
   const packageRoot = path.resolve(__dirname, '../../../..');
 
   return greenlock.init({
@@ -45,21 +54,17 @@ export function setupHttpServer({ app, ctx }: { app: express.Application, ctx: S
     maintainerEmail: "contact@mediainbox.io"
   }).ready(function(glx: any) {
     const plainServer = glx.httpServer(app);
-    const plainAddr = config.http_ip || '0.0.0.0';
-    const plainPort = config.http_port || 80;
 
-    return plainServer.listen(plainPort, plainAddr, function() {
+    return plainServer.listen(serverConfig.httpPort, serverConfig.httpIp, function() {
       const secureServer = glx.httpsServer(null, app);
-      const secureAddr = config.https_ip || '0.0.0.0';
-      const securePort = config.https_port || 443;
 
-      return secureServer.listen(securePort, secureAddr, function() {
+      return secureServer.listen(serverConfig.httpsPort, serverConfig.httpsIp, function() {
         plainServer.removeAllListeners('error');
         secureServer.removeAllListeners('error');
-        return console.log("Greenlock: cluster child on PID " + process.pid);
+        console.log("Greenlock: cluster child on PID " + process.pid);
       });
     });
   }).master(() => {
-    return console.log("Greenlock: master on PID " + process.pid);
+    console.log("Greenlock: master on PID " + process.pid);
   });
 }

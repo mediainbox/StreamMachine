@@ -1,22 +1,26 @@
 import {ListenersCollection} from "./ListenersCollection";
 import {Logger} from "winston";
 import {round} from "../../helpers/number";
+import {componentLogger} from "../../logger";
 
-const REPORT_INTERVAL = 5000;
+const REPORT_INTERVAL = 10000;
 
 export class ListenersReporter {
   private reportHandle: NodeJS.Timeout;
   private prevSentKbytes = 0;
   private prevSentSeconds = 0;
 
+  private readonly logger: Logger;
+
   constructor(
+    private readonly streamId: string,
     private readonly listeners: ListenersCollection,
-    private readonly logger: Logger,
   ) {
-    //this.scheduleCheck();
+    this.logger = componentLogger(`listeners_reporter[${streamId}]`);
+    this.scheduleReport();
   }
 
-  scheduleCheck() {
+  scheduleReport() {
     this.reportHandle = setInterval(() => {
       const count = this.listeners.count();
 

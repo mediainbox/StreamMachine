@@ -1,12 +1,12 @@
-import {ListenEvent, ListenOptions} from "../types";
 import {EventEmitter} from 'events';
 import {Logger} from "winston";
 import {IOutput} from "../output/IOutput";
 import {Client} from "./Client";
-import {Events, EventsHub} from "../../events";
 import {Mutable} from "../../helpers/types";
 import {IListener} from "./IListener";
 import {ISource} from "../output/ISource";
+import {ListenOptions} from "../types";
+import {slaveEvents, SlaveEvent} from "../events";
 
 export class Listener extends EventEmitter implements IListener {
   readonly connectedAt = Date.now();
@@ -18,7 +18,6 @@ export class Listener extends EventEmitter implements IListener {
   private readonly source: ISource;
   private readonly output: IOutput;
   private readonly logger: Logger;
-  private readonly events: EventsHub;
 
   private readonly listenInterval: number;
   private listenIntervalHandle: NodeJS.Timeout;
@@ -53,11 +52,6 @@ export class Listener extends EventEmitter implements IListener {
     return this;
   }
 
-  setEvents(events: EventsHub): this {
-    (this.events as Mutable<EventsHub>) = events;
-    return this;
-  }
-
   setListenInterval(listenInterval: number): this {
     (this.listenInterval as Mutable<number>) = listenInterval;
     return this;
@@ -73,13 +67,13 @@ export class Listener extends EventEmitter implements IListener {
     const sentBytes = this.output.getSentBytes();
     const sentSeconds = this.output.getSentSeconds();
 
-    this.events.emit(Events.Listener.LISTEN, {
+    slaveEvents().emit(SlaveEvent.LISTENER_LISTEN, {
+      listener: this,
       ts: Date.now(),
       streamId: this.streamId,
       sentBytes: sentBytes - this.sentBytes,
       sentSeconds: sentSeconds - this.sentSeconds,
-      listener: this,
-    } as ListenEvent);
+    });
 
     this.sentBytes = sentBytes;
     this.sentSeconds = sentSeconds;
@@ -111,7 +105,7 @@ export class Listener extends EventEmitter implements IListener {
     }
 
     (this.source as Mutable<ISource>) = source;
-    this.events.emit(Events.Listener.SESSION_START, this);
+    slaveEvents().emit(SlaveEvent.LISTENER_SESSION_START, this);
     this.output.send(source);
   }
 
@@ -124,7 +118,7 @@ export class Listener extends EventEmitter implements IListener {
     clearInterval(this.listenIntervalHandle);
 
     this.logger.debug(`listener disconnected`);
-    this.events.emit(Events.Listener.DISCONNECT, this);
+    slaveEvents().emit(SlaveEvent.LISTENER_DISCONNECT, this);
     this.disconnected = true;
 
     this.output.removeListener('disconnect', this.disconnect);

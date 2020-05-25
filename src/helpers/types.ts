@@ -496,6 +496,6 @@ export type ReadonlyKeys<T> = {
     >;
 }[keyof T];
 
-export type DeepReadonly<T> = {
-  readonly [P in keyof T]: DeepReadonly<T[P]>;
-}
+export type Arguments<T> = [T] extends [(...args: infer U) => any]
+  ? U
+  : [T] extends [void] ? [] : [T]

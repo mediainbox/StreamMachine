@@ -1,35 +1,32 @@
 import {StreamsCollection} from "../streams/StreamsCollection";
-import {SlaveConfig_V1, SlaveCtx} from "../types";
 import express from "express";
 import {rootStreamRewrite} from "./middlewares/RootStream";
 import {trackingMiddleware} from "./middlewares/Tracking";
 import {banClientsMiddleware} from "./middlewares/BanClients";
 import {utilityController} from "./utilityController";
-import {Events} from "../../events";
-import {setupHttpServer} from "./HttpServer";
 import {Server} from "http";
 import {EventEmitter} from 'events';
 import {Logger} from "winston";
+import {componentLogger} from "../../logger";
+import {SlaveEvent, slaveEvents} from "../events";
+import {SlaveConfig} from "../config/types";
 
 const cors = require("cors");
 const cookieParser = require('cookie-parser');
 
+type ServerConfig = SlaveConfig['server'];
+
 export class ListenServer extends EventEmitter {
-  private server: Server;
   private readonly logger: Logger;
-  private readonly config: SlaveConfig_V1;
   private readonly app: express.Application;
 
   constructor(
+    private readonly config: ServerConfig,
     private readonly streams: StreamsCollection,
-    private readonly ctx: SlaveCtx,
   ) {
     super();
 
-    const config = this.config = ctx.config;
-    this.logger = ctx.logger.child({
-      component: "listen_server",
-    })
+    this.logger = componentLogger("listen_server");
 
     const app = this.app = express();
     app.set("x-powered-by", false);
@@ -39,7 +36,7 @@ export class ListenServer extends EventEmitter {
     });
     app.use(cookieParser());
 
-    if (config.cors?.enabled) {
+    if (config.cors.enabled) {
       this.logger.info("enable cors");
       app.use(cors({
         origin: config.cors.origin || true,
@@ -47,7 +44,7 @@ export class ListenServer extends EventEmitter {
       }));
     }
 
-    if (config.behind_proxy) {
+    if (config.behindProxy) {
       this.logger.info("enable 'trust proxy' for express");
       app.set("trust proxy", true);
     }
@@ -61,7 +58,7 @@ export class ListenServer extends EventEmitter {
         return;
       }
 
-      req.stream = stream;
+      req.sStream = stream;
       next();
     });
 
@@ -73,12 +70,12 @@ export class ListenServer extends EventEmitter {
 
     // requests debug logger
     // TODO: like stackdriver
-    if (this.config.debug_incoming_requests) {
+    if (this.config.logRequests) {
     }
 
     // check user agent for banned clients
-    if (this.config.ua_skip) {
-      app.use(banClientsMiddleware(this.config.ua_skip, this.logger))
+    if (this.config.blockUserAgents) {
+      app.use(banClientsMiddleware(this.config.blockUserAgents, this.logger))
     }
 
     // utility routes
@@ -93,15 +90,17 @@ export class ListenServer extends EventEmitter {
 
     // listen to the stream
     app.get("/:stream", (req, res) => {
-      this.logger.debug(`listen request for ${req.stream.getId()} from ip ${req.ip}`);
+      this.logger.debug(`listen request for ${req.sStream.getId()} from ip ${req.ip}`);
 
-      this.ctx.events.emit(Events.Listener.LANDED, {
-        stream: req.stream,
+      slaveEvents().emit(SlaveEvent.LISTENER_LANDED, {
+        stream: req.sStream,
         req,
         res,
       });
     });
+  }
 
-    this.server = setupHttpServer({ app, ctx });
+  getApp() {
+    return this.app;
   }
 }

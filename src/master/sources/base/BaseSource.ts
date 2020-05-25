@@ -1,47 +1,49 @@
-import uuid from "uuid";
+import * as uuid from "uuid";
 import {FrameChunker} from "./FrameChunker";
-import {Milliseconds, Seconds} from "../../../types/util";
 import {Logger} from "winston";
 import {getParserForFormat} from "../../../parsers/parserFactory";
 import {FrameHeader} from "../../../parsers/types";
-import { EventEmitter } from 'events';
-import {ISource} from "./ISource";
-import {Format, SourceStatus, SourceVitals} from "../../../types";
-import { Writable } from "stream";
+import {ISource, SourceConfig, SourceEvents} from "./ISource";
+import {SourceStatus, SourceVitals} from "../../../types";
+import {Writable} from "stream";
+import {componentLogger} from "../../../logger";
+import {TypedEmitterClass} from "../../../helpers/events";
 
-export interface SourceConfig {
-  readonly format: Format;
-  readonly chunkDuration: Seconds;
-  readonly priority: number;
-}
-
-export abstract class BaseSource extends EventEmitter implements ISource {
+export abstract class BaseSource extends TypedEmitterClass<SourceEvents>() implements ISource {
   protected readonly id = uuid.v4();
   protected connected = false;
   protected connectedAt: Date | null = null;
-  protected vitals: SourceVitals | null;
+  protected vitals: SourceVitals | null = null;
 
   protected chunker: FrameChunker;
   protected parser: Writable;
 
+  protected readonly logger: Logger
+
   protected constructor(
     protected readonly config: SourceConfig,
-    protected readonly logger: Logger
   ) {
     super();
 
-    this.createParser();
+    this.logger = componentLogger(`source_${this.config.type}`);
+
+    this.chunker = new FrameChunker(this.config.chunkDuration * 1000);
+
+    // turns data frames into chunks
+    this.parser = getParserForFormat(this.config.format);
+
+    this.setupParser();
   }
 
-  abstract getType(): string;
   abstract connect(): void;
   abstract getStatus(): SourceStatus;
 
-  createParser() {
-    // turns data frames into chunks
-    this.chunker = new FrameChunker(this.config.chunkDuration * 1000);
-    this.parser = getParserForFormat(this.config.format);
+  getType() {
+    return this.config.type;
+  }
 
+  // TODO: refactor externally
+  setupParser() {
     // get vitals from first header
     this.parser.once("header", (header: FrameHeader) => {
       this.setVitals({
@@ -64,13 +66,13 @@ export abstract class BaseSource extends EventEmitter implements ISource {
       let chunk;
 
       while (chunk = this.chunker.read()) {
-        this.emit("_chunk", chunk)
+        this.emit("chunk", chunk)
       }
     });
   }
 
   private setVitals(vitals: SourceVitals) {
-    this.logger.info(`set source vitals ${vitals.streamKey}`, { vitals })
+    this.logger.info(`set source vitals ${vitals.streamKey}`, {vitals})
     this.vitals = vitals;
     this.emit("vitals", this.vitals);
   }

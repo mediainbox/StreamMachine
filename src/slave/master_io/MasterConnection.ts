@@ -1,12 +1,13 @@
-import {InputConfig, SlaveCtx, SlaveStatus, _SourceVitals} from "../types";
 import {Logger} from "winston";
-import {WsAudioMessage} from "../../types";
 import {toTime} from "../../helpers/datetime";
 import axios from 'axios';
 import {Readable} from "stream";
 import {promiseTimeout} from "../../helpers/promises";
 import socketIO from "socket.io-client";
-import {Events} from "../../events";
+import {componentLogger} from "../../logger";
+import {SlaveEvent, slaveEvents} from "../events";
+import {SlaveConfig} from "../config/types";
+import {MasterWsMessage, SlaveWsMessage, SlaveWsSocket} from "../../messages";
 
 const REWIND_REQUEST_TIMEOUT = 15 * 1000;
 const ALIVE_INTERVAL = 5000;
@@ -17,50 +18,37 @@ const RECONNECT_WAIT = 5000;
  */
 export class MasterConnection {
   private readonly logger: Logger;
-  private readonly config: {
-    readonly master: string[];
-    readonly timeout?: number;
-  };
-
-  private ws: SocketIOClient.Socket;
+  private ws: SlaveWsSocket;
   private id: string;
   private connected = false;
   private masterUrlIndex = 0;
   private aliveInterval: NodeJS.Timeout;
 
-  constructor(private readonly ctx: SlaveCtx) {
-    this.logger = this.ctx.logger.child({
-      component: 'master_connection'
-    });
-    this.config = this.ctx.config.slave;
+  constructor(private readonly config: SlaveConfig['master'] & { slaveId: string }) {
+    this.logger = componentLogger('master_connection');
 
     this.connect();
   }
 
-  send(event: string, ...args: any[]) {
-    this.ws.emit(event, ...args);
-  }
-
-  // TODO: vitals to configuration
-  getStreamVitals(key: string, cb: (err: Error | null, vitals: _SourceVitals) => void) {
-    this.ws.emit(Events.Link.STREAM_VITALS, key, cb);
+  buildConnectionUrl(url: string): string {
+    return `${url}?password=${this.config.password}&slaveId=${this.config.slaveId}`
   }
 
   connect() {
-    const masterWsUrl = this.config.master[this.masterUrlIndex];
+    const nextUrl = this.config.urls[this.masterUrlIndex];
 
-    this.logger.info(`connect to master[${this.masterUrlIndex}] at ${masterWsUrl}`);
+    this.logger.info(`Connect to master[${this.masterUrlIndex}] at ${nextUrl}`);
 
-    this.ws = socketIO.connect(masterWsUrl, {
+    this.ws = socketIO.connect(this.buildConnectionUrl(nextUrl), {
       reconnection: false,
       timeout: this.config.timeout,
-    });
+    }) as SlaveWsSocket;
 
-    const onConnectError = (err: Error & { description: string; }) => {
-      this.logger.warn(`connect to master[${this.masterUrlIndex}] at ${this.config.master[this.masterUrlIndex]} failed (${err.message})`, {
-        err
+    const onConnectError = (error: Error) => {
+      this.logger.warn(`Connection failed (${error.message})`, {
+        error
       });
-      this.logger.info(`reconnect in ${RECONNECT_WAIT}ms`);
+      this.logger.info(`Reconnect in ${RECONNECT_WAIT}ms`);
 
       setTimeout(() => {
         this.tryFallbackConnection();
@@ -79,7 +67,7 @@ export class MasterConnection {
         this.tryFallbackConnection();
       }, 1000);
 
-      return this.ws.emit(Events.Link.CONNECTION_VALIDATE, (res: string) => {
+      return this.ws.emit(SlaveWsMessage.CONNECTION_VALIDATE, (res: string) => {
         clearTimeout(pingTimeout);
 
         if (res !== 'OK') {
@@ -99,7 +87,7 @@ export class MasterConnection {
         this.id = this.ws.id;
         this.connected = true;
 
-        this.ctx.events.emit(Events.Slave.CONNECTED);
+        slaveEvents().emit(SlaveEvent.CONNECT);
       });
     });
 
@@ -110,35 +98,31 @@ export class MasterConnection {
       clearInterval(this.aliveInterval);
       this.tryFallbackConnection();
 
-      return this.ctx.events.emit(Events.Slave.DISCONNECT);
+      slaveEvents().emit(SlaveEvent.DISCONNECT);
     });
 
-    this.ws.on(Events.Link.CONFIG, (config: InputConfig) => {
-      this.ctx.events.emit(Events.Link.CONFIG, config);
+    /*this.ws.on(Events.Link.CONFIG, (config: InputConfig) => {
+      slaveEvents().emit(Events.Link.CONFIG, config);
     });
 
     this.ws.on(Events.Link.SLAVE_STATUS, (cb: (status: SlaveStatus) => void) => {
-      this.ctx.events.emit(Events.Link.SLAVE_STATUS, cb);
-    });
+      slaveEvents().emit(Events.Link.SLAVE_STATUS, cb);
+    });*/
 
-    this.ws.on(Events.Link.AUDIO, (msg: WsAudioMessage) => {
+    this.ws.on(MasterWsMessage.CHUNK, chunk => {
       // our data gets converted into an ArrayBuffer to go over the
       // socket. convert it back before insertion
       // convert timestamp back to a date object
-      const chunk = {
-        ...msg.chunk,
-        ts: new Date(msg.chunk.ts).valueOf()
-      }
-      this.logger.silly(`audio chunk received from master: ${msg.stream}/${toTime(chunk.ts)}`)
+      this.logger.silly(`Audio chunk received: ${chunk.streamId}/${toTime(chunk.chunk.ts)}`)
 
       // emit globally, this event will be listened by stream sources
-      return this.ctx.events.emit(`audio:${msg.stream}`, chunk);
+      slaveEvents().emit(SlaveEvent.CHUNK, chunk);
     });
   }
 
   tryFallbackConnection() {
     this.disconnect();
-    const masterUrls = this.config.master;
+    const masterUrls = this.config.urls;
 
     this.masterUrlIndex++;
     if (this.masterUrlIndex >= masterUrls.length) {
@@ -146,7 +130,7 @@ export class MasterConnection {
     }
 
     // else, try to connect to the next url
-    this.logger.info('try next master available url');
+    this.logger.info('Try next master available url');
     this.connect();
   }
 

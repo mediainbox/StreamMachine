@@ -1,51 +1,54 @@
 import {LoggingWinston as StackdriverLogging} from '@google-cloud/logging-winston';
 import * as CustomTransports from "./transports";
 import cluster from 'cluster';
-import winston from "winston";
-import {SlaveConfig_V1} from "../slave/types";
+import winston, {Logger} from "winston";
 import * as os from "os";
+import {LoggerConfig} from "../types";
 
-const {combine, timestamp, label, json, errors } = winston.format;
+const {combine, timestamp, label, json, errors} = winston.format;
 
-export function createLogger(config: SlaveConfig_V1) {
-  console.log(`[logger] create logger (mode: ${config.mode})`);
+let loggerInstance: Logger;
+
+export function createLogger(mode: string, config: LoggerConfig): Logger {
+  console.log(`[logger] create logger`);
 
   const transports = [];
 
   // debug transport to stdout if not prod
   if (process.env.NODE_ENV !== 'production') {
+    console.log("[logger] add debug transport");
     transports.push(new CustomTransports.DebugTransport());
   }
 
   // json file output
-  if (config.log.json) {
-    console.log("[logger] adding file json transport");
+  if (config.transports.json) {
+    console.log("[logger] adding json file transport");
     transports.push(new winston.transports.File({
-      level: config.log.json.level,
-      filename: config.log.json.file,
+      level: config.transports.json.level,
+      filename: config.transports.json.file,
       maxsize: 10 * 1024 * 1024,
     }));
   }
 
   // gcp stackdriver
-  if (config.log.stackdriver) {
+  if (config.transports.stackdriver) {
     console.log("[logger] adding stackdriver transport");
     transports.push(new StackdriverLogging({
-      logName: 'stream_machine',
-      level: config.log.stackdriver.level,
-      serviceContext: {
+      // TODO: fix
+      //logName: 'stream_machine',
+      level: config.transports.stackdriver.level,
+      /*serviceContext: {
         service: 'stream-machine',
         version: '1.0.0'
-      },
-      prefix: config.mode,
+      },*/
       labels: {
-        mode: config.mode,
+        //mode: mode,
         //env: config.env
       },
     }));
   }
 
-  const addMetadata = winston.format(function(info) {
+  const addMetadata = winston.format(function (info) {
     info.hostname = os.hostname();
     info.pid = process.pid;
     info.workerId = cluster.isWorker ? cluster.worker.id : undefined;
@@ -56,16 +59,30 @@ export function createLogger(config: SlaveConfig_V1) {
   const logger = winston.createLogger({
     format: combine(
       addMetadata(),
-      errors({ stack: true }),
+      errors({stack: true}),
       timestamp(),
       json(),
     ),
-    //level: 'info',
-    level: 'debug',
+    level: config.level,
     transports: transports
   });
 
   winston.addColors((winston.config as any).npm.levels);
 
+  loggerInstance = logger;
   return logger;
+}
+
+export function getLogger(): Logger {
+  if (!loggerInstance) {
+    throw new Error('Logger not initialized');
+  }
+
+  return loggerInstance;
+}
+
+export function componentLogger(name: string): Logger {
+  return getLogger().child({
+    component: name
+  });
 }

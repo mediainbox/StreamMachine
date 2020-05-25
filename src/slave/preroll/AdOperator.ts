@@ -1,12 +1,18 @@
-import {EventEmitter} from "events";
 import {Logger} from "winston";
 import {AdInstance} from "./AdInstance";
 import axios from 'axios';
-import {IAdOperator, PrerollerConfig} from "./types";
+import {IAdOperator} from "./types";
 import {Readable} from "stream";
 import {parseAdResponse} from "./responseParser";
 import {EmptyReadable} from "../../util/EmptyReadable";
-import { Client } from "../listeners/Client";
+import {Client} from "../listeners/Client";
+import {AdsConfig} from "../config/types";
+import {componentLogger} from "../../logger";
+
+type Config = Omit<AdsConfig, 'serverUrl'> & {
+  adUrl: string;
+  streamKey: string;
+};
 
 /**
  * Class that will create an Ad instance, get its creative,
@@ -15,8 +21,6 @@ import { Client } from "../listeners/Client";
  * return and empty preroll.
  */
 export class AdOperator implements IAdOperator {
-  private readonly adUrl: string;
-
   private ad: AdInstance;
   private adRequestCancel?: () => void;
   private transcoderRequestCancel?: () => void;
@@ -29,23 +33,12 @@ export class AdOperator implements IAdOperator {
 
   constructor(
     private readonly adId: string,
-    private readonly config: PrerollerConfig,
-    private readonly client: Client,
+    private readonly config: Config,
     private readonly logger: Logger,
   ) {
-    this.adUrl = config.adUrl
-      .replace("!KEY!", config.streamKey)
-      .replace("!STREAM!", config.streamId)
-      .replace("!IP!", client.ip)
-      .replace("!UA!", encodeURIComponent(client.ua))
-      .replace("!UUID!", client.session_id);
   }
 
   async build(): Promise<Readable> {
-    if (!this.config?.enabled) {
-      return new EmptyReadable();
-    }
-
     this.abortTimeout = this.abortOnTimeout();
 
     try {
@@ -88,7 +81,7 @@ export class AdOperator implements IAdOperator {
     this.logger.debug('request ad from server');
 
     return axios
-      .get(this.adUrl, {
+      .get(this.config.adUrl, {
         cancelToken: new axios.CancelToken(cancel => {
           this.adRequestCancel = cancel;
         }),
@@ -142,7 +135,7 @@ export class AdOperator implements IAdOperator {
     return setTimeout(() => {
       this.logger.warn(`ad build timeout, abort`)
       this.abort();
-    }, this.config.timeout);
+    }, this.config.adTimeout);
   }
 
   private cleanup() {

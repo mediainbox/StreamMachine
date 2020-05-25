@@ -2,7 +2,7 @@ const _ = require("lodash");
 const MemoryStore = require("./store/memory_store");
 const RewindWriter = require('./rewind_writer');
 const {toTime} = require('../helpers/datetime');
-const {passthrough, BetterEventEmitter} = require('../events');
+const {passthrough, BetterEventEmitter} = require('../helpers/events');
 
 // RewindBuffer supports play from an arbitrary position in the last X hours
 // of our stream.

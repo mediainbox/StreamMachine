@@ -1,5 +1,5 @@
 import {Seconds} from "./util";
-import {SourceConfig} from "../master/sources/base/BaseSource";
+import {SourceConfig} from "../master/sources/base/ISource";
 
 export interface Err extends Error {
   context?: any;
@@ -9,21 +9,15 @@ export interface Err extends Error {
 export interface Chunk {
   readonly ts: number;
   readonly duration: number;
-  readonly meta: {
-    readonly StreamTitle: string;
-    readonly StreamUrl: string;
-  };
   readonly data: Buffer;
   readonly frames: number;
   readonly streamKey: string;
 }
 
-export interface WsAudioMessage {
-  readonly stream: string;
-  readonly chunk: Chunk;
+export enum Format {
+  AAC = 'aac',
+  MP3 = 'mp3'
 }
-
-export type Format = 'mp3' | 'aac';
 
 export interface StreamMetadata {
   readonly title: string;
@@ -45,3 +39,20 @@ export interface SourceStatus {
   readonly vitals: SourceVitals | null;
   readonly lastChunkTs: number | null;
 }
+
+export interface LoggerConfig {
+  readonly level?: string;
+  readonly transports: {
+    readonly json?: {
+      readonly level?: string;
+      readonly file: string;
+    };
+    readonly stackdriver?: {
+      readonly level?: string;
+    };
+  };
+}
+
+export type IfEnabled<T> =
+  | { enabled: false } & Partial<T>
+  | { enabled: true } & T;

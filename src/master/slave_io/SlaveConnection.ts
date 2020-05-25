@@ -1,63 +1,52 @@
-var Events, SlaveConnection;
+import {SlaveStatus} from "../../slave/types";
+import {componentLogger} from "../../logger";
+import {Logger} from "winston";
+import {StreamChunk} from "../types";
+import {MasterWsSocket} from "../../messages";
 
-({Events} = require('../../events'));
+export class SlaveConnection {
+  private readonly logger: Logger;
+  private readonly connectedAt: Date;
 
-export class SlaveConnection extends EventEmitter {
-  constructor(ctx, socket) {
-    super();
-    this.ctx = ctx;
-    this.socket = socket;
-    this.id = this.socket.id;
-    this.last_status = null;
-    this.last_err = null;
-    this.connected_at = new Date();
-    this.logger = this.ctx.logger.child({
-      slave: this.socket.id
-    });
-    // -- wire up logging -- #
-    this.logger = this.logger.child({
-      slave: this.socket.id
-    });
-    this.socket.on("log", (obj = {}) => {
-      return this.logger[obj.level || 'debug'].apply(this.logger, [obj.msg || "", obj.meta || {}]);
-    });
+  constructor(
+    private readonly slaveId: string,
+    private readonly socket: MasterWsSocket
+  ) {
+    this.connectedAt = new Date();
 
+    this.logger = componentLogger(`slave_connection[${slaveId}]`);
 
-    this.socket.on(Events.Listener.LISTEN, data => {
-      this.ctx.events.emit(Events.Listener.LISTEN, data);
-    });
+    this.hookEvents();
+  }
 
-    this.socket.on(Events.Listener.SESSION_START, data => {
-      this.ctx.events.emit(Events.Listener.SESSION_START, data);
-    });
-
-    this.socket.on(Events.Link.STREAM_VITALS, (key, cb) => {
-      // respond with the stream's vitals
-      return this.ctx.master.vitals(key, cb);
-    });
-
+  hookEvents() {
     // attach disconnect handler
     this.socket.on("disconnect", () => {
-      return this._handleDisconnect();
+      this.handleDisconnect();
     });
   }
 
-  //----------
-  status(cb) {
-    return this.socket.emit(Events.Link.SLAVE_STATUS, (err, status) => {
-      this.last_status = status;
-      this.last_err = err;
-      return cb(err, status);
-    });
+  getStatus(): Promise<SlaveStatus> {
+    return new Promise((resolve, reject) => {
+      /*this.ws.emit(Events.Link.SLAVE_STATUS, (err, status) => {
+        if (err) {
+          reject(err);
+          return;
+        }
+
+        this.last_status = status;
+        resolve(status);
+      });*/
+    })
   }
 
-  //----------
-  _handleDisconnect() {
-    var connected;
-    connected = Math.round((Number(new Date()) - Number(this.connected_at)) / 60000);
-    this.logger.debug(`slave ${this.socket.id} disconnected (connection lasted ${connected} minutes)`);
-    // TODO: who handles this?
-    return this.emit("disconnect");
+  handleDisconnect() {
+    const mins = Math.round((Number(new Date()) - Number(this.connectedAt)) / 60000);
+    this.logger.debug(`slave ${this.slaveId} disconnected (connected for ${mins} minutes)`);
+    //this.emit("disconnect");
   }
 
-};
+  sendChunk(chunk: StreamChunk) {
+    this.socket.emit('chunk', chunk);
+  }
+}
