@@ -8,9 +8,9 @@ export class FrameChunker extends Transform {
   private _queue_duration = 0;
   private _remainders = 0;
   private _target: number;
-  private _last_ts: Date | number | null;
+  private _last_ts: number | null;
 
-  constructor(duration1: number, initialTime = new Date()) {
+  constructor(duration1: number, initialTime = Date.now()) {
     super({
       objectMode: true
     });
@@ -69,7 +69,7 @@ export class FrameChunker extends Transform {
         this._remainders = this._remainders - simple_rem;
         simple_dur += simple_rem;
       }
-      ts = this._last_ts ? new Date(Number(this._last_ts) + simple_dur) : this.initialTime;
+      ts = this._last_ts ? this._last_ts + simple_dur : this.initialTime;
       this._last_ts = ts;
       this.push({
         data: buf,

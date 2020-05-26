@@ -56,18 +56,30 @@ export class Stream extends TypedEmitterClass<Events>() {
   }
 
   hookEvents() {
+    this.sources.on("connected", this.onSourceConnectionOk);
+
     this.sources.on("chunk", chunk => {
       masterEvents().emit('chunk', {
         streamId: this.id,
         chunk
       });
-    });
 
-    this.sources.on("connected", this.onSourceConnectionOk);
+      this.rewindBuffer?.push(chunk);
+    });
   }
 
   onSourceConnectionOk = (vitals: SourceVitals) => {
     this.vitals = vitals;
+
+    // set up a rewind buffer, for use in bringing new slaves up to date
+    this.rewindBuffer = new RewindBuffer(
+      this.id,
+      {
+        bufferSeconds: this.config.rewind.bufferSeconds,
+      },
+      vitals
+    );
+
     this.emit("connected");
   };
 
@@ -101,15 +113,6 @@ export class Stream extends TypedEmitterClass<Events>() {
 
     return new Promise((resolve, reject) => {
       this.runOrWait("connected", () => {
-        // set up a rewind buffer, for use in bringing new slaves up to date
-        this.rewindBuffer = new RewindBuffer(
-          this.id,
-          {
-            bufferSeconds: this.config.rewind.bufferSeconds,
-          },
-          this.vitals!
-        );
-
         resolve(this.rewindBuffer);
       });
     });
@@ -119,6 +122,8 @@ export class Stream extends TypedEmitterClass<Events>() {
     return this
       .getRewindBuffer()
       .then(rewindBuffer => {
+        this.logger.debug(`Dump RewindBuffer with ${rewindBuffer.getBufferedSeconds()} seconds`);
+
         return rewindBuffer.dump();
       });
   }

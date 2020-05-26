@@ -154,7 +154,7 @@ export class MemoryStore extends TypedEmitterClass<Events>() implements IChunkSt
       // If the current chunk's timestamp matches the last chunk's,
       // it's probable that insert() was called again using the same chunk
       // Often related to dangling event handlers that were not properly removed
-    } else if (cts === fb || cts === lb || this.buffer.find(b => b.ts.valueOf() === cts)) {
+    } else if (cts === fb || cts === lb || this.buffer.find(b => b.ts === cts)) {
       // Chunk timestamp already found in the buffer
     } else {
       // need to insert in the middle.

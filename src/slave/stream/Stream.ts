@@ -18,7 +18,7 @@ import {Kbytes} from "../../types/util";
 import {ListenEventData, SlaveEvent, slaveEvents} from "../events";
 import {StreamEvent, StreamEvents} from "./events";
 import {StreamChunk} from "../../master/types";
-import {createRewindLoader} from "../../rewind/RewindLoader";
+import {createRewindReader} from "../../rewind/RewindReader";
 import {SlaveStreamConfig} from "../types/streams";
 import {RewindBuffer} from "../../rewind/RewindBuffer";
 
@@ -155,7 +155,7 @@ export class Stream extends TypedEmitterClass<StreamEvents>() {
       .masterConnection
       .getRewind(this.id)
       .then(readable => {
-        this.rewindBuffer.preload(createRewindLoader(readable), () => {
+        this.rewindBuffer.preload(createRewindReader(readable), () => {
           this.logger.info('rewind buffer loaded, allow listener connections to start');
           this.emit(StreamEvent.REWIND_LOADED);
         });

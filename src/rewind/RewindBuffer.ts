@@ -111,9 +111,11 @@ export class RewindBuffer extends TypedEmitterClass<Events>() {
           let chunk;
 
           while (chunk = loader.read()) {
-            // Insert a chunk into the RewindBuffer. Inserts can only go backward, so
-            // the timestamp must be less than @buffer[0].ts for a valid chunk
-            this.buffer.insert(chunk);
+            if (!chunk.__header__) {
+              // Insert a chunk into the RewindBuffer. Inserts can only go backward, so
+              // the timestamp must be less than @buffer[0].ts for a valid chunk
+              this.buffer.insert(chunk);
+            }
           }
         })
         .on('error', (error: Error) => {
@@ -218,6 +220,6 @@ export class RewindBuffer extends TypedEmitterClass<Events>() {
     // taking a copy of the array should effectively freeze us in place
     const copy = this.buffer.clone();
 
-    return new RewindWriter(copy, this.vitals.chunkDuration, this.vitals.streamKey);
+    return new RewindWriter(copy, this.vitals);
   }
 }

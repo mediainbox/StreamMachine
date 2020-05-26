@@ -13,9 +13,7 @@ function buildParser() {
               var meta;
               meta = JSON.parse(this.vars.meta.toString());
               this.push({
-                ts: new Date(meta.ts),
-                meta: meta.meta,
-                duration: meta.duration,
+                ...meta,
                 data: this.vars.data
               });
               this.vars = {};
@@ -27,6 +25,7 @@ function buildParser() {
   })
 }
 
-export function createRewindLoader(binarySource: Readable) {
+// TODO: convert to writable
+export function createRewindReader(binarySource: Readable) {
   return binarySource.pipe(buildParser());
 }
