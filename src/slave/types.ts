@@ -5,6 +5,7 @@ import express from "express";
 import {SourceVitals} from "../types";
 import {SlaveConfig} from "./config/types";
 import {BaseStreamConfig} from "src/types/stream";
+import {Seconds} from "../types/util";
 
 export type SlaveStreamConfig = BaseStreamConfig & {
   readonly vitals: SourceVitals;
@@ -35,6 +36,7 @@ export type SlaveStatus = {
 };
 
 export interface ListenOptions {
-  offset: number;
-  pump?: boolean;
+  readonly offset: Seconds;
+  readonly initialBurst: Seconds;
+  readonly pumpAndFinish: boolean;
 }

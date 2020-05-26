@@ -52,11 +52,11 @@ export class RewindGateway {
     });
 
     app.get("/slave/:stream/rewind", (req, res) => {
-      this.logger.info(`RewindBuffer request from slave #${req.query.slaveId} on ${req.mStream.getId()}`);
+      this.logger.info(`RewindBuffer request from slave #${req.query.slaveId} for ${req.mStream.getId()}`);
       res.status(200).write('');
 
       req.mStream
-        .getRewind()
+        .dumpRewindBuffer()
         .then(rewindStream => {
           rewindStream.pipe(new Throttle(100 * 1024 * 1024)).pipe(res);
 

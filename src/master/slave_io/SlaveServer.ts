@@ -70,6 +70,11 @@ export class SlaveServer {
         this.logger.error(`Slave did not provide id`);
         next(new Error("Missing slave id"));
         return;
+      } else if (this.connections.get(slaveId)) {
+        const error = new Error(`Slave with id "${slaveId}" already connected`);
+        this.logger.error(error);
+        next(error);
+        return;
       }
 
       return next();

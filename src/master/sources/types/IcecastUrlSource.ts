@@ -77,7 +77,7 @@ export class IcecastUrlSource extends BaseSource {
 
       this.icyResponse.on("metadata", (data) => {
         const meta = Icy.parse(data);
-        this.logger.debug("Got Icecast metadata event", { meta });
+        //this.logger.debug("Got Icecast metadata event", { meta });
 
         this.emit("metadata", {
           title: meta.StreamTitle || "",

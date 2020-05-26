@@ -1,13 +1,11 @@
 import {Readable} from "stream";
 import {Chunk} from "../types";
 import {RewindBuffer} from "./RewindBuffer";
-import {Seconds} from "../types/util";
+import {ListenOptions} from "../slave/types";
 
 const HIGH_WATERMARK = 256 * 1024 // 256 KB;
 
-interface Config {
-  readonly offset: Seconds;
-  readonly pumpAndFinish: boolean;
+interface Config extends ListenOptions {
 }
 
 // Rewinder is the general-purpose listener stream.
@@ -48,36 +46,12 @@ export class Rewinder extends Readable {
     });
   }
 
-  pump(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const chunksOffset = this.rewind.validateSecondsOffset(this.config.offset);
+  async pump(): Promise<void> {
+    // offset != 0: pump some data before we start regular listening
+    // offset = 0: pump back from live
+    const chunks = this.rewind.getSeconds(this.config.offset, this.config.initialBurst);
 
-      if (this.config.pumpAndFinish) {
-        // we're just giving one pump of data, then EOF
-        return this.rewind.pumpFrom(this, this.offset, this.rewind.secsToOffset(this.pumpSecs), false);
-      }
-
-      if (this.opts.pump) {
-        if (this.offset === 0) {
-          // pump some data before we start regular listening
-          //debug(`Rewinder: Pumping ${this.rewind.burst} seconds.`);
-          this.rewind.pumpSeconds(this, this.pumpSecs, true);
-          return resolve();
-        } else {
-          // we're offset, so we'll pump from the offset point forward instead of
-          // back from live
-          return this.rewind.burstFrom(this, this.offset, this.pumpSecs, (err: Error, newoffset: number) => {
-            if (err) {
-              return reject(err);
-            }
-            this.offset = newoffset;
-            return resolve();
-          });
-        }
-      }
-
-      return resolve();
-    });
+    this.enqueueChunks(chunks);
   }
 
   // -- Handle an empty queue -- #
@@ -88,7 +62,7 @@ export class Rewinder extends Readable {
   // to signal that we've reached the end and nothing more will
   // follow.
   handleEmpty() {
-    if (this.pumpOnly) {
+    if (this.config.pumpAndFinish) {
       this.push(null);
     } else {
       this.push('');
@@ -171,25 +145,25 @@ export class Rewinder extends Readable {
     pushQueue();
   };
 
-  queueChunk = (chunk: Chunk) => {
+  enqueueChunks(chunks: Chunk[]) {
+    chunks.forEach(c => this.enqueueChunk(c));
+  }
+
+  enqueueChunk(chunk: Chunk) {
     this.queue.push(chunk);
     this.queuedBytes += chunk.data.length;
 
     if (!this.reading) {
       this.read(0);
     }
-  };
-
-  _destroy() {
-    this.emit('destroy');
-    this.removeAllListeners();
-  }
-
-  getOffset() {
-    return this.offset;
   }
 
   getStats() {
     return this.stats;
+  }
+
+  _destroy() {
+    this.emit('destroy');
+    this.removeAllListeners();
   }
 }

@@ -2,11 +2,10 @@ import {SlaveStatus} from "../../slave/types";
 import {componentLogger} from "../../logger";
 import {Logger} from "winston";
 import {StreamChunk} from "../types";
-import {MasterWsSocket, MasterWsMessage} from "../../messages";
+import {MasterWsMessage, MasterWsSocket} from "../../messages";
 import {TypedEmitterClass} from "../../helpers/events";
-import {SlaveStreamsConfig} from "../../slave/types/streams";
-import { Stream } from "../stream/Stream";
-import { getStreamsDataForSlaves } from "./helpers";
+import {Stream} from "../stream/Stream";
+import {getStreamsDataForSlaves} from "./helpers";
 
 interface Events {
   disconnect: () => void;
@@ -23,7 +22,7 @@ export class SlaveConnection extends TypedEmitterClass<Events>() {
     super();
     this.connectedAt = new Date();
 
-    this.logger = componentLogger(`slave_connection[${slaveId}]`);
+    this.logger = componentLogger(`slave_connection[#${slaveId}]`);
 
     this.hookEvents();
   }

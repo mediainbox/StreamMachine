@@ -7,12 +7,10 @@ import {Logger} from "winston";
 import {toTime} from "../helpers/datetime";
 import {RewindWriter} from "./RewindWriter";
 import {Readable} from 'stream';
-import {Rewinder} from "./Rewinder";
-
+import _ from "lodash";
 
 interface Config {
   bufferSeconds: Seconds;
-  initialBurst: Seconds;
 }
 
 interface Events {
@@ -158,67 +156,24 @@ export class RewindBuffer extends TypedEmitterClass<Events>() {
     return bufferedLength - 1;
   }
 
-  pumpSeconds(rewinder: Rewinder, seconds: Seconds, concat, cb) {
-    // pump the most recent X seconds
-    const frames = this.validateSecondsOffset(seconds);
-
-    return this.pumpFrom(rewinder, frames, frames, concat, cb);
+  getSeconds(offset: Seconds, _length?: Seconds): Chunk[] {
+    return this.getChunks(
+      this.validateSecondsOffset(offset),
+      _length && this.validateSecondsOffset(_length),
+    );
   }
 
-  pumpFrom(rewinder: Rewinder, offset: number, length: number): Promise<{
-    chunks: number;
-    duration: number;
-  }> {
-    return new Promise(resolve => {
-      // we want to send _length_ chunks, starting at _offset_
-      if (offset === 0 || length === 0) {
-        resolve({
-          chunks: 0,
-          duration: 0,
-        });
-        return;
-      }
+  getChunks(offset: number, _length?: number): Chunk[] {
+    // if not defined, equals offset, otherwise length max is = offset
+    const length = typeof _length === 'undefined' ? offset :
+      (_length > offset ? offset : _length);
 
-      const chunks = this.buffer.range(offset, length);
-      let pumpLen = 0;
-      let duration = 0;
-      const buffers = [];
-
-      for (let i = 0, len = chunks.length; i < len; i++) {
-        const chunk = chunks[i];
-        pumpLen += chunk.data.length;
-        duration += chunk.duration;
-
-        rewinder.queueChunk(chunk);
-      }
-
-
-      // how many seconds are between this date and the end of the buffer?
-      const offsetSeconds = this.offsetToSeconds(offset);
-
-      resolve({
-        chunks:   as asd,
-        duration: asd as ,
-      })
-    });
-  }
-
-  burstFrom(rewinder, offset, burstSecs, cb) {
-    var burst;
-    // we want to send them @burst frames (if available), starting at offset.
-    // return them the new offset position and the burst data
-
-    // convert burstSecs to frames
-    burst = this.validateSecondsOffset(burstSecs);
-    if (offset > burst) {
-      return this.pumpFrom(rewinder, offset, burst, false, (err, info) => {
-        return typeof cb === "function" ? cb(err, offset - burst) : void 0;
-      });
-    } else {
-      return this.pumpFrom(rewinder, offset, offset, false, (err, info) => {
-        return typeof cb === "function" ? cb(err, 0) : void 0;
-      });
+    // offset = 0 is live, length = 0 is no chunks
+    if (offset === 0 || length === 0) {
+      return [];
     }
+
+    return this.buffer.range(offset, length);
   }
 
   destroy() {
@@ -259,10 +214,10 @@ export class RewindBuffer extends TypedEmitterClass<Events>() {
   // TODO: move away
   // Dump the rewindbuffer. We want to dump the newest data first, so that
   // means running back from the end of the array to the front.
-  dumpBuffer(): RewindWriter {
+  dump(): RewindWriter {
     // taking a copy of the array should effectively freeze us in place
     const copy = this.buffer.clone();
 
     return new RewindWriter(copy, this.vitals.chunkDuration, this.vitals.streamKey);
   }
-};
+}

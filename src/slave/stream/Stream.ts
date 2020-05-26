@@ -20,8 +20,7 @@ import {StreamEvent, StreamEvents} from "./events";
 import {StreamChunk} from "../../master/types";
 import {createRewindLoader} from "../../rewind/RewindLoader";
 import {SlaveStreamConfig} from "../types/streams";
-
-const RewindBuffer = require("../../rewind/RewindBuffer");
+import {RewindBuffer} from "../../rewind/RewindBuffer";
 
 interface GlobalConfig {
   readonly listenerMaxBufferSize: Kbytes;
@@ -143,14 +142,13 @@ export class Stream extends TypedEmitterClass<StreamEvents>() {
 
     // create rewind buffer associated to this stream that will
     // store the audio chunks sent from master
-    this.rewindBuffer = new RewindBuffer({
-      id: `slave__${this.id}`,
-      streamKey: this.id,
-      maxSeconds: this.config.rewind.bufferSeconds,
-      initialBurst: this.config.rewind.initialBurst,
-      vitals: this.config.vitals,
-      logger: this.logger,
-    });
+    this.rewindBuffer = new RewindBuffer(
+      this.id,
+      {
+        bufferSeconds: this.config.rewind.bufferSeconds,
+      },
+      this.config.vitals,
+    );
 
     // fetch current buffer from master and preload rewind
     this

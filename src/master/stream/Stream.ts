@@ -4,20 +4,23 @@ import {MasterStreamConfig} from "../types";
 import {StreamSources} from "./StreamSources";
 import {componentLogger} from "../../logger";
 import {TypedEmitterClass} from "../../helpers/events";
-import {Chunk, SourceVitals} from "../../types";
+import {Chunk, SourceVitals, MasterStreamStatus} from "../../types";
 import {masterEvents} from "../events";
-
-const RewindBuffer = require('../../rewind/RewindBuffer');
+import {RewindBuffer} from "../../rewind/RewindBuffer";
 
 interface Events {
   chunk: (chunk: Chunk) => void;
+  connected: () => void;
 }
 
 export class Stream extends TypedEmitterClass<Events>() {
   private readonly sources: StreamSources;
-  private readonly rewindBuffer: any;
   private readonly logger: Logger;
-  private vitals: SourceVitals | null = null;
+
+  private rewindBuffer?: RewindBuffer;
+  private vitals?: SourceVitals;
+
+  private status = MasterStreamStatus.STARTING;
 
   constructor(
     private readonly id: string,
@@ -40,16 +43,6 @@ export class Stream extends TypedEmitterClass<Events>() {
 
     this.sources = new StreamSources(this.id, config.sources);
 
-    // set up a rewind buffer, for use in bringing new slaves up to date
-    // TODO: initialize only on vitals
-    this.rewindBuffer = new RewindBuffer({
-      id: `master__${this.id}`,
-      streamKey: this.id,
-      maxSeconds: this.config.rewind.bufferSeconds,
-      //initialBurst: this.config.rewind.bufferSeconds,
-      logger: this.logger
-    });
-
     // Rewind listens to us, not to our source
     // this.rewindBuffer.connectSource(this)
     // this.rewindBuffer.emit("source", this);
@@ -70,11 +63,12 @@ export class Stream extends TypedEmitterClass<Events>() {
       });
     });
 
-    this.sources.on("vitals", this.updateVitals);
+    this.sources.on("connected", this.onSourceConnectionOk);
   }
 
-  updateVitals = (vitals: SourceVitals) => {
+  onSourceConnectionOk = (vitals: SourceVitals) => {
     this.vitals = vitals;
+    this.emit("connected");
   };
 
   getId() {
@@ -89,7 +83,7 @@ export class Stream extends TypedEmitterClass<Events>() {
     return this.vitals;
   }
 
-  status() {
+  getStatus() {
     return {
       // id is DEPRECATED in favor of key
       key: this.id,
@@ -100,24 +94,40 @@ export class Stream extends TypedEmitterClass<Events>() {
     };
   }
 
-  getRewind(): Promise<Readable> {
-    return new Promise((resolve, reject) => {
-      return this.rewindBuffer.dumpBuffer((err: Error | null, _rewind: Readable) => {
-        if (err) {
-          reject(err);
-          return;
-        }
+  async getRewindBuffer(): Promise<RewindBuffer> {
+    if (this.rewindBuffer) {
+      return this.rewindBuffer;
+    }
 
-        resolve(_rewind);
+    return new Promise((resolve, reject) => {
+      this.runOrWait("connected", () => {
+        // set up a rewind buffer, for use in bringing new slaves up to date
+        this.rewindBuffer = new RewindBuffer(
+          this.id,
+          {
+            bufferSeconds: this.config.rewind.bufferSeconds,
+          },
+          this.vitals!
+        );
+
+        resolve(this.rewindBuffer);
       });
     });
+  }
+
+  async dumpRewindBuffer(): Promise<Readable> {
+    return this
+      .getRewindBuffer()
+      .then(rewindBuffer => {
+        return rewindBuffer.dump();
+      });
   }
 
   destroy() {
     // shut down our sources and go away
     //this.destroying = true;
 
-    this.rewindBuffer.disconnect();
+    this.rewindBuffer?.destroy();
     //this.source.removeListener("data", this.dataFunc);
     //this.source.removeListener("vitals", this.vitalsFunc);
 

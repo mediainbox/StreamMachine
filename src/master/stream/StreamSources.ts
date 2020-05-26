@@ -6,7 +6,7 @@ import {makeSource} from "../sources/sourceFactory";
 
 interface Events {
   chunk: (chunk: Chunk) => void;
-  vitals: (vitals: SourceVitals) => void;
+  connected: (vitals: SourceVitals) => void;
 }
 
 export class StreamSources extends TypedEmitterClass<Events>() {
@@ -36,7 +36,7 @@ export class StreamSources extends TypedEmitterClass<Events>() {
       });
 
       source.on('vitals', vitals => {
-        this.emit('vitals', vitals);
+        this.emit('connected', vitals);
       });
     });
 

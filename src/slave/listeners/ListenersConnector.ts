@@ -39,8 +39,9 @@ export class ListenersConnector {
       .setClient(Client.fromRequest(req))
       .setOutput(output)
       .setOptions({
-        offset: req.query.offset ? Number(req.query.offset) : 0,
-        pump: output.shouldPump()
+        offset: (req.query.offset ? Number(req.query.offset) : 0) as Seconds,
+        initialBurst: stream.getConfig().rewind.initialBurst, // FIXME
+        pumpAndFinish: !!req.query.pumpAndFinish
       })
       .setListenInterval(this.config.listenInterval)
       .setLogger(componentLogger(`stream[${stream.getId()}]:listener[#${listenerId}]`));

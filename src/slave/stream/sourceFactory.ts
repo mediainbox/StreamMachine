@@ -3,11 +3,12 @@ import {IPreroller} from "../preroll/IPreroller";
 import {IListener} from "../listeners/IListener";
 import {ISource} from "../output/ISource";
 import {Rewinder} from "../../rewind/Rewinder";
+import {RewindBuffer} from "../../rewind/RewindBuffer";
 
 export async function createListenerSource(args: {
   listener: IListener,
   preroller: IPreroller,
-  rewindBuffer: any,
+  rewindBuffer: RewindBuffer,
 }): Promise<ISource> {
   const {listener, preroller, rewindBuffer} = args;
 

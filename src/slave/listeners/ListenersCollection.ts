@@ -8,7 +8,10 @@ export class ListenersCollection extends Collection<IListener> {
       // we'll give them whatever is at length - offset
       // FIXME: This lookup strategy is horribly inefficient
       const latestForListener = buffer.at(listener.options.offset);
-      listener.getSource().addChunk(latestForListener);
+
+      if (latestForListener) {
+        listener.getSource().addChunk(latestForListener);
+      }
     });
   }
 
