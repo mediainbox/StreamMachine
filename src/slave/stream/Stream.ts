@@ -13,7 +13,7 @@ import {createListenerSource} from "./sourceFactory";
 import {ISource} from "../output/ISource";
 import {TypedEmitterClass} from "../../helpers/events";
 import {componentLogger} from "../../logger";
-import {_SourceVitals, StreamStats, StreamStatus} from "../types";
+import {StreamStats, StreamStatus} from "../types";
 import {Kbytes} from "../../types/util";
 import {ListenEventData, SlaveEvent, slaveEvents} from "../events";
 import {StreamEvent, StreamEvents} from "./events";
@@ -21,7 +21,7 @@ import {StreamChunk} from "../../master/types";
 import {createRewindLoader} from "../../rewind/RewindLoader";
 import {SlaveStreamConfig} from "../types/streams";
 
-const RewindBuffer = require("../../rewind/rewind_buffer");
+const RewindBuffer = require("../../rewind/RewindBuffer");
 
 interface GlobalConfig {
   readonly listenerMaxBufferSize: Kbytes;
@@ -37,14 +37,13 @@ export class Stream extends TypedEmitterClass<StreamEvents>() {
     sentBytes: 0,
   };
   private readonly listenersCol = new ListenersCollection();
-  private vitals: Partial<_SourceVitals>;
 
   private readonly logger: Logger;
   private readonly listenersCleaner: ListenersCleaner;
   private readonly listenersReporter: ListenersReporter;
 
-  private preroller: IPreroller;
-  private rewindBuffer: any;
+  private preroller?: IPreroller;
+  private rewindBuffer?: any;
 
   constructor(
     private readonly id: string,
@@ -67,9 +66,11 @@ export class Stream extends TypedEmitterClass<StreamEvents>() {
       globalConfig.listenerMaxBufferSize,
     );
 
+    // TODO: move to slave?
     this.listenersReporter = new ListenersReporter(
       this.id,
       this.listenersCol,
+      false,
     );
 
     this.hookEvents();
@@ -125,12 +126,13 @@ export class Stream extends TypedEmitterClass<StreamEvents>() {
   initPreroller() {
     if (!this.config.ads.enabled) {
       this.logger.info('ads are disabled');
-      return new NullPreroller();
+      this.preroller = new NullPreroller();
+      return;
     }
 
     this.logger.info('ads are enabled, init preroller');
 
-    return new Preroller(
+    this.preroller = new Preroller(
       this.id,
       this.config.ads,
     );
@@ -146,7 +148,7 @@ export class Stream extends TypedEmitterClass<StreamEvents>() {
       streamKey: this.id,
       maxSeconds: this.config.rewind.bufferSeconds,
       initialBurst: this.config.rewind.initialBurst,
-      vitals: this.vitals,
+      vitals: this.config.vitals,
       logger: this.logger,
     });
 
@@ -186,7 +188,7 @@ export class Stream extends TypedEmitterClass<StreamEvents>() {
         try {
           const source = await createListenerSource({
             listener,
-            preroller: this.preroller,
+            preroller: this.preroller!,
             rewindBuffer: this.rewindBuffer,
           });
 

@@ -6,12 +6,12 @@ import {EventsDefinition} from "../helpers/events";
 import SocketIO from "socket.io";
 
 export enum MasterWsMessage { // master -> slave
-  CONFIGURE_STREAMS = 'configure_streams',
+  STREAMS = 'streams',
   CHUNK = 'chunk',
 }
 
 export interface MasterWsMessages extends EventsDefinition<MasterWsMessage> {
-  configure_streams: (config: SlaveStreamsConfig[]) => void;
+  streams: (config: SlaveStreamsConfig) => void;
   chunk: (chunk: StreamChunk) => void;
 }
 

@@ -3,10 +3,10 @@ import {Format, IfEnabled} from "./index";
 import {DeepReadonly} from "ts-essentials";
 import {AdsConfig} from "../slave/config/types";
 
-export type StreamConfig = DeepReadonly<{
+export type BaseStreamConfig = DeepReadonly<{
   clientId: string;
   id: string;
-  meta: {
+  metadata: {
     title: string;
     url: string;
   }

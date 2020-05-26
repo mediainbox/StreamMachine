@@ -2,7 +2,7 @@ import {ISource} from "../sources/base/ISource";
 import {SourceConfig} from "../types";
 import {Chunk, SourceVitals} from "../../types";
 import {TypedEmitterClass} from "../../helpers/events";
-import {makeSource} from "./sourceFactory";
+import {makeSource} from "../sources/sourceFactory";
 
 interface Events {
   chunk: (chunk: Chunk) => void;
@@ -19,7 +19,8 @@ export class StreamSources extends TypedEmitterClass<Events>() {
   ) {
     super();
 
-    this.sources = config.map(makeSource);
+    // build all sources from config
+    this.sources = config.map(config => makeSource(this.streamId, config));
 
     this.sources.forEach(source => {
       source.on('connect', () => {
@@ -46,4 +47,11 @@ export class StreamSources extends TypedEmitterClass<Events>() {
     this.activeSource = this.sources[0];
     this.activeSource.connect();
   }
+
+  /**
+   * TODO:
+   * - on source add: promote if more priority or none active
+   * - on source disconnect: promote new source if any, otherwise event
+   * - on source promote: unhook old and hook new
+   */
 }

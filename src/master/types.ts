@@ -1,36 +1,13 @@
-import {Logger} from "winston";
-import {EventEmitter} from "events";
 import {Seconds} from "../types/util";
 import {Chunk, Format, LoggerConfig} from "../types";
-import {Stream} from "./streams/Stream";
+import {Stream} from "./stream/Stream";
 import {Request} from "express";
 import {DeepReadonly} from "ts-essentials";
+import {BaseStreamConfig} from "../types/stream";
 
-export type StreamConfig = DeepReadonly<{
-  clientId: string;
-  id: string;
-  meta: {
-    title: string;
-    url: string;
-  }
-  format: Format;
-  rewind: {
-    bufferSeconds: Seconds;
-    initialBurst: Seconds;
-  };
-  sources: readonly SourceConfig[];
-  ads?: {
-    adUrl?: string;
-    transcoderUrl?: string;
-    prerollKey?: string;
-  }
-  geolock?: {
-    enabled: false;
-    mode: 'whitelist';
-    countryCodes: readonly string[]
-    fallback?: string;
-  };
-}>;
+export type MasterStreamConfig = BaseStreamConfig & {
+  readonly sources: readonly SourceConfig[];
+};
 
 export enum SourceType {
   ICECAST_URL = 'icecast_url',
@@ -48,7 +25,7 @@ export type SourceConfig = {
   host: string;
   password: string;
 }
-);
+  );
 
 export type MasterConfig = DeepReadonly<{
   rewind: {
@@ -72,8 +49,7 @@ export type MasterConfig = DeepReadonly<{
   redis: {
     url: string;
   };
-  streams: StreamConfig[];
-
+  streams: MasterStreamConfig[];
   //chunk_duration!
 }>;
 

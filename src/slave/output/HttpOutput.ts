@@ -13,7 +13,7 @@ export abstract class HttpOutput extends EventEmitter implements IOutput {
   protected isStreaming = false;
 
   protected socket: Socket;
-  protected source: ISource;
+  protected source?: ISource;
 
   constructor(
     protected readonly req: express.Request,
@@ -55,7 +55,7 @@ export abstract class HttpOutput extends EventEmitter implements IOutput {
     }
 
     const bufferSize = this.socket.bufferSize || 0;
-    const queuedBytes = this.source.getQueuedBytes() || 0;
+    const queuedBytes = this.source?.getQueuedBytes() || 0;
 
     return bufferSize + queuedBytes;
   }
@@ -65,7 +65,7 @@ export abstract class HttpOutput extends EventEmitter implements IOutput {
   }
 
   getSentSeconds() {
-    return this.source.getSentSeconds();
+    return this.source?.getSentSeconds() || 0;
   }
 
   send(source: ISource) {

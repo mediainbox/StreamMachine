@@ -43,4 +43,5 @@ export type AdsConfig = {
   transcoderUrl: string;
   adTimeout: Milliseconds;
   impressionDelay: Milliseconds;
+  prerollKey?: string;
 };

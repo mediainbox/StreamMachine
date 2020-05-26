@@ -6,7 +6,7 @@ import {componentLogger} from "../../logger";
 const REPORT_INTERVAL = 10000;
 
 export class ListenersReporter {
-  private reportHandle: NodeJS.Timeout;
+  private reportHandle?: NodeJS.Timeout;
   private prevSentKbytes = 0;
   private prevSentSeconds = 0;
 
@@ -15,9 +15,13 @@ export class ListenersReporter {
   constructor(
     private readonly streamId: string,
     private readonly listeners: ListenersCollection,
+    private readonly enabled = true,
   ) {
     this.logger = componentLogger(`listeners_reporter[${streamId}]`);
-    this.scheduleReport();
+
+    if (enabled) {
+      this.scheduleReport();
+    }
   }
 
   scheduleReport() {
@@ -52,6 +56,6 @@ export class ListenersReporter {
   }
 
   destroy() {
-    clearInterval(this.reportHandle);
+    this.reportHandle && clearInterval(this.reportHandle);
   }
 }

@@ -1,15 +1,13 @@
-import express from "express";
-import {TypedEmitter} from "../../helpers/events";
 import {Logger} from "winston";
 import {componentLogger} from "../../logger";
 import {SlaveConnections} from "./SlaveConnections";
 import SocketIO from "socket.io";
 import * as http from "http";
 import {SlaveConnection} from "./SlaveConnection";
-import {StreamChunk, StreamRequest} from "../types";
+import {StreamChunk} from "../types";
 import {StreamsCollection} from "../streams/StreamsCollection";
-import Throttle from "throttle";
 import {MasterWsSocket, SlaveWsMessage} from "../../messages";
+import {MasterEvent, masterEvents} from "../events";
 
 // Socket.IO server that listens for Slave connections
 // Will create a SlaveConnection for each connected Slave
@@ -30,8 +28,8 @@ export class SlaveServer {
   private wsServer?: SocketIO.Server;
 
   constructor(
-    private readonly config: Config,
     private readonly streams: StreamsCollection,
+    private readonly config: Config,
   ) {
     this.logger = componentLogger("slave_server");
 
@@ -39,6 +37,12 @@ export class SlaveServer {
 
     //this.master.on(Events.Master.CONFIG_UPDATE, cUpdate); -> update slaves
     // CONFIG_UPDATE_DEBOUNCE
+
+    this.hookEvents();
+  }
+
+  hookEvents() {
+    masterEvents().on(MasterEvent.CHUNK, this.broadcastChunk);
   }
 
   listen(server: http.Server) {
@@ -52,10 +56,11 @@ export class SlaveServer {
 
     // add our authentication
     this.wsServer.use((socket, next) => {
-      this.logger.debug("Check auth for slave connection");
 
       const sentPassword = socket.request._query.password;
       const slaveId = socket.request._query.slaveId;
+
+      this.logger.debug(`Got connection from slave #${slaveId} at socket ${socket.id}`);
 
       if (this.config.password !== sentPassword) {
         this.logger.error(`Slave auth is invalid (password ${sentPassword} is incorrect)`);
@@ -67,86 +72,43 @@ export class SlaveServer {
         return;
       }
 
-      this.logger.debug("Slave auth is valid");
       return next();
     });
 
     // look for slave connections
     this.wsServer.on("connect", (socket: MasterWsSocket) => {
       const slaveId = socket.request._query.slaveId;
-      this.logger.debug("Master got connection");
 
       // a slave may make multiple connections to test transports. we're
       // only interested in the one that gives us the OK
       socket.once(SlaveWsMessage.CONNECTION_VALIDATE, (cb) => {
-        this.logger.debug(`Validated incoming slave connection at socket ${socket.id}`);
+        this.logger.info(`Validated slave #${slaveId} connection`);
 
         // ping back to let the slave know we're here
         cb("OK");
 
-        this.logger.debug(`slave connection is ${socket.id}`);
-        //socket.emit(Events.Link.CONFIG, this._config);
-
-        this.connections.add(slaveId, new SlaveConnection(slaveId, socket));
-        /*this.slaveConnections[socket.id].on(Events.Link.DISCONNECT, () => {
-          return this.emit("disconnect", socket.id);
-        });*/
+        this.handleNewSlave(slaveId, socket);
       });
     });
   }
 
-  broadcastChunk(chunk: StreamChunk) {
+  handleNewSlave(slaveId: string, socket: MasterWsSocket) {
+    const connection = new SlaveConnection(slaveId, socket);
+    this.connections.add(slaveId, connection);
+
+    connection.sendStreams(this.streams.toArray());
+
+    connection.on('disconnect', () => {
+      this.connections.remove(slaveId);
+    });
+  }
+
+  broadcastChunk = (chunk: StreamChunk) => {
     this.connections.map(connection => {
       connection.sendChunk(chunk);
-    })
-  }
+    });
+  };
 
   pollForSync(): void {
-  }
-
-  getRewindApi() {
-    const app = express();
-
-    app.param("stream", (req, res, next, key) => {
-      const stream = this.streams.get(key);
-
-      if (!stream) {
-        res.status(404).send("Invalid stream");
-        return;
-      }
-
-      req.mStream = stream;
-    });
-
-    // validate password
-    app.use((req, res, next) => {
-      const sentPassword = req.query.password;
-
-      if (this.config.password !== sentPassword) {
-        this.logger.warn(`Slave auth is invalid (password ${sentPassword} is incorrect)`);
-        res.status(403).send("Invalid password");
-        return;
-      }
-
-      this.logger.debug("Slave auth is valid");
-      next();
-    });
-
-    app.get("/:stream/rewind", (req: StreamRequest, res) => {
-      this.logger.debug(`RewindBuffer request from slave on ${req.stream!}.`);
-      res.status(200).write('');
-
-      req.stream!
-        .getRewind()
-        .then(rewindStream => {
-          rewindStream.pipe(new Throttle(100 * 1024 * 1024)).pipe(res);
-
-          res.on("end", () => {
-            this.logger.debug("RewindBuffer sent successfully");
-          });
-        });
-    });
-
-    return app;
   }
 }

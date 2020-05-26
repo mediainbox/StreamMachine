@@ -74,7 +74,7 @@ export class ListenServer extends EventEmitter {
     }
 
     // check user agent for banned clients
-    if (this.config.blockUserAgents) {
+    if (this.config.blockUserAgents?.length) {
       app.use(banClientsMiddleware(this.config.blockUserAgents, this.logger))
     }
 

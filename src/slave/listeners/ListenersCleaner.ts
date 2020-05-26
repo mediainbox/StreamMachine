@@ -9,7 +9,7 @@ const CLEAN_INTERVAL = 60000;
 // buffers. Buffer size can be configured via the "max_buffer" setting,
 // which takes bits
 export class ListenersCleaner {
-  private cleanupHandle: NodeJS.Timeout;
+  private cleanupHandle?: NodeJS.Timeout;
   private readonly logger: Logger;
 
   constructor(
@@ -46,6 +46,6 @@ export class ListenersCleaner {
   }
 
   destroy() {
-    clearInterval(this.cleanupHandle);
+    this.cleanupHandle && clearInterval(this.cleanupHandle);
   }
 }

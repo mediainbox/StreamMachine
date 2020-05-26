@@ -1,12 +1,11 @@
 import express from "express";
-import {SlaveCtx} from "../types";
 import * as http from "http";
+import {Server} from "http";
 import * as path from "path";
-import { Server } from "http";
 import cluster from "cluster";
 import {componentLogger} from "../../logger";
-import _ from "lodash";
 import {SlaveConfig} from "../config/types";
+
 const greenlock = require("greenlock-express");
 
 export function buildHttpServer(
@@ -52,13 +51,13 @@ export function buildHttpServer(
     cluster: true,
     workers: config.cluster,
     maintainerEmail: "contact@mediainbox.io"
-  }).ready(function(glx: any) {
+  }).ready(function (glx: any) {
     const plainServer = glx.httpServer(app);
 
-    return plainServer.listen(serverConfig.httpPort, serverConfig.httpIp, function() {
+    return plainServer.listen(serverConfig.httpPort, serverConfig.httpIp, function () {
       const secureServer = glx.httpsServer(null, app);
 
-      return secureServer.listen(serverConfig.httpsPort, serverConfig.httpsIp, function() {
+      return secureServer.listen(serverConfig.httpsPort, serverConfig.httpsIp, function () {
         plainServer.removeAllListeners('error');
         secureServer.removeAllListeners('error');
         console.log("Greenlock: cluster child on PID " + process.pid);

@@ -2,16 +2,13 @@ import {Logger} from "winston";
 import {EventEmitter} from "events";
 import {Stream} from "./stream/Stream";
 import express from "express";
-import {Format, LoggerConfig} from "../types";
+import {SourceVitals} from "../types";
 import {SlaveConfig} from "./config/types";
+import {BaseStreamConfig} from "src/types/stream";
 
-export interface _SourceVitals {
-  readonly format: Format;
-  readonly codec: string;
-  readonly streamKey: string;
-  readonly framesPerSecond: number;
-  readonly secondsPerChunk: number;
-}
+export type SlaveStreamConfig = BaseStreamConfig & {
+  readonly vitals: SourceVitals;
+};
 
 export interface StreamStats {
   connections: 0;
@@ -28,13 +25,6 @@ export interface StreamStatus {
   };
 }
 
-export interface SlaveCtx {
-  readonly config: SlaveConfig;
-  readonly logger: Logger;
-  readonly events: EventEmitter;
-  readonly providers: {}
-}
-
 export type SlaveStatus = {
   readonly _stats: {
     kbytes_sent: number;
@@ -47,12 +37,4 @@ export type SlaveStatus = {
 export interface ListenOptions {
   offset: number;
   pump?: boolean;
-}
-
-// Events
-
-export interface ListenerLandedEvent {
-  readonly stream: Stream;
-  readonly req: express.Request;
-  readonly res: express.Response;
 }

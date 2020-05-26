@@ -1,15 +1,13 @@
 import {Logger} from "winston";
-import _ from "lodash";
 import {Readable} from "stream";
-import {DEFAULT_CONFIG} from "./config";
-import {StreamConfig} from "../types";
+import {MasterStreamConfig} from "../types";
 import {StreamSources} from "./StreamSources";
 import {componentLogger} from "../../logger";
 import {TypedEmitterClass} from "../../helpers/events";
 import {Chunk, SourceVitals} from "../../types";
 import {masterEvents} from "../events";
 
-const RewindBuffer = require('../../rewind/rewind_buffer');
+const RewindBuffer = require('../../rewind/RewindBuffer');
 
 interface Events {
   chunk: (chunk: Chunk) => void;
@@ -23,11 +21,10 @@ export class Stream extends TypedEmitterClass<Events>() {
 
   constructor(
     private readonly id: string,
-    private readonly config: StreamConfig,
+    private readonly config: MasterStreamConfig,
   ) {
     super();
 
-    this.config = _.defaults(config, DEFAULT_CONFIG);
     this.logger = componentLogger(`stream[${id}]`);
 
     this.logger.info(`Initialize stream`);
@@ -75,13 +72,21 @@ export class Stream extends TypedEmitterClass<Events>() {
 
     this.sources.on("vitals", this.updateVitals);
   }
-  
+
   updateVitals = (vitals: SourceVitals) => {
     this.vitals = vitals;
   };
 
+  getId() {
+    return this.id;
+  }
+
   getConfig() {
     return this.config;
+  }
+
+  getVitals() {
+    return this.vitals;
   }
 
   status() {

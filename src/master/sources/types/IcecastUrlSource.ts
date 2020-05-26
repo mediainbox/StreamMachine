@@ -5,6 +5,7 @@ import {toTime} from "../../../helpers/datetime";
 import {Chunk, StreamMetadata} from "../../../types";
 import {ClientRequest, IncomingMessage} from "http";
 import {SourceConfig} from "../base/ISource";
+import {Logger} from "winston";
 
 const Icy = require('icy');
 
@@ -23,10 +24,11 @@ export class IcecastUrlSource extends BaseSource {
 
   constructor(
     readonly config: Config,
+    readonly logger: Logger,
   ) {
-    super(config);
+    super(config, logger);
 
-    this.logger.info(`Create source from ${config.url}`);
+    this.logger.info(`Create source`);
   }
 
   getStatus() {
@@ -57,7 +59,7 @@ export class IcecastUrlSource extends BaseSource {
     }, (res: IncomingMessage) => {
       this.icyResponse = res;
 
-      this.logger.debug(`Connected successfully`);
+      this.logger.info(`Connected successfully`);
 
       if (res.statusCode === 302) {
         this.redirectedUrl = res.headers.location!;
@@ -74,8 +76,8 @@ export class IcecastUrlSource extends BaseSource {
       });
 
       this.icyResponse.on("metadata", (data) => {
-        this.logger.debug("Got Icecast metadata event");
         const meta = Icy.parse(data);
+        this.logger.debug("Got Icecast metadata event", { meta });
 
         this.emit("metadata", {
           title: meta.StreamTitle || "",
@@ -107,7 +109,7 @@ export class IcecastUrlSource extends BaseSource {
   };
 
   logChunk = (chunk: Chunk) => {
-    this.logger.silly(`received chunk from parser (time: ${toTime(chunk.ts)})`)
+    this.logger.silly(`Got chunk from parser (time: ${toTime(chunk.ts)})`)
     this.lastChunkTs = chunk.ts;
   };
 

@@ -1,9 +1,8 @@
 import {makeOutput} from '../output/factory';
-import {ListenerLandedEvent} from "../types";
 import {Listener} from "./Listener";
 import {Client} from "./Client";
 import {IListener} from "./IListener";
-import {SlaveEvent, slaveEvents} from "../events";
+import {SlaveEvent, slaveEvents, ListenerLandedEvent} from "../events";
 import {componentLogger} from "../../logger";
 import {Seconds} from "../../types/util";
 

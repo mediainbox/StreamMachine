@@ -39,6 +39,12 @@ export interface SlaveEvents extends EventsDefinition<SlaveEvent> {
   listener_disconnect: (listener: IListener) => void;
 }
 
+export interface ListenerLandedEvent {
+  readonly stream: Stream;
+  readonly req: express.Request;
+  readonly res: express.Response;
+}
+
 export interface ListenEventData {
   readonly listener: IListener;
   readonly ts: number;

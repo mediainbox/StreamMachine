@@ -2,11 +2,11 @@ import express from "express";
 import {Mutable} from "../../helpers/types";
 
 export class Client {
-  readonly path: string;
-  readonly unique_listener_id: string;
-  readonly session_id: string;
-  readonly ip: string;
-  readonly ua: string;
+  readonly path: string = null!;
+  readonly unique_listener_id: string = null!;
+  readonly session_id: string = null!;
+  readonly ip: string = null!;
+  readonly ua: string = null!;
 
   static fromRequest(req: express.Request): Client {
     const client = new Client() as Mutable<Client>;

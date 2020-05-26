@@ -18,14 +18,11 @@ export abstract class BaseSource extends TypedEmitterClass<SourceEvents>() imple
   protected chunker: FrameChunker;
   protected parser: Writable;
 
-  protected readonly logger: Logger
-
   protected constructor(
     protected readonly config: SourceConfig,
+    protected readonly logger: Logger,
   ) {
     super();
-
-    this.logger = componentLogger(`source_${this.config.type}`);
 
     this.chunker = new FrameChunker(this.config.chunkDuration * 1000);
 
@@ -72,7 +69,7 @@ export abstract class BaseSource extends TypedEmitterClass<SourceEvents>() imple
   }
 
   private setVitals(vitals: SourceVitals) {
-    this.logger.info(`set source vitals ${vitals.streamKey}`, {vitals})
+    this.logger.info(`Set source vitals (stream key: ${vitals.streamKey})`, {vitals})
     this.vitals = vitals;
     this.emit("vitals", this.vitals);
   }

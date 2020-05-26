@@ -2,9 +2,17 @@ import {SlaveStatus} from "../../slave/types";
 import {componentLogger} from "../../logger";
 import {Logger} from "winston";
 import {StreamChunk} from "../types";
-import {MasterWsSocket} from "../../messages";
+import {MasterWsSocket, MasterWsMessage} from "../../messages";
+import {TypedEmitterClass} from "../../helpers/events";
+import {SlaveStreamsConfig} from "../../slave/types/streams";
+import { Stream } from "../stream/Stream";
+import { getStreamsDataForSlaves } from "./helpers";
 
-export class SlaveConnection {
+interface Events {
+  disconnect: () => void;
+}
+
+export class SlaveConnection extends TypedEmitterClass<Events>() {
   private readonly logger: Logger;
   private readonly connectedAt: Date;
 
@@ -12,6 +20,7 @@ export class SlaveConnection {
     private readonly slaveId: string,
     private readonly socket: MasterWsSocket
   ) {
+    super();
     this.connectedAt = new Date();
 
     this.logger = componentLogger(`slave_connection[${slaveId}]`);
@@ -24,6 +33,14 @@ export class SlaveConnection {
     this.socket.on("disconnect", () => {
       this.handleDisconnect();
     });
+  }
+
+  sendChunk(chunk: StreamChunk) {
+    this.socket.emit(MasterWsMessage.CHUNK, chunk);
+  }
+
+  sendStreams(streams: readonly Stream[]) {
+    this.socket.emit(MasterWsMessage.STREAMS, getStreamsDataForSlaves(streams));
   }
 
   getStatus(): Promise<SlaveStatus> {
@@ -42,11 +59,7 @@ export class SlaveConnection {
 
   handleDisconnect() {
     const mins = Math.round((Number(new Date()) - Number(this.connectedAt)) / 60000);
-    this.logger.debug(`slave ${this.slaveId} disconnected (connected for ${mins} minutes)`);
-    //this.emit("disconnect");
-  }
-
-  sendChunk(chunk: StreamChunk) {
-    this.socket.emit('chunk', chunk);
+    this.logger.info(`Slave disconnected (connected for ${mins} minutes)`);
+    this.emit("disconnect");
   }
 }

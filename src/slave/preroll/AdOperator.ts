@@ -21,12 +21,12 @@ type Config = Omit<AdsConfig, 'serverUrl'> & {
  * return and empty preroll.
  */
 export class AdOperator implements IAdOperator {
-  private ad: AdInstance;
+  private ad: AdInstance = null!;
   private adRequestCancel?: () => void;
   private transcoderRequestCancel?: () => void;
-  private transcoderResponse: Readable;
-  private abortTimeout: NodeJS.Timeout;
-  private impressionTimeout: NodeJS.Timeout;
+  private transcoderResponse?: Readable;
+  private abortTimeout?: NodeJS.Timeout;
+  private impressionTimeout?: NodeJS.Timeout;
 
   private isAborted = false;
   private isFinished = false;
@@ -107,8 +107,7 @@ export class AdOperator implements IAdOperator {
       }),
     })
       .then(response => {
-        this.transcoderResponse = response.data;
-
+        this.transcoderResponse = response.data as Readable;
         this.transcoderResponse.on('end', () => this.isFinished = true);
 
         return this.transcoderResponse;
@@ -139,8 +138,8 @@ export class AdOperator implements IAdOperator {
   }
 
   private cleanup() {
-    clearTimeout(this.abortTimeout);
-    clearTimeout(this.impressionTimeout);
+    this.abortTimeout && clearTimeout(this.abortTimeout);
+    this.impressionTimeout && clearTimeout(this.impressionTimeout);
   }
 
   abort() {

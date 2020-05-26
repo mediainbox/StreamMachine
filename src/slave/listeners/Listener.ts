@@ -10,18 +10,17 @@ import {slaveEvents, SlaveEvent} from "../events";
 
 export class Listener extends EventEmitter implements IListener {
   readonly connectedAt = Date.now();
-  readonly client: Client;
-  readonly options: ListenOptions;
+  readonly client: Client = null!;
+  readonly options: ListenOptions = null!;
+
+  private readonly source: ISource = null!;
+  private readonly output: IOutput = null!;
+  private readonly logger: Logger = null!;
+
+  private readonly listenInterval: number = null!;
+  private listenIntervalHandle?: NodeJS.Timeout;
 
   private disconnected = false;
-
-  private readonly source: ISource;
-  private readonly output: IOutput;
-  private readonly logger: Logger;
-
-  private readonly listenInterval: number;
-  private listenIntervalHandle: NodeJS.Timeout;
-
   private sentBytes = 0;
   private sentSeconds = 0;
 
@@ -115,7 +114,7 @@ export class Listener extends EventEmitter implements IListener {
     }
 
     this.emitListen();
-    clearInterval(this.listenIntervalHandle);
+    this.listenIntervalHandle && clearInterval(this.listenIntervalHandle);
 
     this.logger.debug(`listener disconnected`);
     slaveEvents().emit(SlaveEvent.LISTENER_DISCONNECT, this);

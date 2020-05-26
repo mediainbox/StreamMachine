@@ -8,6 +8,7 @@ import {componentLogger} from "../../logger";
 import {SlaveEvent, slaveEvents} from "../events";
 import {SlaveConfig} from "../config/types";
 import {MasterWsMessage, SlaveWsMessage, SlaveWsSocket} from "../../messages";
+import {SlaveStreamsConfig} from "../types/streams";
 
 const REWIND_REQUEST_TIMEOUT = 15 * 1000;
 const ALIVE_INTERVAL = 5000;
@@ -18,11 +19,10 @@ const RECONNECT_WAIT = 5000;
  */
 export class MasterConnection {
   private readonly logger: Logger;
-  private ws: SlaveWsSocket;
-  private id: string;
+  private ws: SlaveWsSocket = null!;
   private connected = false;
   private masterUrlIndex = 0;
-  private aliveInterval: NodeJS.Timeout;
+  private aliveInterval?: NodeJS.Timeout;
 
   constructor(private readonly config: SlaveConfig['master'] & { slaveId: string }) {
     this.logger = componentLogger('master_connection');
@@ -84,7 +84,6 @@ export class MasterConnection {
 
         this.ws.off('connect_error', onConnectError);
         this.logger.info("connection to master validated, slave is connected");
-        this.id = this.ws.id;
         this.connected = true;
 
         slaveEvents().emit(SlaveEvent.CONNECT);
@@ -95,17 +94,17 @@ export class MasterConnection {
       this.connected = false;
       this.logger.info("disconnected from master");
 
-      clearInterval(this.aliveInterval);
+      this.aliveInterval && clearInterval(this.aliveInterval);
       this.tryFallbackConnection();
 
       slaveEvents().emit(SlaveEvent.DISCONNECT);
     });
 
-    /*this.ws.on(Events.Link.CONFIG, (config: InputConfig) => {
-      slaveEvents().emit(Events.Link.CONFIG, config);
+    this.ws.on(MasterWsMessage.STREAMS, (streamsConfig: SlaveStreamsConfig) => {
+      slaveEvents().emit(SlaveEvent.CONFIGURE_STREAMS, streamsConfig);
     });
 
-    this.ws.on(Events.Link.SLAVE_STATUS, (cb: (status: SlaveStatus) => void) => {
+    /*this.ws.on(Events.Link.SLAVE_STATUS, (cb: (status: SlaveStatus) => void) => {
       slaveEvents().emit(Events.Link.SLAVE_STATUS, cb);
     });*/
 
@@ -137,12 +136,13 @@ export class MasterConnection {
   getRewind(streamId: string): Promise<Readable> {
     this.logger.info(`make rewind buffer request for stream ${streamId}`);
 
-    const request = axios.get<Readable>(`/s/${streamId}/rewind`, {
-      baseURL: `http://${this.ws.io.opts.hostname}:${this.ws.io.opts.port}`,
-      headers: {
-        'stream-slave-id': this.id
-      },
-      responseType: "stream"
+    const request = axios.get<Readable>(`/slave/${streamId}/rewind`, {
+      baseURL: this.config.urls[this.masterUrlIndex].replace(/^ws/, 'http'),
+      responseType: "stream",
+      params: {
+        slaveId: this.config.slaveId,
+        password: this.config.password,
+      }
     })
       .then(res => {
         this.logger.info(`got rewind stream response from master`);

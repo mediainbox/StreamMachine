@@ -39,13 +39,20 @@
     {
       "clientId": "cadena3",
       "id": "cadena3_main",
-      "meta": {
+      "metadata": {
         "title": "Cadena 3",
         "url": "https://cadena3.com.ar"
       },
       "format": "mp3",
       "rewind": {
+        "initialBurst": 5,
         "bufferSeconds": 300
+      },
+      "ads": {
+        "enabled": false
+      },
+      "geolock": {
+        "enabled": false
       },
       "sources": [
         {

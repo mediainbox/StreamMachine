@@ -1,6 +1,6 @@
 var Logger, RewindBuffer, filepath, fs, i, log, next_buf, path, rewind, stream;
 
-RewindBuffer = require("../rewind/rewind_buffer");
+RewindBuffer = require("../rewind/RewindBuffer");
 
 Logger = require("../logger");
 

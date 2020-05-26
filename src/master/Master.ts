@@ -1,13 +1,14 @@
 import './types/ambient';
 import {EventEmitter} from 'events';
-import {MasterConfig, StreamConfig} from "./types";
+import {MasterConfig, MasterStreamConfig} from "./types";
 import {StreamsCollection} from "./streams/StreamsCollection";
-import {Stream} from "./streams/Stream";
+import {Stream} from "./stream/Stream";
 import {Logger} from "winston";
 import {componentLogger, createLogger} from "../logger";
 import {SlaveServer} from "./slave_io/SlaveServer";
 import * as http from "http";
 import express from "express";
+import {RewindGateway} from "./slave_io/RewindGateway";
 
 /**
  * Master handles configuration, slaves, incoming sources,
@@ -36,14 +37,20 @@ export class Master extends EventEmitter {
     //this.sourcein = new SourceIn(this.ctx);
 
     this.slaveServer = new SlaveServer(
+      this.streams,
       {
         password: config.slavesServer.password
       },
-      this.streams,
     );
     this.slaveServer.listen(this.httpServer);
 
-    app.use('/slave', this.slaveServer.getRewindApi());
+    const rewindGateway = new RewindGateway(
+      this.streams,
+      {
+        password: config.slavesServer.password,
+      }
+    );
+    app.use(rewindGateway.getApp());
 
     //this.configure(this.config);
 
@@ -53,11 +60,6 @@ export class Master extends EventEmitter {
 
     //this.server.use("/s", this.master.transport.app);
     //this.server.use("/api", this.master.api.app);
-
-    //this.loadRewinds();
-    //@handle = @server.listen @opts.master.port
-    //@master.slaves.listen(@handle)
-    //@master.sourcein.listen()
 
     this.configureStreams(config.streams);
   }
@@ -80,7 +82,7 @@ export class Master extends EventEmitter {
 
   // configre can be called on a new core, or it can be called to
   // reconfigure an existing core.  we need to support either one.
-  configureStreams(streamsConfig: readonly StreamConfig[]) {
+  configureStreams(streamsConfig: readonly MasterStreamConfig[]) {
 
     streamsConfig.forEach(config => {
 

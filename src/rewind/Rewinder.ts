@@ -1,7 +1,14 @@
 import {Readable} from "stream";
 import {Chunk} from "../types";
+import {RewindBuffer} from "./RewindBuffer";
+import {Seconds} from "../types/util";
 
 const HIGH_WATERMARK = 256 * 1024 // 256 KB;
+
+interface Config {
+  readonly offset: Seconds;
+  readonly pumpAndFinish: boolean;
+}
 
 // Rewinder is the general-purpose listener stream.
 // Arguments:
@@ -29,48 +36,25 @@ export class Rewinder extends Readable {
   // keep track of the duration of the segments we have pushed
   // Note that for non-pump requests, these will be reset periodically
   // as we report listening segments
-  private offsetSeconds = null;
-  private pumpOnly = false;
-  private offset = 0; // offset requested in chunks
   private queuedBytes = 0;
   private reading = false;
-  private pumpSecs: number;
 
   constructor(
-    private readonly rewind: any,
-    private readonly opts: {
-      offset?: number;
-      pump?: boolean;
-      pumpOnly?: boolean;
-    } = {},
+    private readonly rewind: RewindBuffer,
+    private readonly config: Config,
   ) {
     super({
       highWaterMark: HIGH_WATERMARK
     });
-
-    // Implement the guts of the Readable stream. For a normal stream,
-    // RewindBuffer will be calling _insert at regular ticks to put content
-    // into our queue, and _read takes the task of buffering and sending
-    // that out to the listener.
-
-    this.pumpSecs = opts.pump === true ? this.rewind.initialBurst : opts.pump;
   }
 
   pump(): Promise<void> {
     return new Promise((resolve, reject) => {
-      this.offset = this.opts.offset ? this.rewind.validateSecondsOffset(this.opts.offset) : 0;
+      const chunksOffset = this.rewind.validateSecondsOffset(this.config.offset);
 
-      if (this.opts.pumpOnly) {
+      if (this.config.pumpAndFinish) {
         // we're just giving one pump of data, then EOF
-        this.pumpOnly = true;
-        return this.rewind.pumpFrom(this, this.offset, this.rewind.secsToOffset(this.pumpSecs), false, (err: Error, info: any) => {
-          if (err) {
-            return reject(err);
-          }
-          // return pump information
-          return resolve(info);
-        });
-        return;
+        return this.rewind.pumpFrom(this, this.offset, this.rewind.secsToOffset(this.pumpSecs), false);
       }
 
       if (this.opts.pump) {
@@ -187,7 +171,7 @@ export class Rewinder extends Readable {
     pushQueue();
   };
 
-  _insert = (chunk: Chunk) => {
+  queueChunk = (chunk: Chunk) => {
     this.queue.push(chunk);
     this.queuedBytes += chunk.data.length;
 

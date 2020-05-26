@@ -41,6 +41,7 @@ export interface TypedEmitter<Events> {
   emit<E extends keyof Events> (event: E, ...args: Arguments<Events[E]>): boolean;
   eventNames (): (keyof Events | string | symbol)[];
   listeners<E extends keyof Events> (event: E): Function[];
+  rawListeners<E extends keyof Events> (event: E): Function[];
   listenerCount<E extends keyof Events> (event: E): number;
 
   getMaxListeners (): number;
