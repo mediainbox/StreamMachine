@@ -14,23 +14,18 @@ import {ISource} from "../output/ISource";
 import {TypedEmitterClass} from "../../helpers/events";
 import {componentLogger} from "../../logger";
 import {StreamStats, StreamStatus} from "../types";
-import {Kbytes} from "../../types/util";
 import {ListenEventData, SlaveEvent, slaveEvents} from "../events";
-import {StreamEvent, StreamEvents} from "./events";
-import {StreamChunk} from "../../master/types";
+import {SlaveStreamStatus, StreamEvent, StreamEvents} from "./types";
 import {createRewindReader} from "../../rewind/RewindReader";
 import {SlaveStreamConfig} from "../types/streams";
 import {RewindBuffer} from "../../rewind/RewindBuffer";
-
-interface GlobalConfig {
-  readonly listenerMaxBufferSize: Kbytes;
-}
+import {StreamChunk} from "../../types/stream";
 
 /**
  * Stream is the componenent where that listeners connect to.
  * Loads data from rewind buffer and pushes them to clients
  */
-export class Stream extends TypedEmitterClass<StreamEvents>() {
+export class SlaveStream extends TypedEmitterClass<StreamEvents>() {
   private readonly stats: StreamStats = {
     connections: 0, // total counter, not active count
     sentBytes: 0,
@@ -40,14 +35,14 @@ export class Stream extends TypedEmitterClass<StreamEvents>() {
   private readonly logger: Logger;
   private readonly listenersCleaner: ListenersCleaner;
   private readonly listenersReporter: ListenersReporter;
+  private status = SlaveStreamStatus.CREATED;
 
-  private preroller?: IPreroller;
+  private preroller: IPreroller = new NullPreroller();
   private rewindBuffer?: any;
 
   constructor(
     private readonly id: string,
     private readonly config: SlaveStreamConfig,
-    private readonly globalConfig: GlobalConfig,
     private readonly masterConnection: MasterConnection,
   ) {
     super();
@@ -62,7 +57,7 @@ export class Stream extends TypedEmitterClass<StreamEvents>() {
     this.listenersCleaner = new ListenersCleaner(
       this.id,
       this.listenersCol,
-      globalConfig.listenerMaxBufferSize,
+      config.listen.maxBufferSize
     );
 
     // TODO: move to slave?
@@ -90,14 +85,14 @@ export class Stream extends TypedEmitterClass<StreamEvents>() {
 
   hookEvents() {
     // wait for rewind to be loaded before pushing any data
-    this.runOrWait(StreamEvent.REWIND_LOADED, () => {
+    this.runOrWait(StreamEvent.READY, () => {
       slaveEvents().on(`chunk`, (data: StreamChunk) => {
         if (data.streamId !== this.id) {
           // chunk for other stream
           return;
         }
 
-        this.logger.silly(`push received audio chunk ${toTime(data.chunk.ts)}`);
+        this.logger.silly(`Push received audio chunk ${toTime(data.chunk.ts)}`);
         this.rewindBuffer.push(data.chunk);
         this.listenersCol.pushLatest(this.rewindBuffer.buffer);
       });
@@ -124,12 +119,11 @@ export class Stream extends TypedEmitterClass<StreamEvents>() {
 
   initPreroller() {
     if (!this.config.ads.enabled) {
-      this.logger.info('ads are disabled');
-      this.preroller = new NullPreroller();
+      this.logger.info('Ads are disabled');
       return;
     }
 
-    this.logger.info('ads are enabled, init preroller');
+    this.logger.info('Ads are enabled, init preroller');
 
     this.preroller = new Preroller(
       this.id,
@@ -138,14 +132,14 @@ export class Stream extends TypedEmitterClass<StreamEvents>() {
   }
 
   initRewindBuffer() {
-    this.logger.info(`Create rewind buffer, max size is ${this.config.rewind.bufferSeconds} seconds`);
+    this.logger.info(`Create rewind buffer, max size is ${this.config.rewindBuffer.maxSeconds} seconds`);
 
     // create rewind buffer associated to this stream that will
     // store the audio chunks sent from master
     this.rewindBuffer = new RewindBuffer(
       this.id,
       {
-        bufferSeconds: this.config.rewind.bufferSeconds,
+        maxSeconds: this.config.rewindBuffer.maxSeconds,
       },
       this.config.vitals,
     );
@@ -155,16 +149,19 @@ export class Stream extends TypedEmitterClass<StreamEvents>() {
       .masterConnection
       .getRewind(this.id)
       .then(readable => {
-        this.rewindBuffer.preload(createRewindReader(readable), () => {
-          this.logger.info('rewind buffer loaded, allow listener connections to start');
-          this.emit(StreamEvent.REWIND_LOADED);
-        });
+        return this.rewindBuffer.preload(createRewindReader(readable))
+          .then(() => {
+            this.logger.info('Rewind buffer loaded, allow listener connections to start');
+          });
       })
       .catch((error: Err) => {
-        this.logger.error(`could not load rewind from master, error: ${error.code}`, {
+        this.logger.error(`Could not load rewind from master, error: ${error.code}`, {
           error
         });
-        this.emit(StreamEvent.REWIND_LOADED);
+      })
+      .finally(() => {
+        this.status = SlaveStreamStatus.READY;
+        this.emit(StreamEvent.READY);
       })
   }
 
@@ -172,29 +169,29 @@ export class Stream extends TypedEmitterClass<StreamEvents>() {
     return new Promise((resolve, reject) => {
       // don't ask for a rewinder while our source is going through init,
       // since we don't want to fail an offset request that should be valid
-      this.runOrWait(StreamEvent.REWIND_LOADED, async () => {
+      this.runOrWait(StreamEvent.READY, async () => {
         this.stats.connections++;
 
         this.listenersCol.add(listener.id, listener);
-        this.logger.debug(`add listener #${listener.id}, create source`);
+        this.logger.debug(`Add listener #${listener.id}, create source`);
 
         listener.once('disconnect', () => {
-          this.logger.debug(`remove listener #${listener.id}`);
+          this.logger.debug(`Remove listener #${listener.id}`);
           this.listenersCol.remove(listener.id);
         });
 
         try {
           const source = await createListenerSource({
             listener,
-            preroller: this.preroller!,
+            preroller: this.preroller,
             rewindBuffer: this.rewindBuffer,
           });
 
-          this.logger.debug(`built audio source for listener #${listener.id}`);
+          this.logger.debug(`Built audio source for listener #${listener.id}`);
 
-          resolve(source);
+          listener.send(source);
         } catch (error) {
-          this.logger.error(`error ocurred while loading rewinder for listener #${listener.id}`, {
+          this.logger.error(`Error ocurred while loading rewinder for listener #${listener.id}`, {
             error,
           });
           reject(error);
@@ -203,7 +200,7 @@ export class Stream extends TypedEmitterClass<StreamEvents>() {
     });
   }
 
-  status(): StreamStatus {
+  getStatus(): StreamStatus {
     return {
       key: this.id,
       bufferStatus: this.rewindBuffer.getStatus(),

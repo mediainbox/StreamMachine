@@ -1,5 +1,5 @@
 import './types/ambient';
-import {Stream} from "./stream/Stream";
+import {SlaveStream} from "./stream/Stream";
 import {StreamsCollection} from "./streams/StreamsCollection";
 import {EventEmitter} from "events";
 import {Logger} from "winston";
@@ -10,11 +10,11 @@ import {AnalyticsReporter} from "./analytics/AnalyticsReporter";
 import {buildHttpServer} from "./server/HttpServer";
 import express from "express";
 import {componentLogger, createLogger} from "../logger";
+import _ from "lodash";
 import {SlaveConfig} from "./config/types";
 import {SlaveEvent, slaveEvents} from "./events";
 import {validateConfig} from "./types/config";
-import {SlaveStreamConfig, SlaveStreamsConfig} from "./types/streams";
-import _ from "lodash";
+import {SlaveStreamsConfig} from "./types/streams";
 
 export class Slave extends EventEmitter {
   private connected = false;
@@ -46,9 +46,7 @@ export class Slave extends EventEmitter {
     });
 
     this.streams = new StreamsCollection();
-    this.listenersConnector = new ListenersConnector({
-      listenInterval: this.config.analytics.listenInterval! // FIXME
-    });
+    this.listenersConnector = new ListenersConnector();
     this.analyticsReporter = new AnalyticsReporter(this.masterConnection);
 
     this.listenServer = new ListenServer(
@@ -108,12 +106,9 @@ export class Slave extends EventEmitter {
       if (toCreate) {
         this.logger.info(`create new stream ${streamConfig.id}`);
 
-        const stream = new Stream(
+        const stream = new SlaveStream(
           streamConfig.id,
           streamConfig,
-          {
-            listenerMaxBufferSize: this.config.listener.maxBufferSize
-          },
           this.masterConnection,
         );
 

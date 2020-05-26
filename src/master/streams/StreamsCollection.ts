@@ -1,6 +1,6 @@
 import {Collection} from "../../util/Collection";
-import {Stream} from "../stream/Stream";
+import {MasterStream} from "../stream/Stream";
 
-export class StreamsCollection extends Collection<Stream> {
+export class StreamsCollection extends Collection<MasterStream> {
 
 }

@@ -1,5 +1,5 @@
 import {IfEnabled, LoggerConfig} from "../../types";
-import {Kbytes, Milliseconds, Seconds} from "../../types/util";
+import {Milliseconds} from "../../types/util";
 import {DeepReadonly} from "ts-essentials";
 
 export type SlaveConfig = DeepReadonly<{
@@ -9,8 +9,8 @@ export type SlaveConfig = DeepReadonly<{
     workers: number;
   }>;
   master: {
-    password: string;
     urls: string[];
+    password: string;
     timeout: Milliseconds;
   },
   server: {
@@ -29,19 +29,5 @@ export type SlaveConfig = DeepReadonly<{
   redis: {
     url: string;
   };
-  listener: {
-    maxBufferSize: Kbytes,
-  },
-  analytics: IfEnabled<{
-    listenInterval: Seconds;
-  }>
-  ads: IfEnabled<AdsConfig>;
 }>;
 
-export type AdsConfig = {
-  serverUrl: string;
-  transcoderUrl: string;
-  adTimeout: Milliseconds;
-  impressionDelay: Milliseconds;
-  prerollKey?: string;
-};

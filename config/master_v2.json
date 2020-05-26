@@ -1,11 +1,4 @@
 {
-  "rewind": {
-    "dump": {
-      "enabled": false,
-      "dir": "",
-      "frequency": 0
-    }
-  },
   "log": {
     "level": "debug",
     "logRequests": false,
@@ -15,8 +8,7 @@
     }
   },
   "sourceIn": {
-    "port": 0,
-    "ip": ""
+    "enabled": false
   },
   "server": {
     "port": 8020
@@ -27,13 +19,15 @@
   "redis": {
     "url": ""
   },
-  "analytics": {
-    "listenInterval": 0
-  },
   "ads": {
     "adUrl": "",
     "transcoderUrl": "",
     "impressionDelay": 0
+  },
+  "rewindBuffer": {
+    "dump": {
+      "enabled": false
+    }
   },
   "streams": [
     {
@@ -44,10 +38,11 @@
         "url": "https://cadena3.com.ar"
       },
       "format": "mp3",
-      "rewind": {
-        "initialBurst": 5,
-        "bufferSeconds": 300
+      "chunkDuration": 5,
+      "rewindBuffer": {
+        "maxSeconds": 300
       },
+
       "ads": {
         "enabled": false
       },

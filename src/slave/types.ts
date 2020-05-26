@@ -1,6 +1,6 @@
 import {Logger} from "winston";
 import {EventEmitter} from "events";
-import {Stream} from "./stream/Stream";
+import {SlaveStream} from "./stream/Stream";
 import express from "express";
 import {SourceVitals} from "../types";
 import {SlaveConfig} from "./config/types";

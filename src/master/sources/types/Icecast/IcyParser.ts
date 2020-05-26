@@ -1,3 +1,5 @@
+// @ts-nocheck
+
 import { EventEmitter } from 'events';
 
 export class IcyParser extends EventEmitter {

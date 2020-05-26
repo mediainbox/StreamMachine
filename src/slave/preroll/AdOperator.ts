@@ -6,8 +6,8 @@ import {Readable} from "stream";
 import {parseAdResponse} from "./responseParser";
 import {EmptyReadable} from "../../util/EmptyReadable";
 import {Client} from "../listeners/Client";
-import {AdsConfig} from "../config/types";
 import {componentLogger} from "../../logger";
+import {AdsConfig} from "../../types/stream";
 
 type Config = Omit<AdsConfig, 'serverUrl'> & {
   adUrl: string;

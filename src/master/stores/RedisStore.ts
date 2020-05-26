@@ -1,3 +1,5 @@
+// @ts-nocheck
+
 var Redis, RedisStore, Url, _, debug, nconf;
 
 _ = require("lodash");

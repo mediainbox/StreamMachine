@@ -1,5 +1,5 @@
-import {StreamChunk} from "../../master/types";
 import {EventsDefinition, TypedEmitter, TypedEmitterClass} from "../../helpers/events";
+import {StreamChunk} from "../../types/stream";
 
 let instance: TypedEmitter<Events>;
 

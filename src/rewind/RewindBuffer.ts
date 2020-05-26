@@ -10,7 +10,7 @@ import {Readable} from 'stream';
 import _ from "lodash";
 
 interface Config {
-  bufferSeconds: Seconds;
+  maxSeconds: Seconds;
 }
 
 interface Events {
@@ -36,12 +36,6 @@ interface Events {
 // * uint16: data length
 // * Buffer: data chunk
 export class RewindBuffer extends TypedEmitterClass<Events>() {
-  static EVENTS = {
-    RESET: 'reset',
-    PRELOAD_START: 'PRELOAD_START',
-    PRELOAD_DONE: 'PRELOAD_DONE',
-  }
-
   private buffer = new MemoryStore();
   private preloading = false;
   private destroyed = false;
@@ -92,10 +86,10 @@ export class RewindBuffer extends TypedEmitterClass<Events>() {
   }
 
   adjustBufferSize() {
-    const maxChunks = Math.round(this.config.bufferSeconds / this.vitals.chunkDuration);
+    const maxChunks = Math.round(this.config.maxSeconds / this.vitals.chunkDuration);
     this.buffer.setMaxLength(maxChunks);
 
-    this.logger.info(`buffer adjusted, max length is ${this.config.bufferSeconds} seconds (${maxChunks} chunks)`);
+    this.logger.info(`buffer adjusted, max length is ${this.config.maxSeconds} seconds (${maxChunks} chunks)`);
   }
 
   // Load a RewindBuffer.  Buffer should arrive newest first, which means

@@ -7,7 +7,14 @@ export interface StreamEvents extends EventsDefinition<StreamEvent> {
 }
 
 export enum StreamEvent {
- REWIND_LOADED = 'rewind_loaded',
+ READY = 'ready',
  CONFIG = 'config',
  DISCONNECT = 'disconnect',
+}
+
+export enum SlaveStreamStatus {
+  CREATED = 'CREATED',
+  REWIND_LOADING = 'REWIND_LOADING',
+  READY = 'READY', // ready to serve
+  DESTROYED = 'DESTROYED'
 }

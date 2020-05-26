@@ -1,8 +1,8 @@
 import {SlaveStreamsConfig} from "../../slave/types/streams";
-import { Stream } from "../stream/Stream";
+import { MasterStream } from "../stream/Stream";
 import _ from "lodash";
 
-export function getStreamsDataForSlaves(streams: readonly Stream[]): SlaveStreamsConfig {
+export function getStreamsDataForSlaves(streams: readonly MasterStream[]): SlaveStreamsConfig {
   return streams.map(stream => {
     const config = _.omit(stream.getConfig(), 'sources');
 

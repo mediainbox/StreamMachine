@@ -1,11 +1,11 @@
 import {SlaveStatus} from "../../slave/types";
 import {componentLogger} from "../../logger";
 import {Logger} from "winston";
-import {StreamChunk} from "../types";
 import {MasterWsMessage, MasterWsSocket} from "../../messages";
 import {TypedEmitterClass} from "../../helpers/events";
-import {Stream} from "../stream/Stream";
+import {MasterStream} from "../stream/Stream";
 import {getStreamsDataForSlaves} from "./helpers";
+import {StreamChunk} from "../../types/stream";
 
 interface Events {
   disconnect: () => void;
@@ -38,7 +38,7 @@ export class SlaveConnection extends TypedEmitterClass<Events>() {
     this.socket.emit(MasterWsMessage.CHUNK, chunk);
   }
 
-  sendStreams(streams: readonly Stream[]) {
+  sendStreams(streams: readonly MasterStream[]) {
     this.socket.emit(MasterWsMessage.STREAMS, getStreamsDataForSlaves(streams));
   }
 

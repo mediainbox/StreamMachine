@@ -4,7 +4,7 @@ import {MasterStreamConfig} from "../types";
 import {StreamSources} from "./StreamSources";
 import {componentLogger} from "../../logger";
 import {TypedEmitterClass} from "../../helpers/events";
-import {Chunk, SourceVitals, MasterStreamStatus} from "../../types";
+import {Chunk, SourceVitals} from "../../types";
 import {masterEvents} from "../events";
 import {RewindBuffer} from "../../rewind/RewindBuffer";
 
@@ -13,14 +13,22 @@ interface Events {
   connected: () => void;
 }
 
-export class Stream extends TypedEmitterClass<Events>() {
+export enum MasterStreamStatus {
+  CREATED = 'CREATED',
+  CONNECTING = 'CONNECTING',
+  CONNECTION_VALIDATE = 'CONNECTION_VALIDATE',
+  CONNECTED = 'CONNECTED',
+  DISCONNECTED = 'DISCONNECTED',
+  DESTROYED = 'DESTROYED',
+}
+
+export class MasterStream extends TypedEmitterClass<Events>() {
   private readonly sources: StreamSources;
   private readonly logger: Logger;
 
   private rewindBuffer?: RewindBuffer;
   private vitals?: SourceVitals;
-
-  private status = MasterStreamStatus.STARTING;
+  private status = MasterStreamStatus.CREATED;
 
   constructor(
     private readonly id: string,
@@ -32,26 +40,7 @@ export class Stream extends TypedEmitterClass<Events>() {
 
     this.logger.info(`Initialize stream`);
 
-    // We have three options for what source we're going to use:
-    // a) Internal: Create our own source mount and manage our own sources.
-    //    Basically the original stream behavior.
-    // b) Source Mount: Connect to a source mount and use its source
-    //    directly. You'll get whatever incoming format the source gets.
-    // c) Source Mount w/ Transcoding: Connect to a source mount, but run a
-    //    transcoding source between it and us, so that we always get a
-    //    certain format as our input.
-
-    this.sources = new StreamSources(this.id, config.sources);
-
-    // Rewind listens to us, not to our source
-    // this.rewindBuffer.connectSource(this)
-    // this.rewindBuffer.emit("source", this);
-
-    // Pass along buffer loads
-    //this.rewindBuffer.on("buffer", (c) => {
-    //  return this.emit("buffer", c);
-    //});
-
+    this.sources = new StreamSources(config, config.sources);
     this.hookEvents();
   }
 
@@ -75,7 +64,7 @@ export class Stream extends TypedEmitterClass<Events>() {
     this.rewindBuffer = new RewindBuffer(
       this.id,
       {
-        bufferSeconds: this.config.rewind.bufferSeconds,
+        maxSeconds: this.config.rewindBuffer.maxSeconds,
       },
       vitals
     );

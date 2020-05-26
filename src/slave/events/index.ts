@@ -1,9 +1,9 @@
-import {Stream} from "../stream/Stream";
+import {SlaveStream} from "../stream/Stream";
 import express from "express";
-import {StreamChunk} from "../../master/types";
 import {EventsDefinition, TypedEmitter, TypedEmitterClass} from "../../helpers/events";
 import {IListener} from "../listeners/IListener";
 import {SlaveStreamsConfig} from "../types/streams";
+import {StreamChunk} from "../../types/stream";
 
 let instance: TypedEmitter<SlaveEvents>;
 
@@ -33,14 +33,14 @@ export interface SlaveEvents extends EventsDefinition<SlaveEvent> {
   configure_streams: (streamsConfig: SlaveStreamsConfig) => void;
   disconnect: () => void;
   chunk: (chunk: StreamChunk) => void;
-  listener_landed: (args: { stream: Stream, req: express.Request, res: express.Response }) => void;
+  listener_landed: (args: { stream: SlaveStream, req: express.Request, res: express.Response }) => void;
   listener_session_start: (listener: IListener) => void;
   listener_listen: (data: ListenEventData) => void;
   listener_disconnect: (listener: IListener) => void;
 }
 
 export interface ListenerLandedEvent {
-  readonly stream: Stream;
+  readonly stream: SlaveStream;
   readonly req: express.Request;
   readonly res: express.Response;
 }

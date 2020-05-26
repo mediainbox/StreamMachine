@@ -1,3 +1,5 @@
+// @ts-nocheck
+
 import { EventEmitter } from "src/master/events";
 
 // Monitoring component

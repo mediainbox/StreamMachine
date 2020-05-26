@@ -19,15 +19,6 @@ export enum Format {
   MP3 = 'mp3'
 }
 
-export enum MasterStreamStatus {
-  STARTING = 'STARTING',
-  CONNECTING = 'CONNECTING',
-  CONNECTION_VALIDATE = 'CONNECTION_VALIDATE',
-  CONNECTED = 'CONNECTED',
-  DISCONNECTED = 'DISCONNECTED',
-  DESTROYED = 'DESTROYED',
-}
-
 export interface StreamMetadata {
   readonly title: string;
   readonly url: string;

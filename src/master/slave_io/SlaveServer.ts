@@ -4,10 +4,10 @@ import {SlaveConnections} from "./SlaveConnections";
 import SocketIO from "socket.io";
 import * as http from "http";
 import {SlaveConnection} from "./SlaveConnection";
-import {StreamChunk} from "../types";
 import {StreamsCollection} from "../streams/StreamsCollection";
 import {MasterWsSocket, SlaveWsMessage} from "../../messages";
 import {MasterEvent, masterEvents} from "../events";
+import {StreamChunk} from "../../types/stream";
 
 // Socket.IO server that listens for Slave connections
 // Will create a SlaveConnection for each connected Slave

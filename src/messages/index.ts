@@ -1,9 +1,9 @@
 import {SocketClientEvents, SocketServerEvents, TypedSocketClient, TypedSocketServer} from "../helpers/socket";
 import {SlaveStreamsConfig} from "../slave/types/streams";
-import {StreamChunk} from "../master/types";
 import SocketIOClient from "socket.io-client";
 import {EventsDefinition} from "../helpers/events";
 import SocketIO from "socket.io";
+import {StreamChunk} from "../types/stream";
 
 export enum MasterWsMessage { // master -> slave
   STREAMS = 'streams',

@@ -17,7 +17,7 @@ export class Listener extends EventEmitter implements IListener {
   private readonly output: IOutput = null!;
   private readonly logger: Logger = null!;
 
-  private readonly listenInterval: number = null!;
+  private readonly listenInterval?: number;
   private listenIntervalHandle?: NodeJS.Timeout;
 
   private disconnected = false;
@@ -51,7 +51,7 @@ export class Listener extends EventEmitter implements IListener {
     return this;
   }
 
-  setListenInterval(listenInterval: number): this {
+  emitListen(listenInterval: number): this {
     (this.listenInterval as Mutable<number>) = listenInterval;
     return this;
   }
@@ -59,10 +59,12 @@ export class Listener extends EventEmitter implements IListener {
   hookEvents() {
     this.output.once('disconnect', this.disconnect);
 
-    this.listenIntervalHandle = setInterval(this.emitListen, this.listenInterval);
+    if (this.listenInterval) {
+      this.listenIntervalHandle = setInterval(this.emitListenEvent, this.listenInterval);
+    }
   }
 
-  emitListen = () => {
+  emitListenEvent = () => {
     const sentBytes = this.output.getSentBytes();
     const sentSeconds = this.output.getSentSeconds();
 
@@ -113,7 +115,7 @@ export class Listener extends EventEmitter implements IListener {
       return;
     }
 
-    this.emitListen();
+    this.emitListenEvent();
     this.listenIntervalHandle && clearInterval(this.listenIntervalHandle);
 
     this.logger.debug(`listener disconnected`);

@@ -1,11 +1,34 @@
 import {Seconds} from "../types/util";
-import {Chunk, Format, LoggerConfig} from "../types";
-import {Stream} from "./stream/Stream";
-import {Request} from "express";
+import {IfEnabled, LoggerConfig} from "../types";
 import {DeepReadonly} from "ts-essentials";
 import {BaseStreamConfig} from "../types/stream";
 
+export type MasterConfig = DeepReadonly<{
+  log: LoggerConfig;
+  sourceIn: IfEnabled<{
+    port: number;
+    ip: string;
+  }>;
+  server: {
+    port: number;
+  };
+  slavesServer: {
+    password: string;
+  };
+  redis: {
+    url: string;
+  };
+  rewindBuffer: {
+    dump: IfEnabled<{
+      dir: string;
+      frequency: Seconds;
+    }>;
+  };
+  streams?: MasterStreamConfig[];
+}>;
+
 export type MasterStreamConfig = BaseStreamConfig & {
+  readonly chunkDuration: Seconds;
   readonly sources: readonly SourceConfig[];
 };
 
@@ -26,37 +49,3 @@ export type SourceConfig = {
   password: string;
 }
   );
-
-export type MasterConfig = DeepReadonly<{
-  rewind: {
-    dump?: {
-      enabled?: boolean;
-      dir: string;
-      frequency: Seconds;
-    };
-  };
-  log: LoggerConfig;
-  sourceIn?: {
-    port?: number;
-    ip?: string;
-  };
-  server: {
-    port?: number;
-  }
-  slavesServer: {
-    password: string;
-  };
-  redis: {
-    url: string;
-  };
-  streams: MasterStreamConfig[];
-  //chunk_duration!
-}>;
-
-
-export interface StreamChunk {
-  readonly streamId: string;
-  readonly chunk: Chunk;
-}
-
-export type StreamRequest = Request & { stream?: Stream };

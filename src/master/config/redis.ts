@@ -1,3 +1,5 @@
+// @ts-nocheck
+
 import Redis from "../../stores/RedisStore";
 import MasterConfigRedisStore from "./RedisConfigProvider";
 import _ from "lodash";

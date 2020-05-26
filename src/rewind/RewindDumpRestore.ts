@@ -1,3 +1,5 @@
+// @ts-nocheck
+
 var RewindDumpRestore, _, fs, path;
 
 path = require("path");

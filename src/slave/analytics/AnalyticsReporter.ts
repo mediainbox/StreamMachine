@@ -1,6 +1,6 @@
 import {MasterConnection} from "../master_io/MasterConnection";
 import {IListener} from "../listeners/IListener";
-import {ListenEventData, slaveEvents, SlaveEvent} from "../events";
+import {ListenEventData, SlaveEvent, slaveEvents} from "../events";
 
 export class AnalyticsReporter {
   constructor(

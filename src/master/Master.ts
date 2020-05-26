@@ -2,7 +2,7 @@ import './types/ambient';
 import {EventEmitter} from 'events';
 import {MasterConfig, MasterStreamConfig} from "./types";
 import {StreamsCollection} from "./streams/StreamsCollection";
-import {Stream} from "./stream/Stream";
+import {MasterStream} from "./stream/Stream";
 import {Logger} from "winston";
 import {componentLogger, createLogger} from "../logger";
 import {SlaveServer} from "./slave_io/SlaveServer";
@@ -61,7 +61,9 @@ export class Master extends EventEmitter {
     //this.server.use("/s", this.master.transport.app);
     //this.server.use("/api", this.master.api.app);
 
-    this.configureStreams(config.streams);
+    if (config.streams) {
+      this.configureStreams(config.streams);
+    }
   }
 
   hookEvents() {
@@ -86,7 +88,7 @@ export class Master extends EventEmitter {
 
     streamsConfig.forEach(config => {
 
-      const stream = new Stream(
+      const stream = new MasterStream(
         config.id,
         config, // TODO: inherit config from master
       );

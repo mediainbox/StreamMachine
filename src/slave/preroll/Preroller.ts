@@ -4,8 +4,8 @@ import {IAdOperator} from "./types";
 import {AdOperator} from "./AdOperator";
 import {IListener} from "../listeners/IListener";
 import {IPreroller} from "./IPreroller";
-import {AdsConfig} from "../config/types";
 import {componentLogger} from "../../logger";
+import {AdsConfig} from "../../types/stream";
 
 export class Preroller implements IPreroller {
   private adRequests = 0;

@@ -28,21 +28,7 @@ export const DEFAULT_CONFIG: SlaveConfig = {
       enabled: false,
     },
   },
-  listener: {
-    maxBufferSize: 4096 as Kbytes,
-  },
   redis: {
     url: '',
   },
-  analytics: {
-    enabled: false,
-    listenInterval: 30 as Seconds,
-  },
-  ads: {
-    enabled: false,
-    serverUrl: '',
-    transcoderUrl: '',
-    adTimeout: 5000 as Milliseconds,
-    impressionDelay: 5000 as Milliseconds,
-  }
 }

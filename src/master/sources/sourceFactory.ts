@@ -1,18 +1,19 @@
 import {ISource} from "./base/ISource";
-import {SourceConfig, SourceType} from "../types";
+import {MasterStreamConfig, SourceConfig, SourceType} from "../types";
 import {IcecastUrlSource} from "./types/IcecastUrlSource";
-import {Format} from "../../types";
-import {Seconds} from "../../types/util";
 import {componentLogger} from "../../logger";
 
-export function makeSource(streamId: string, sourceConfig: SourceConfig): ISource {
+export function makeSource(streamConfig: MasterStreamConfig, sourceConfig: SourceConfig): ISource {
   if (sourceConfig.type === SourceType.ICECAST_URL) {
-    return new IcecastUrlSource({
+    const icecastUrlSourceConfig = {
       ...sourceConfig,
-      format: Format.MP3,
-      chunkDuration: 0.5 as Seconds, // FIXME
-    },
-      componentLogger(`stream[${streamId}]:source_${SourceType.ICECAST_URL}`),
+      format: streamConfig.format,
+      chunkDuration: streamConfig.chunkDuration,
+    };
+
+    return new IcecastUrlSource(
+      icecastUrlSourceConfig,
+      componentLogger(`stream[${streamConfig.id}]:source_${SourceType.ICECAST_URL}`),
     );
   }
 

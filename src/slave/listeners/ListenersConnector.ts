@@ -5,9 +5,9 @@ import {IListener} from "./IListener";
 import {SlaveEvent, slaveEvents, ListenerLandedEvent} from "../events";
 import {componentLogger} from "../../logger";
 import {Seconds} from "../../types/util";
+import {ListenOptions} from "../types";
 
 interface Config {
-  readonly listenInterval: Seconds;
 }
 
 /**
@@ -16,7 +16,7 @@ interface Config {
 export class ListenersConnector {
   private listenersCount = 0;
 
-  constructor(private readonly config: Config) {
+  constructor() {
     this.hookEvents();
   }
 
@@ -35,22 +35,27 @@ export class ListenersConnector {
       res,
     });
 
+    const streamConfig = stream.getConfig();
+
+    // TODO: validate options with stream
+    const listenOptions: ListenOptions = {
+      offset: (req.query.offset ? Number(req.query.offset) : 0) as Seconds,
+      initialBurst: streamConfig.listen.initialBurst,
+      pumpAndFinish: !!req.query.pumpAndFinish
+    };
+
     const listener: IListener = new Listener(stream.getId(), listenerId)
       .setClient(Client.fromRequest(req))
       .setOutput(output)
-      .setOptions({
-        offset: (req.query.offset ? Number(req.query.offset) : 0) as Seconds,
-        initialBurst: stream.getConfig().rewind.initialBurst, // FIXME
-        pumpAndFinish: !!req.query.pumpAndFinish
-      })
-      .setListenInterval(this.config.listenInterval)
+      .setOptions(listenOptions)
       .setLogger(componentLogger(`stream[${stream.getId()}]:listener[#${listenerId}]`));
+
+    if (streamConfig.analytics.enabled) {
+      listener.emitListen(streamConfig.analytics.listenInterval);
+    }
 
     stream
       .listen(listener)
-      .then(source => {
-        listener.send(source);
-      })
       .catch(() => {
         res.status(500).end('Server error');
         listener.disconnect();

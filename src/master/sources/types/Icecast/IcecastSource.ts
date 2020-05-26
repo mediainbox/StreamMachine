@@ -1,3 +1,5 @@
+// @ts-nocheck
+
 import {BaseSource} from "./base/BaseSource";
 
 export class IcecastSource extends BaseSource {

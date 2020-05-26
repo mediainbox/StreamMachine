@@ -1,3 +1,5 @@
+// @ts-nocheck
+
 import net from "net";
 import IcecastSource from "../../sources/IcecastSource";
 import IcyParser from "./IcyParser";

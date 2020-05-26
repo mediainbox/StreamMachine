@@ -1,3 +1,5 @@
+// @ts-nocheck
+
 var BasicStrategy, MasterAPI, Throttle, Users, api, bodyParser, express, passport, path;
 
 express = require("express");

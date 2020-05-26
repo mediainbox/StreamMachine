@@ -3,8 +3,8 @@ const now = function() {
 };
 
 export class Debounce {
-  private timeout: NodeJS.Timeout | null;
-  private last: number;
+  private timeout: NodeJS.Timeout | null = null;
+  private last: number = 0;
   private _t: () => void;
 
   constructor(private wait: number, private cb: null | ((ts: number) => void)) {

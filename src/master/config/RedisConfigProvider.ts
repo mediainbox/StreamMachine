@@ -1,3 +1,5 @@
+// @ts-nocheck
+
 const EventEmitter = require('events').EventEmitter;
 
 module.exports = class MasterConfigRedisStore extends EventEmitter {

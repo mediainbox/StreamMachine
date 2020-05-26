@@ -1,5 +1,4 @@
 import express from "express";
-import {StreamRequest} from "../types";
 import Throttle from "throttle";
 import {StreamsCollection} from "../streams/StreamsCollection";
 import {componentLogger} from "../../logger";
