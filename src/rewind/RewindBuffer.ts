@@ -6,7 +6,7 @@ import {MemoryStore} from "./store/MemoyStore";
 import {Logger} from "winston";
 import {toTime} from "../helpers/datetime";
 import {RewindWriter} from "./RewindWriter";
-import {Readable, Writable} from 'stream';
+import {Readable} from 'stream';
 import {Rewinder} from "./Rewinder";
 
 
@@ -74,31 +74,6 @@ export class RewindBuffer extends TypedEmitterClass<Events>() {
     this.logger.silly(`insert chunk ${toTime(chunk.ts)} in buffer`);
     this.buffer.insert(chunk);
   };
-
-  // TODO: check
-  connectSource = (source) => {
-    if (this.source) {
-      this.source.removeListener("data", this.push);
-      this.logger.debug("removed old rewind data listener");
-    }
-
-    this.source = source;
-
-    source.vitals((err, vitals) => {
-      if (this.vitals.streamKey && this.vitals.streamKey === vitals.streamKey) {
-        this.logger.debug("rewind buffer validated new source, keep current buffer");
-      } else {
-        this.updateVitals({
-          // TODO: standarize globally
-          streamKey: vitals.streamKey,
-          framesPerSecond: vitals.framesPerSec,
-          secondsPerChunk: vitals.emitDuration
-        });
-      }
-
-      source.on("data", this.push);
-    });
-  }
 
   updateVitals(vitals: SourceVitals) {
     if (this.vitals.streamKey !== vitals.streamKey) {
@@ -190,7 +165,7 @@ export class RewindBuffer extends TypedEmitterClass<Events>() {
     return this.pumpFrom(rewinder, frames, frames, concat, cb);
   }
 
-  pumpFrom(rewinder: Rewinder, offset: number, length: number, concat: boolean): Promise<{
+  pumpFrom(rewinder: Rewinder, offset: number, length: number): Promise<{
     chunks: number;
     duration: number;
   }> {
@@ -214,19 +189,9 @@ export class RewindBuffer extends TypedEmitterClass<Events>() {
         pumpLen += chunk.data.length;
         duration += chunk.duration;
 
-        if (concat) {
-          buffers.push(chunk.data);
-        } else {
-          rewinder.queueChunk(chunk);
-        }
+        rewinder.queueChunk(chunk);
       }
 
-      if (concat) {
-        rewinder.queueChunk({
-          data: Buffer.concat(buffers),
-          duration: duration
-        });
-      }
 
       // how many seconds are between this date and the end of the buffer?
       const offsetSeconds = this.offsetToSeconds(offset);
