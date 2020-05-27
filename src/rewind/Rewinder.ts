@@ -2,6 +2,9 @@ import {Readable} from "stream";
 import {Chunk} from "../types";
 import {RewindBuffer} from "./RewindBuffer";
 import {ListenOptions} from "../slave/types";
+import {Logger} from "winston";
+import {toTime} from "../helpers/datetime";
+import {Seconds} from "../types/util";
 
 const HIGH_WATERMARK = 256 * 1024 // 256 KB;
 
@@ -37,21 +40,49 @@ export class Rewinder extends Readable {
   private queuedBytes = 0;
   private reading = false;
 
+  private rewindOffset: Seconds;
+
   constructor(
     private readonly rewind: RewindBuffer,
     private readonly config: Config,
+    private readonly logger: Logger
   ) {
     super({
       highWaterMark: HIGH_WATERMARK
+    });
+
+    // FIXME: move outside rewinder
+    this.rewindOffset = this.config.offset ?
+      this.config.offset - this.config.initialBurst as Seconds :
+      0 as Seconds;
+
+    this.logger.debug(`Create rewinder`, {
+      config: this.config,
+      rewindOffset: this.rewindOffset
     });
   }
 
   async pump(): Promise<void> {
     // offset != 0: pump some data before we start regular listening
     // offset = 0: pump back from live
-    const chunks = this.rewind.getSeconds(this.config.offset, this.config.initialBurst);
+    const chunks = this.rewind.getSeconds(
+      this.config.offset,
+      this.config.initialBurst
+    );
 
     this.enqueueChunks(chunks);
+  }
+
+  pullChunk() {
+    const chunk = this.rewind.chunkAtSeconds(this.rewindOffset);
+
+    if (!chunk) {
+      this.logger.silly(`No chunk pulled (rewind offset: ${this.rewindOffset} secs)`);
+      return;
+    }
+
+    this.logger.silly(`Enqueue pulled chunk ${toTime(chunk.ts)} (rewind offset: ${this.rewindOffset} secs)`);
+    this.enqueueChunk(chunk);
   }
 
   // -- Handle an empty queue -- #
@@ -106,16 +137,11 @@ export class Rewinder extends Readable {
       this.stats.bytesSent += nextChunk.data.length;
       this.stats.secondsSent += nextChunk.duration / 1000;
 
-      // Not all chunks will contain metadata, but go ahead and send
-      // ours out if it does
-      //if (nextChunk.meta) {
-        //this.emit("meta", nextChunk.meta);
-      //}
-
       // Push the chunk of data onto our reader. The return from push
       // will tell us whether to keep pushing, or whether we need to
       // stop and wait for a drain event (basically wait for the
       // reader to catch up to us)
+      this.logger.silly(`Push output chunk ${toTime(nextChunk.ts)}`);
       if (this.push(nextChunk.data)) {
         readBytesSent += nextChunk.data.length;
 

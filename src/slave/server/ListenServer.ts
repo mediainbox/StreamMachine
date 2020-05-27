@@ -9,7 +9,7 @@ import {EventEmitter} from 'events';
 import {Logger} from "winston";
 import {componentLogger} from "../../logger";
 import {SlaveEvent, slaveEvents} from "../events";
-import {SlaveConfig} from "../config/types";
+import {SlaveConfig} from "../types/config";
 
 const cors = require("cors");
 const cookieParser = require('cookie-parser');
@@ -90,7 +90,7 @@ export class ListenServer extends EventEmitter {
 
     // listen to the stream
     app.get("/:stream", (req, res) => {
-      this.logger.debug(`listen request for ${req.sStream.getId()} from ip ${req.ip}`);
+      this.logger.debug(`Listen request for ${req.sStream.getId()} from ip ${req.ip}`);
 
       slaveEvents().emit(SlaveEvent.LISTENER_LANDED, {
         stream: req.sStream,

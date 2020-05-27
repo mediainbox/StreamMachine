@@ -4,7 +4,7 @@ import {Server} from "http";
 import * as path from "path";
 import cluster from "cluster";
 import {componentLogger} from "../../logger";
-import {SlaveConfig} from "../config/types";
+import {SlaveConfig} from "../types/config";
 
 const greenlock = require("greenlock-express");
 

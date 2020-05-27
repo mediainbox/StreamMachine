@@ -1,26 +1,33 @@
-import {Chunk, Format, SourceStatus, SourceVitals, StreamMetadata} from "../../../types";
-import {Seconds} from "../../../types/util";
+import {Chunk, SourceStatus, SourceVitals, StreamMetadata} from "../../../types";
 import {TypedEmitter} from "../../../helpers/events";
-
-export interface SourceConfig {
-  readonly type: string;
-  readonly format: Format;
-  readonly chunkDuration: Seconds;
-  readonly priority: number;
-}
+import {BaseSourceConfig} from "../../types/config";
 
 export interface SourceEvents {
   connect: () => void;
+  connect_error: (error: Error) => void;
   disconnect: () => void;
   chunk: (chunk: Chunk) => void;
   vitals: (vitals: SourceVitals) => void;
   metadata: (meta: StreamMetadata) => void;
+  destroy: () => void;
 }
 
-export interface ISource extends TypedEmitter<SourceEvents> {
-  getType(): string;
-  getVitals(): Promise<SourceVitals>;
-  getStatus(): SourceStatus;
+export interface ISource<Config extends BaseSourceConfig = any> extends TypedEmitter<SourceEvents> {
+  getId(): string;
+
+  getPriority(): number;
+
+  getStatus(): SourceStatus<Config>;
+
+  isConnected(): boolean;
+
+  getConfig(): Config;
+
+  configure(config: Config): void;
+
   connect(): void;
+
   disconnect(): void;
+
+  destroy(): void;
 }

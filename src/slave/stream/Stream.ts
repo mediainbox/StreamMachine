@@ -1,5 +1,5 @@
 import {ListenersCollection} from "../listeners/ListenersCollection";
-import {Err} from "../../types";
+import {Chunk, Err} from "../../types";
 import {ListenersCleaner} from "../listeners/ListenersCleaner";
 import {toTime} from "../../helpers/datetime";
 import {Preroller} from "../preroll/Preroller";
@@ -86,15 +86,13 @@ export class SlaveStream extends TypedEmitterClass<StreamEvents>() {
   hookEvents() {
     // wait for rewind to be loaded before pushing any data
     this.runOrWait(StreamEvent.READY, () => {
-      slaveEvents().on(`chunk`, (data: StreamChunk) => {
+      slaveEvents().on(SlaveEvent.CHUNK, (data: StreamChunk) => {
         if (data.streamId !== this.id) {
           // chunk for other stream
           return;
         }
 
-        this.logger.silly(`Push received audio chunk ${toTime(data.chunk.ts)}`);
-        this.rewindBuffer.push(data.chunk);
-        this.listenersCol.pushLatest(this.rewindBuffer.buffer);
+        this.handleNewChunk(data.chunk);
       });
     });
 
@@ -182,6 +180,7 @@ export class SlaveStream extends TypedEmitterClass<StreamEvents>() {
 
         try {
           const source = await createListenerSource({
+            streamId: this.id,
             listener,
             preroller: this.preroller,
             rewindBuffer: this.rewindBuffer,
@@ -197,6 +196,17 @@ export class SlaveStream extends TypedEmitterClass<StreamEvents>() {
           reject(error);
         }
       });
+    });
+  }
+
+  handleNewChunk(chunk: Chunk) {
+    this.logger.silly(`New chunk ${toTime(chunk.ts)}`);
+    this.rewindBuffer.push(chunk);
+
+    // TODO: fix this, if master does not send chunk, no data is
+    // pushed to listeners buffers!
+    this.listenersCol.map(listener => {
+      listener.getSource().pullChunk();
     });
   }
 

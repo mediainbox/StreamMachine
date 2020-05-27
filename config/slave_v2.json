@@ -8,7 +8,7 @@
     ]
   },
   "log": {
-    "level": "debug"
+    "level": "silly"
   },
   "server": {
     "httpPort": 9002

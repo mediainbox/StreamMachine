@@ -10,16 +10,16 @@ export function passthrough(_events: string | string[], source: EventEmitter, ta
 }
 
 export class BetterEventEmitter extends EventEmitter {
-  __emitted: Record<string, any> = {};
+  __emitted: Record<string, boolean> = {};
 
   emit(evt: string, ...args: any[]) {
-    this.__emitted[evt] = args;
+    this.__emitted[evt] = true;
     return super.emit(evt, ...args);
   }
 
   runOrWait(evt: any, listener: (...args: any[]) => void) {
     if (this.__emitted[evt]) {
-      listener(...this.__emitted[evt]);
+      listener();
       return;
     }
 
@@ -27,7 +27,7 @@ export class BetterEventEmitter extends EventEmitter {
   }
 }
 
-export interface TypedEmitter<Events> {
+export interface BaseTypedEmitter<Events> {
   addListener<E extends keyof Events> (event: E, listener: Events[E]): this;
   on<E extends keyof Events> (event: E, listener: Events[E]): this;
   once<E extends keyof Events> (event: E, listener: Events[E]): this;
@@ -46,7 +46,9 @@ export interface TypedEmitter<Events> {
 
   getMaxListeners (): number;
   setMaxListeners (maxListeners: number): this;
+}
 
+export interface TypedEmitter<Events> extends BaseTypedEmitter<Events> {
   runOrWait<E extends keyof Events> (event: E, listener: Events[E]): this;
 }
 

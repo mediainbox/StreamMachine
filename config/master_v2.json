@@ -1,7 +1,6 @@
 {
   "log": {
-    "level": "debug",
-    "logRequests": false,
+    "level": "silly",
     "transports": {
       "json": false,
       "stackdriver": false
@@ -31,6 +30,7 @@
   },
   "streams": [
     {
+      "enabled": true,
       "clientId": "cadena3",
       "id": "cadena3_main",
       "metadata": {
@@ -38,22 +38,41 @@
         "url": "https://cadena3.com.ar"
       },
       "format": "mp3",
-      "chunkDuration": 5,
-      "rewindBuffer": {
-        "maxSeconds": 300
-      },
-
-      "ads": {
-        "enabled": false
-      },
-      "geolock": {
-        "enabled": false
-      },
       "sources": [
         {
+          "enabled": true,
+          "id": "A1",
+          "name": "main",
           "type": "icecast_url",
-          "priority": 100,
-          "url": "https://c3ny1.mediainbox.net/cadena3.mp3"
+          "url": "https://c3ny1.mediainbox.net/cadena3.mp3",
+          "priority": 70
+        },
+        {
+          "enabled": true,
+          "id": "A2",
+          "name": "secondary",
+          "type": "icecast_url",
+          "url": "https://c3dl1.mediainbox.net/93e7475a85ae487009cec367c68866c7-encoder-fm-1",
+          "priority": 50
+        }
+      ]
+    },
+    {
+      "enabled": false,
+      "clientId": "gcba",
+      "id": "la2x4",
+      "metadata": {
+        "title": "La 2x4",
+        "url": "https://la2x4.com.ar"
+      },
+      "format": "mp3",
+      "chunkDuration": 5,
+      "sources": [
+        {
+          "id": "B1",
+          "type": "icecast_url",
+          "url": "http://radios.argentina.fm:9270/stream",
+          "priority": 50
         }
       ]
     }

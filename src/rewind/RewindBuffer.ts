@@ -49,7 +49,7 @@ export class RewindBuffer extends TypedEmitterClass<Events>() {
   ) {
     super();
 
-    this.logger = componentLogger(`rewind_buffer[${this.id}]`);
+    this.logger = componentLogger(`stream[${this.id}]:rewind_buffer`);
 
     this.hookEvents();
   }
@@ -63,7 +63,7 @@ export class RewindBuffer extends TypedEmitterClass<Events>() {
       throw new Error('RewindBuffer is destroyed!');
     }
 
-    this.logger.silly(`insert chunk ${toTime(chunk.ts)} in buffer`);
+    this.logger.silly(`Insert chunk ${toTime(chunk.ts)}`);
     this.buffer.insert(chunk);
   };
 
@@ -120,7 +120,8 @@ export class RewindBuffer extends TypedEmitterClass<Events>() {
         })
         .on('end', () => {
           this.preloading = false;
-          this.logger.info(`preload finished, loaded ${this.getBufferedSeconds()} seconds (${this.buffer.length()} chunks)`);
+          // TODO: log start/end of buffer
+          this.logger.info(`Preload finished, loaded ${this.getBufferedSeconds()} seconds (${this.buffer.length()} chunks)`);
           this.emit("preload_done");
           resolve();
         });
@@ -153,10 +154,14 @@ export class RewindBuffer extends TypedEmitterClass<Events>() {
   }
 
   getSeconds(offset: Seconds, _length?: Seconds): Chunk[] {
-    return this.getChunks(
-      this.validateSecondsOffset(offset),
-      _length && this.validateSecondsOffset(_length),
-    );
+    let validatedOffset = this.validateSecondsOffset(offset);
+    const validatedLength = _length && this.validateSecondsOffset(_length);
+
+    if (validatedLength && validatedOffset < validatedLength) {
+      validatedOffset = validatedLength;
+    }
+
+    return this.getChunks(validatedOffset, validatedLength);
   }
 
   getChunks(offset: number, _length?: number): Chunk[] {
@@ -170,6 +175,10 @@ export class RewindBuffer extends TypedEmitterClass<Events>() {
     }
 
     return this.buffer.range(offset, length);
+  }
+
+  chunkAtSeconds(offset: Seconds): Chunk | null {
+    return this.buffer.at(this.validateSecondsOffset(offset));
   }
 
   destroy() {

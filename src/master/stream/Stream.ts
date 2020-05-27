@@ -1,19 +1,22 @@
 import {Logger} from "winston";
 import {Readable} from "stream";
-import {MasterStreamConfig} from "../types";
 import {StreamSources} from "./StreamSources";
 import {componentLogger} from "../../logger";
 import {TypedEmitterClass} from "../../helpers/events";
 import {Chunk, SourceVitals} from "../../types";
 import {masterEvents} from "../events";
 import {RewindBuffer} from "../../rewind/RewindBuffer";
+import {MasterStreamConfig} from "../types/config";
+import _ from "lodash";
+import {difference} from "../../helpers/object";
 
 interface Events {
   chunk: (chunk: Chunk) => void;
   connected: () => void;
+  destroy: () => void;
 }
 
-export enum MasterStreamStatus {
+export enum MasterStreamState {
   CREATED = 'CREATED',
   CONNECTING = 'CONNECTING',
   CONNECTION_VALIDATE = 'CONNECTION_VALIDATE',
@@ -28,7 +31,7 @@ export class MasterStream extends TypedEmitterClass<Events>() {
 
   private rewindBuffer?: RewindBuffer;
   private vitals?: SourceVitals;
-  private status = MasterStreamStatus.CREATED;
+  private state = MasterStreamState.CREATED;
 
   constructor(
     private readonly id: string,
@@ -40,12 +43,16 @@ export class MasterStream extends TypedEmitterClass<Events>() {
 
     this.logger.info(`Initialize stream`);
 
-    this.sources = new StreamSources(config, config.sources);
+    this.sources = new StreamSources({
+      streamId: id,
+      format: config.format,
+      chunkDuration: config.chunkDuration
+    }, config.sources);
     this.hookEvents();
   }
 
   hookEvents() {
-    this.sources.on("connected", this.onSourceConnectionOk);
+    this.sources.on("vitals", this.onSourceConnectionOk);
 
     this.sources.on("chunk", chunk => {
       masterEvents().emit('chunk', {
@@ -55,6 +62,16 @@ export class MasterStream extends TypedEmitterClass<Events>() {
 
       this.rewindBuffer?.push(chunk);
     });
+  }
+
+  configure(config: MasterStreamConfig) {
+    if (!_.isEqual(this.config.sources, config.sources)) {
+      this.logger.info(`Sources config has changed`);
+
+      this.sources.configure(config.sources);
+    } else {
+      this.logger.info(`Sources unchanged`);
+    }
   }
 
   onSourceConnectionOk = (vitals: SourceVitals) => {
@@ -118,13 +135,18 @@ export class MasterStream extends TypedEmitterClass<Events>() {
   }
 
   destroy() {
+    this.logger.info('Stream destroy');
+
     // shut down our sources and go away
     //this.destroying = true;
 
+    this.state = MasterStreamState.DESTROYED;
+
     this.rewindBuffer?.destroy();
+    this.sources.destroy();
     //this.source.removeListener("data", this.dataFunc);
     //this.source.removeListener("vitals", this.vitalsFunc);
 
-    //this.emit("destroy");
+    this.emit("destroy");
   }
 }

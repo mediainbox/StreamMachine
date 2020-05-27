@@ -6,9 +6,9 @@ import {promiseTimeout} from "../../helpers/promises";
 import socketIO from "socket.io-client";
 import {componentLogger} from "../../logger";
 import {SlaveEvent, slaveEvents} from "../events";
-import {SlaveConfig} from "../config/types";
 import {MasterWsMessage, SlaveWsMessage, SlaveWsSocket} from "../../messages";
 import {SlaveStreamsConfig} from "../types/streams";
+import {SlaveConfig} from "../types/config";
 
 const REWIND_REQUEST_TIMEOUT = 15 * 1000;
 const ALIVE_INTERVAL = 5000;
@@ -112,7 +112,7 @@ export class MasterConnection {
       // our data gets converted into an ArrayBuffer to go over the
       // socket. convert it back before insertion
       // convert timestamp back to a date object
-      this.logger.silly(`Audio chunk received: ${chunk.streamId}/${toTime(chunk.chunk.ts)}`)
+      this.logger.silly(`Chunk received: ${chunk.streamId}/${toTime(chunk.chunk.ts)}`)
 
       // emit globally, this event will be listened by stream sources
       slaveEvents().emit(SlaveEvent.CHUNK, chunk);
@@ -134,7 +134,7 @@ export class MasterConnection {
   }
 
   getRewind(streamId: string): Promise<Readable> {
-    this.logger.info(`make rewind buffer request for stream ${streamId}`);
+    this.logger.info(`Make rewind buffer request for stream ${streamId}`);
 
     const request = axios.get<Readable>(`/slave/${streamId}/rewind`, {
       baseURL: this.config.urls[this.masterUrlIndex].replace(/^ws/, 'http'),
@@ -145,7 +145,7 @@ export class MasterConnection {
       }
     })
       .then(res => {
-        this.logger.info(`got rewind stream response from master`);
+        this.logger.info(`Got rewind stream response for ${streamId} from master`);
 
         return res.data;
       });

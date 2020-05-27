@@ -11,10 +11,10 @@ import {buildHttpServer} from "./server/HttpServer";
 import express from "express";
 import {componentLogger, createLogger} from "../logger";
 import _ from "lodash";
-import {SlaveConfig} from "./config/types";
 import {SlaveEvent, slaveEvents} from "./events";
-import {validateConfig} from "./types/config";
 import {SlaveStreamsConfig} from "./types/streams";
+import {validateConfig} from "./config";
+import {SlaveConfig} from "./types/config";
 
 export class Slave extends EventEmitter {
   private connected = false;
@@ -104,7 +104,7 @@ export class Slave extends EventEmitter {
       const toCreate = !activeStreamsIds.includes(streamConfig.id);
 
       if (toCreate) {
-        this.logger.info(`create new stream ${streamConfig.id}`);
+        this.logger.info(`Create new stream ${streamConfig.id}`);
 
         const stream = new SlaveStream(
           streamConfig.id,
@@ -114,10 +114,10 @@ export class Slave extends EventEmitter {
 
         this.streams.add(streamConfig.id, stream);
       } else {
-        this.logger.info(`reconfigure stream ${streamConfig.id}`);
+        this.logger.info(`Reconfigure stream ${streamConfig.id}`);
 
         const stream = this.streams.get(streamConfig.id);
-        //stream.reconfigure(config);
+        //stream.configure(config);
       }
     });
 
@@ -129,7 +129,7 @@ export class Slave extends EventEmitter {
       stream.destroy();
     })
 
-    this.logger.info("streams configuration done");
+    this.logger.info("Streams configuration done");
     //this.configured = true;
   }
 

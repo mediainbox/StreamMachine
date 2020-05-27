@@ -125,6 +125,11 @@ export type Case<
   U extends {} | undefined = undefined
   > = U extends undefined ? { type: T } : { type: T } & U;
 
+export type Type<
+  T extends string | number,
+  U extends {} | undefined = undefined
+  > = U extends undefined ? { type: T } : { type: T } & U;
+
 export function Case<T extends string | number>(t: T): Case<T, undefined>;
 export function Case<T extends string | number, U extends {}>(
   t: T,

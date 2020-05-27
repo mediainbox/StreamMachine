@@ -1,19 +1,27 @@
 import {ISource} from "./base/ISource";
-import {MasterStreamConfig, SourceConfig, SourceType} from "../types";
+import {SourceType} from "../types";
 import {IcecastUrlSource} from "./types/IcecastUrlSource";
 import {componentLogger} from "../../logger";
+import {SourceConfig} from "../types/config";
+import {SourceChunker} from "./base/SourceChunker";
+import {Format} from "../../types";
+import {Seconds} from "../../types/util";
 
-export function makeSource(streamConfig: MasterStreamConfig, sourceConfig: SourceConfig): ISource {
+export interface StreamData {
+  readonly streamId: string;
+  readonly format: Format;
+  readonly chunkDuration: Seconds;
+}
+
+export function makeSource(streamData: StreamData, sourceConfig: SourceConfig): ISource<any> {
   if (sourceConfig.type === SourceType.ICECAST_URL) {
-    const icecastUrlSourceConfig = {
-      ...sourceConfig,
-      format: streamConfig.format,
-      chunkDuration: streamConfig.chunkDuration,
-    };
-
     return new IcecastUrlSource(
-      icecastUrlSourceConfig,
-      componentLogger(`stream[${streamConfig.id}]:source_${SourceType.ICECAST_URL}`),
+      sourceConfig,
+      new SourceChunker({
+        chunkDuration: streamData.chunkDuration,
+        format: streamData.format,
+      }),
+      componentLogger(`stream[${streamData.streamId}]:source_${SourceType.ICECAST_URL}`),
     );
   }
 

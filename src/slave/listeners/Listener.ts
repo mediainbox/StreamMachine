@@ -118,7 +118,7 @@ export class Listener extends EventEmitter implements IListener {
     this.emitListenEvent();
     this.listenIntervalHandle && clearInterval(this.listenIntervalHandle);
 
-    this.logger.debug(`listener disconnected`);
+    this.logger.debug(`Listener disconnected`);
     slaveEvents().emit(SlaveEvent.LISTENER_DISCONNECT, this);
     this.disconnected = true;
 

@@ -84,7 +84,9 @@ export abstract class HttpOutput extends EventEmitter implements IOutput {
       return;
     }
 
+    this.logger.debug('Output disconnected');
     this.disconnected = true;
+
     // emit disconnect here so hooks can still read
     // from source/socket state
     this.emit("disconnect");
@@ -102,7 +104,6 @@ export abstract class HttpOutput extends EventEmitter implements IOutput {
       this.socket.destroy();
     }
 
-    this.logger.debug('output disconnected');
     this.removeAllListeners();
   }
 }

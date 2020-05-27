@@ -1,5 +1,4 @@
 import {Seconds} from "./util";
-import {SourceConfig} from "../master/sources/base/ISource";
 
 export interface Err extends Error {
   context?: any;
@@ -30,12 +29,19 @@ export interface SourceVitals {
   readonly chunkDuration: Seconds;
 }
 
-export interface SourceStatus {
+export enum SourceState {
+  CREATED = 'CREATED',
+  CONNECTED = 'CONNECTED',
+  CONNECTION_ERROR = 'CONNECTION_ERROR',
+  DISCONNECTED = 'DISCONNECTED',
+  DESTROYED = 'DESTROYED',
+}
+
+export interface SourceStatus<Config> {
   readonly id: string;
   readonly type: string;
-  readonly connected: boolean;
-  readonly connectedAt: Date | null;
-  readonly config: SourceConfig;
+  readonly config: Config;
+  readonly state: SourceState;
   readonly vitals: SourceVitals | null;
   readonly lastChunkTs: number | null;
 }

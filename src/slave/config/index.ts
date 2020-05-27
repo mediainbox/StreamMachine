@@ -1,5 +1,6 @@
-import {SlaveConfig} from "./types";
-import {Kbytes, Milliseconds, Seconds} from "../../types/util";
+import {Milliseconds} from "../../types/util";
+import _ from "lodash";
+import {SlaveConfig} from "../types/config";
 
 export const DEFAULT_CONFIG: SlaveConfig = {
   slaveId: '',
@@ -31,4 +32,8 @@ export const DEFAULT_CONFIG: SlaveConfig = {
   redis: {
     url: '',
   },
+}
+
+export function validateConfig(config: SlaveConfig): SlaveConfig {
+  return _.defaultsDeep({}, config, DEFAULT_CONFIG);
 }

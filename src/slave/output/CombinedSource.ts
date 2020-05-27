@@ -1,6 +1,7 @@
 import {PassThrough, Readable} from "stream";
 import {Chunk} from "../../types";
 import {ISource} from "./ISource";
+import {Rewinder} from "../../rewind/Rewinder";
 
 const MultiStream = require('multistream');
 
@@ -12,7 +13,7 @@ export class CombinedSource extends PassThrough implements ISource {
 
   constructor(
     private readonly preroll: Readable,
-    private readonly rewinder: any,
+    private readonly rewinder: Rewinder,
   ) {
     super();
 
@@ -24,8 +25,8 @@ export class CombinedSource extends PassThrough implements ISource {
     this.combined.pipe(this);
   }
 
-  addChunk(chunk: Chunk) {
-    this.rewinder._insert(chunk);
+  pullChunk() {
+    this.rewinder.pullChunk();
   }
 
   _destroy(error: Error | null, callback: (error: (Error | null)) => void) {
@@ -35,7 +36,8 @@ export class CombinedSource extends PassThrough implements ISource {
   }
 
   getQueuedBytes() {
-    return this.rewinder.queuedBytes;
+    return 0;
+    //return this.rewinder.queuedBytes; // FIXME
   }
 
   getSentSeconds() {

@@ -1,11 +1,6 @@
-import {Logger} from "winston";
-import {EventEmitter} from "events";
-import {SlaveStream} from "./stream/Stream";
-import express from "express";
-import {SourceVitals} from "../types";
-import {SlaveConfig} from "./config/types";
+import {SourceVitals} from "../../types";
 import {BaseStreamConfig} from "src/types/stream";
-import {Seconds} from "../types/util";
+import {Seconds} from "../../types/util";
 
 export type SlaveStreamConfig = BaseStreamConfig & {
   readonly vitals: SourceVitals;

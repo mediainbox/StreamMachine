@@ -7,6 +7,10 @@ export class Collection<T> {
     return this._map[key];
   }
 
+  exists(key: string): boolean {
+    return !!this._map[key];
+  }
+
   keys(): readonly string[] {
     return Object.keys(this._map);
   }

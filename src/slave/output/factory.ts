@@ -15,6 +15,6 @@ export function makeOutput(args: {
     args.req,
     args.res,
     args.stream.getFormat(),
-    componentLogger(`stream[${args.stream.getId()}]:output_raw[#${args.listenerId}]`)
+    componentLogger(`stream[${args.stream.getId()}]:listener[#${args.listenerId}]:output_raw`)
   );
 }
