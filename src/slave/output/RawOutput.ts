@@ -8,6 +8,10 @@ export class RawOutput extends HttpOutput {
     (this.res as any)._send('');
   }
 
+  getType() {
+    return 'raw';
+  }
+
   shouldPump() {
     return true;
   }

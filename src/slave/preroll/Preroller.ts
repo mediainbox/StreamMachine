@@ -5,7 +5,7 @@ import {AdOperator} from "./AdOperator";
 import {IListener} from "../listeners/IListener";
 import {IPreroller} from "./IPreroller";
 import {componentLogger} from "../../logger";
-import {AdsConfig} from "../../types/stream";
+import {AdsConfig} from "../../types/ads";
 
 export class Preroller implements IPreroller {
   private adRequests = 0;
@@ -40,9 +40,9 @@ export class Preroller implements IPreroller {
     const adUrl = this.config.serverUrl
         .replace("!KEY!", this.streamId) // FIXME
         .replace("!STREAM!", this.streamId)
-        .replace("!IP!", listener.client.ip)
-        .replace("!UA!", encodeURIComponent(listener.client.ua))
-        .replace("!UUID!", listener.client.session_id);
+        .replace("!IP!", listener.getClient().ip)
+        .replace("!UA!", encodeURIComponent(listener.getClient().ua))
+        .replace("!UUID!", listener.getSessionId());
 
     return new AdOperator(
       String(adId),
@@ -51,7 +51,7 @@ export class Preroller implements IPreroller {
         adUrl,
         streamKey: this.streamId,
       },
-      componentLogger(`stream[${this.streamId}]:ad_operator[#${listener.id}]`)
+      componentLogger(`stream[${this.streamId}]:ad_operator[#${listener.getId()}]`)
     );
   }
 }

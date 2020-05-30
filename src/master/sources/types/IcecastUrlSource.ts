@@ -7,7 +7,7 @@ import {Logger} from "winston";
 import {Mutable} from "../../../helpers/types";
 import {passthrough} from "../../../helpers/events";
 import {SourceChunker} from "../base/SourceChunker";
-import {IcecastUrlConfig} from 'src/master/types/config';
+import {IcecastUrlConfig} from 'src/master/config/source';
 import {BaseSource} from "../base/BaseSource";
 
 const Icy = require('icy');
@@ -25,12 +25,11 @@ export class IcecastUrlSource extends BaseSource<IcecastUrlConfig> {
   private reconnectTimeout?: NodeJS.Timeout;
 
   constructor(
-    readonly config: IcecastUrlConfig,
-    readonly sourceChunker: SourceChunker,
-    readonly logger: Logger,
+    protected readonly config: IcecastUrlConfig,
+    protected readonly sourceChunker: SourceChunker,
+    protected readonly logger: Logger,
   ) {
     super(config, logger);
-
     passthrough(['chunk', 'vitals'], this.sourceChunker, this);
   }
 
@@ -42,10 +41,9 @@ export class IcecastUrlSource extends BaseSource<IcecastUrlConfig> {
     return {} as any;
   }
 
-  connect = () => {
+  connect() {
     this.logger.info(`Connect to Icecast at ${this.config.url}`);
-    this.sourceChunker.reset();
-
+    this.sourceChunker.setup();
 
     const parsedUrl = url.parse(this.redirectedUrl || this.config.url);
 
@@ -89,7 +87,7 @@ export class IcecastUrlSource extends BaseSource<IcecastUrlConfig> {
       this.icyResponse.pipe(this.sourceChunker);
 
       this.emit("connect");
-      this.checkStatusTimeout = setTimeout(this.checkStatus, CHECK_INTERVAL);
+      this.checkStatusTimeout = setTimeout(() => this.checkStatus(), CHECK_INTERVAL);
     });
 
     this.icyRequest!.once("error", (error) => {
@@ -103,7 +101,7 @@ export class IcecastUrlSource extends BaseSource<IcecastUrlConfig> {
     });
   };
 
-  checkStatus = () => {
+  checkStatus() {
     if (!this.isConnected()) {
       this.logger.debug("Status check: not connected, skip status check");
       return;
@@ -112,7 +110,7 @@ export class IcecastUrlSource extends BaseSource<IcecastUrlConfig> {
     this.logger.silly(`Status check: last chunk is ${this.lastChunkTs ? toTime(this.lastChunkTs) : 'NULL'}`);
 
     if (!this.lastChunkTs) {
-      this.checkStatusTimeout = setTimeout(this.checkStatus, 5000);
+      this.checkStatusTimeout = setTimeout(() => this.checkStatus(), 5000);
       return;
     }
 
@@ -122,22 +120,23 @@ export class IcecastUrlSource extends BaseSource<IcecastUrlConfig> {
       return;
     }
 
-    this.checkStatusTimeout = setTimeout(this.checkStatus, 30000);
-  };
+    this.checkStatusTimeout = setTimeout(() => this.checkStatus(), 30000);
+  }
 
-  reconnect = () => {
+  reconnect() {
     if (this.isConnected()) {
       return;
     }
 
     this.logger.debug(`Reconnect to Icecast source from ${this.config.url} in ${RECONNECT_WAIT}ms`);
-    this.reconnectTimeout = setTimeout(this.connect, RECONNECT_WAIT);
-  };
+    this.reconnectTimeout = setTimeout(() => this.connect(), RECONNECT_WAIT);
+  }
 
   reset() {
     this.checkStatusTimeout && clearInterval(this.checkStatusTimeout);
     this.reconnectTimeout && clearInterval(this.reconnectTimeout);
 
+    this.icyResponse?.unpipe();
     this.icyRequest?.destroy();
     this.icyResponse?.destroy();
 
@@ -156,5 +155,6 @@ export class IcecastUrlSource extends BaseSource<IcecastUrlConfig> {
 
   destroy(): void {
     this.sourceChunker.destroy();
+    this.removeAllListeners();
   }
 }

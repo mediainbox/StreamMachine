@@ -1,6 +1,7 @@
-import {Kbytes, Milliseconds, Seconds} from "./util";
-import {Chunk, Format, IfEnabled} from "./index";
+import {Kbytes, Seconds} from "./util";
+import {Format, IfEnabled} from "./index";
 import {DeepReadonly} from "ts-essentials";
+import {AdsConfig} from "./ads";
 
 export type BaseStreamConfig = DeepReadonly<{
   clientId: string;
@@ -14,29 +15,19 @@ export type BaseStreamConfig = DeepReadonly<{
     maxSeconds: Seconds;
   };
   listen: {
-    initialBurst: Seconds;
+    initialBurstSeconds: Seconds;
     maxBufferSize: Kbytes;
   };
-  analytics: IfEnabled<{
-    listenInterval: Seconds;
-  }>
+  eventsReport: {
+    listener: IfEnabled<{
+      interval: Seconds;
+    }>
+  },
   ads: IfEnabled<AdsConfig>;
-  geolock: IfEnabled<{
-    mode: 'whitelist' | 'blacklist';
-    countryCodes: readonly string[]
-    fallback: string;
-  }>;
+  //geolock: IfEnabled<{
+  //  mode: 'whitelist' | 'blacklist';
+  //  countryCodes: readonly string[]
+  //  fallback: string;
+  //}>;
 }>;
 
-export interface AdsConfig {
-  serverUrl: string;
-  transcoderUrl: string;
-  adTimeout: Milliseconds;
-  impressionDelay: Milliseconds;
-  prerollKey?: string;
-}
-
-export interface StreamChunk {
-  readonly streamId: string;
-  readonly chunk: Chunk;
-}

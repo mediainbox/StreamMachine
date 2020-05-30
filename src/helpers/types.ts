@@ -504,3 +504,11 @@ export type ReadonlyKeys<T> = {
 export type Arguments<T> = [T] extends [(...args: infer U) => any]
   ? U
   : [T] extends [void] ? [] : [T]
+
+type Impossible<K extends keyof any> = {
+  [P in K]: never;
+};
+
+export type NoExtraProperties<T, U extends T = T> = U extends Array<infer V>
+  ? NoExtraProperties<V>[]
+  : U & Impossible<Exclude<keyof U, keyof T>>;

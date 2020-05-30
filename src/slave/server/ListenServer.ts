@@ -9,7 +9,7 @@ import {EventEmitter} from 'events';
 import {Logger} from "winston";
 import {componentLogger} from "../../logger";
 import {SlaveEvent, slaveEvents} from "../events";
-import {SlaveConfig} from "../types/config";
+import {SlaveConfig} from "../config";
 
 const cors = require("cors");
 const cookieParser = require('cookie-parser');

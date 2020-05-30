@@ -34,7 +34,7 @@ export class ListenersCleaner {
         }
 
         this.logger.info("connection exceeded max buffer size.", {
-          client: listener.id,
+          client: listener.getId(),
           queuedBytes
         });
 

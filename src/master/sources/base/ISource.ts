@@ -1,6 +1,6 @@
 import {Chunk, SourceStatus, SourceVitals, StreamMetadata} from "../../../types";
 import {TypedEmitter} from "../../../helpers/events";
-import {BaseSourceConfig} from "../../types/config";
+import {BaseSourceConfig} from "../../config/source";
 
 export interface SourceEvents {
   connect: () => void;
@@ -14,6 +14,8 @@ export interface SourceEvents {
 
 export interface ISource<Config extends BaseSourceConfig = any> extends TypedEmitter<SourceEvents> {
   getId(): string;
+
+  getLabel(): string;
 
   getPriority(): number;
 

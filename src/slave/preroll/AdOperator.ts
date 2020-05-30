@@ -5,9 +5,7 @@ import {IAdOperator} from "./types";
 import {Readable} from "stream";
 import {parseAdResponse} from "./responseParser";
 import {EmptyReadable} from "../../util/EmptyReadable";
-import {Client} from "../listeners/Client";
-import {componentLogger} from "../../logger";
-import {AdsConfig} from "../../types/stream";
+import {AdsConfig} from "../../types/ads";
 
 type Config = Omit<AdsConfig, 'serverUrl'> & {
   adUrl: string;
@@ -126,7 +124,7 @@ export class AdOperator implements IAdOperator {
         .catch(error => {
           this.logger.debug('impression request failed', { error });
         })
-    }, this.config.impressionDelay);
+    }, this.config.impressionDelayMs);
   }
 
   // if the preroll request can't be completed in time, abort
@@ -134,7 +132,7 @@ export class AdOperator implements IAdOperator {
     return setTimeout(() => {
       this.logger.warn(`ad build timeout, abort`)
       this.abort();
-    }, this.config.adTimeout);
+    }, this.config.adTimeoutMs);
   }
 
   private cleanup() {

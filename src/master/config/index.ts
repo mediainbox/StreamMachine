@@ -1,56 +1,72 @@
 import _ from "lodash";
-import {Kbytes, Seconds} from "../../types/util";
-import {MasterConfig, MasterStreamConfig} from "../types/config";
-import {Format, IfEnabled} from "../../types";
-import {AdsConfig} from "../../types/stream";
+import * as yup from 'yup';
+import {logConfigSchema} from "../../logger/config";
+import {DEFAULT_STREAM_CONFIG, MasterStreamConfig, streamConfigSchema} from "./stream";
+import {DeepReadonly} from "ts-essentials";
+import {BaseAppConfig} from "../../config/types";
 
-export const DEFAULT_CONFIG: Partial<MasterConfig> = {
+export type MasterConfig = BaseAppConfig & DeepReadonly<{
+  server: {
+    port: number;
+  };
+  slaveAuth: {
+    password: string;
+  };
+  //sourceIn: IfEnabled<{
+  //  port: number;
+  //  ip: string;
+  //}>;
+  //redis: {
+  //  url: string;
+  //};
+  //rewindBuffer: {
+  //  dump: IfEnabled<{
+  //    dir: string;
+  //    frequency: Seconds;
+  //  }>;
+  //};
+  defaultStreamConfig: Partial<MasterStreamConfig>;
+  streams: MasterStreamConfig[];
+}>;
+
+export const masterConfigSchema = yup.object({
+  env: yup.string().required(),
+  log: logConfigSchema.required(),
+  server: yup.object({
+    port: yup.number().positive().max(65535).required()
+  }).required(),
+  slaveAuth: yup.object({
+    password: yup.string().required()
+  }).required(),
+  streams: yup.array().of(streamConfigSchema).defined(),
+}).required();
+
+export const DEFAULT_MASTER_CONFIG: Partial<MasterConfig> = {
   log: {
     level: "info",
-    transports: {}
-  },
-  sourceIn: {
-    enabled: false,
+    transports: {
+      json: {
+        enabled: false,
+      },
+      stackdriver: {
+        enabled: false
+      }
+    }
   },
   server: {
     port: 8020,
   },
-  rewindBuffer: {
-    dump: {
-      enabled: false,
-      frequency: 300 as Seconds,
-    }
-  }
-}
+  defaultStreamConfig: DEFAULT_STREAM_CONFIG,
+  streams: [],
+};
 
-// TODO: add proper validation
-export function validateMasterConfig(config: MasterConfig): MasterConfig {
-  return _.defaultsDeep({}, config, DEFAULT_CONFIG);
-}
+export function validateMasterConfig(data: string | object): MasterConfig {
+  const final = _.defaultsDeep(
+    {},
+    typeof data === 'string' ? JSON.parse(data) : data,
+    DEFAULT_MASTER_CONFIG
+  );
+  masterConfigSchema.validateSync(final);
 
-// TODO: move to a master config value
-export const DEFAULT_STREAM_CONFIG: Partial<MasterStreamConfig> = {
-  enabled: true,
-  chunkDuration: 5 as Seconds,
-  rewindBuffer: {
-    maxSeconds: 300 as Seconds,
-  },
-  listen: {
-    initialBurst: 15 as Seconds,
-    maxBufferSize: 4096 as Kbytes,
-  },
-  analytics: {
-    enabled: false,
-  },
-  ads: {
-    enabled: false,
-  },
-  geolock: {
-    enabled: false,
-  }
-}
-
-// TODO: add proper validation
-export function validateStreamConfig(config: MasterStreamConfig): MasterStreamConfig {
-  return _.defaultsDeep({}, config, DEFAULT_STREAM_CONFIG);
+  return final;
 }

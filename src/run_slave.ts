@@ -1,11 +1,7 @@
-/*
-require('@google-cloud/trace-agent').start
-    projectId: process.env.GCLOUD_PROJECT
-    keyFilename: process.env.GCLOUD_KEY_FILENAME
-*/
-
-import nconf from "nconf";
-import { Slave } from './slave/Slave';
+import {Slave} from './slave/Slave';
+import {parseCommand, runConfigurable} from "./config/runner";
+import {Master} from "./master/Master";
+import {validateMasterConfig} from "./master/config";
 
 process.env.NEW_RELIC_NO_CONFIG_FILE = 'true';
 if (process.env.NEW_RELIC_APP_NAME && process.env.NEW_RELIC_LICENSE_KEY) {
@@ -13,12 +9,7 @@ if (process.env.NEW_RELIC_APP_NAME && process.env.NEW_RELIC_LICENSE_KEY) {
   require('newrelic');
 }
 
-nconf.env().argv();
-nconf.file({
-  file: nconf.get("config")
-});
-
-new Slave(nconf.get());
+new Slave(parseCommand());
 
 setInterval(function () {
   //console.log("process alive timer");

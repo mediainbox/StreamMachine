@@ -17,23 +17,17 @@ interface Config {
 }
 
 export class SourceChunker extends Writable implements BaseTypedEmitter<Events> {
-  protected chunker?: FrameChunker;
-  protected parser?: Writable;
+  protected chunker: FrameChunker = null!;
+  protected parser: Writable = null!;
 
   constructor(private readonly config: Config) {
     super();
 
-
-    this.prepare();
+    this.setup();
   }
 
-  prepare() {
+  setup() {
     this.reset();
-
-    this.chunker = new FrameChunker(this.config.chunkDuration * 1000);
-    this.parser = getParserForFormat(this.config.format);
-
-    this.chunker.resetTime(Date.now());
 
     // get vitals from first header
     this.parser.once("header", (header: FrameHeader) => {
@@ -62,12 +56,21 @@ export class SourceChunker extends Writable implements BaseTypedEmitter<Events> 
     });
   }
 
-  reset() {
+  _write(chunk: any, encoding: BufferEncoding, cb: (error?: (Error | null)) => void) {
+    this.parser.write(chunk);
+    cb();
+  }
+
+  private reset() {
     this.chunker?.destroy();
     this.chunker?.removeAllListeners();
 
     this.parser?.destroy();
     this.parser?.removeAllListeners();
+
+    this.chunker = new FrameChunker(this.config.chunkDuration * 1000);
+    this.parser = getParserForFormat(this.config.format);
+    this.chunker.resetTime(Date.now());
   }
 
   _destroy() {

@@ -21,8 +21,8 @@ export async function createListenerSource(args: {
 
   const rewinder = new Rewinder(
     rewindBuffer,
-    listener.options,
-    componentLogger(`stream[${streamId}]:listener[#${listener.id}]:rewinder`),
+    listener.getOptions(),
+    componentLogger(`stream[${streamId}]:listener[#${listener.getId()}]:rewinder`),
   );
 
   const [preroll] = await Promise.all([

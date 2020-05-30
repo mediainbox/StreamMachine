@@ -16,7 +16,7 @@ export function trackingMiddleware(streams: StreamsCollection): express.RequestH
     let uniqListenerId = req.cookies.unique_listener_id;
     if (!uniqListenerId) {
       uniqListenerId = uuid.v4();
-      res.cookie('unique_listener_id', uuid.v4(), {
+      res.cookie('unique_listener_id', uniqListenerId, {
         maxAge: 365 * 24 * 60 * 1000 // 1 year
       });
     }

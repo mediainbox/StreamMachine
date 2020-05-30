@@ -1,65 +1,60 @@
 import './types/ambient';
 import {SlaveStream} from "./stream/Stream";
 import {StreamsCollection} from "./streams/StreamsCollection";
-import {EventEmitter} from "events";
 import {Logger} from "winston";
 import {ListenersConnector} from "./listeners/ListenersConnector";
 import {ListenServer} from "./server/ListenServer";
 import {MasterConnection} from "./master_io/MasterConnection";
-import {AnalyticsReporter} from "./analytics/AnalyticsReporter";
 import {buildHttpServer} from "./server/HttpServer";
 import express from "express";
 import {componentLogger, createLogger} from "../logger";
 import _ from "lodash";
 import {SlaveEvent, slaveEvents} from "./events";
 import {SlaveStreamsConfig} from "./types/streams";
-import {validateConfig} from "./config";
-import {SlaveConfig} from "./types/config";
+import {SlaveConfig, validateConfig} from "./config";
+import {EventsReporter} from "./events/EventsReporter";
 
-export class Slave extends EventEmitter {
+export class Slave {
   private connected = false;
-  private configured = false;
 
   private readonly logger: Logger;
   private readonly streams: StreamsCollection;
   private readonly masterConnection: MasterConnection;
   private readonly listenersConnector: ListenersConnector;
   private readonly listenServer: ListenServer;
-  private readonly analyticsReporter: AnalyticsReporter;
+  private readonly eventsReporter: EventsReporter;
 
   private readonly app: express.Application;
   private readonly config: SlaveConfig;
 
   constructor(_config: SlaveConfig) {
-    super();
+      const config = this.config = validateConfig(_config);
 
-    const config = this.config = validateConfig(_config);
+      createLogger('slave', config.log);
+      this.logger = componentLogger('slave');
 
-    createLogger('slave', config.log);
-    this.logger = componentLogger('slave');
+      this.logger.info("Initialize slave");
 
-    this.logger.info("Initialize slave");
+      this.masterConnection = new MasterConnection({
+        slaveId: config.slaveId,
+        ...config.master
+      });
 
-    this.masterConnection = new MasterConnection({
-      slaveId: config.slaveId,
-      ...config.master
-    });
+      this.streams = new StreamsCollection();
+      this.listenersConnector = new ListenersConnector();
+      this.listenServer = new ListenServer(
+        config.server,
+        this.streams,
+      );
 
-    this.streams = new StreamsCollection();
-    this.listenersConnector = new ListenersConnector();
-    this.analyticsReporter = new AnalyticsReporter(this.masterConnection);
+      this.eventsReporter = new EventsReporter(this.masterConnection, this.config);
 
-    this.listenServer = new ListenServer(
-      config.server,
-      this.streams,
-    );
+      // setup server related components
+      this.app = express();
+      buildHttpServer(this.app, config);
+      this.app.use(this.listenServer.getApp())
 
-    // setup server related components
-    this.app = express();
-    buildHttpServer(this.app, config);
-    this.app.use(this.listenServer.getApp())
-
-    this.hookEvents();
+      this.hookEvents();
   }
 
   hookEvents() {

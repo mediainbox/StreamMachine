@@ -1,14 +1,15 @@
 import {Logger} from "winston";
 import {Readable} from "stream";
-import {StreamSources} from "./StreamSources";
+import {StreamSources} from "./sources/StreamSources";
 import {componentLogger} from "../../logger";
 import {TypedEmitterClass} from "../../helpers/events";
 import {Chunk, SourceVitals} from "../../types";
 import {masterEvents} from "../events";
 import {RewindBuffer} from "../../rewind/RewindBuffer";
-import {MasterStreamConfig} from "../types/config";
 import _ from "lodash";
 import {difference} from "../../helpers/object";
+import {MasterStreamStatus} from "../types/stream";
+import {MasterStreamConfig} from "../config/stream";
 
 interface Events {
   chunk: (chunk: Chunk) => void;
@@ -30,7 +31,8 @@ export class MasterStream extends TypedEmitterClass<Events>() {
   private readonly logger: Logger;
 
   private rewindBuffer?: RewindBuffer;
-  private vitals?: SourceVitals;
+  private vitals: SourceVitals | null = null;
+  private lastChunkTs: number | null = null;
   private state = MasterStreamState.CREATED;
 
   constructor(
@@ -60,6 +62,7 @@ export class MasterStream extends TypedEmitterClass<Events>() {
         chunk
       });
 
+      this.lastChunkTs = chunk.ts;
       this.rewindBuffer?.push(chunk);
     });
   }
@@ -93,7 +96,11 @@ export class MasterStream extends TypedEmitterClass<Events>() {
     return this.id;
   }
 
-  getConfig() {
+  getClientId() {
+    return this.config.clientId;
+  }
+
+  getConfig(): MasterStreamConfig {
     return this.config;
   }
 
@@ -101,14 +108,15 @@ export class MasterStream extends TypedEmitterClass<Events>() {
     return this.vitals;
   }
 
-  getStatus() {
+  getStatus(): MasterStreamStatus {
     return {
-      // id is DEPRECATED in favor of key
-      key: this.id,
       id: this.id,
-      //vitals: this._vitals,
-      //source: this.source.status(),
-      //rewind: this.rewindBuffer.getStatus()
+      config: this.config,
+      state: this.state,
+      vitals: this.vitals,
+      lastChunkTs: this.lastChunkTs ? new Date(this.lastChunkTs) : null,
+      rewindBuffer: this.rewindBuffer?.getStatus() ?? null,
+      sourcesStatus: []
     };
   }
 

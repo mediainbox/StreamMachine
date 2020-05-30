@@ -1,0 +1,9 @@
+{
+  "log": {
+    "level": "silly",
+    "transports": {}
+  },
+  "es": {
+    "nodes": "http://localhost:9200"
+  }
+}

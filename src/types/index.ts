@@ -46,19 +46,28 @@ export interface SourceStatus<Config> {
   readonly lastChunkTs: number | null;
 }
 
-export interface LoggerConfig {
-  readonly level?: string;
-  readonly transports: {
-    readonly json?: {
-      readonly level?: string;
-      readonly file: string;
-    };
-    readonly stackdriver?: {
-      readonly level?: string;
-    };
-  };
-}
-
 export type IfEnabled<T> =
   | { enabled: false } & Partial<T>
   | { enabled: true } & T;
+
+export interface ClientData {
+  readonly path: string;
+  readonly ip: string;
+  readonly ua: string;
+  readonly device: {
+    type: string | null;
+    os: string | null;
+    browser: string | null;
+  };
+}
+
+export interface GeoData {
+  readonly continent: string;
+  readonly country: string;
+  readonly city: string;
+}
+
+export interface StreamChunk {
+  readonly streamId: string;
+  readonly chunk: Chunk;
+}

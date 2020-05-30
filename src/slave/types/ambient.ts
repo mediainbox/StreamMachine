@@ -1,4 +1,5 @@
 import { SlaveStream } from "../stream/Stream";
+import {Milliseconds} from "../../types/util";
 
 export {};
 
@@ -13,3 +14,10 @@ declare global {
     }
   }
 }
+
+declare global {
+  interface ObjectConstructor {
+    typedKeys<T>(o: T) : Array<keyof T>
+  }
+}
+

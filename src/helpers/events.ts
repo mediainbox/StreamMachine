@@ -56,6 +56,4 @@ export function TypedEmitterClass<Events>(): { new(): TypedEmitter<Events> } {
   return BetterEventEmitter as any;
 }
 
-export type EventsDefinition<Type extends string> = {
-  [P in Type]: (...args: any[]) => void;
-};
+export type EventsDefinition<Type extends string> = Record<Type, (...args: any[]) => void>;

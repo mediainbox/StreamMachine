@@ -7,7 +7,6 @@ import {Logger} from "winston";
 import {toTime} from "../helpers/datetime";
 import {RewindWriter} from "./RewindWriter";
 import {Readable} from 'stream';
-import _ from "lodash";
 
 interface Config {
   maxSeconds: Seconds;
@@ -17,6 +16,15 @@ interface Events {
   reset: () => void;
   preload_start: () => void;
   preload_done: () => void;
+}
+
+export interface RewindBufferStatus {
+  readonly config: Config;
+  readonly vitals: SourceVitals;
+  readonly seconds: Seconds;
+  readonly chunks: number;
+  readonly startDate: Date | null;
+  readonly endDate: Date | null;
 }
 
 // RewindBuffer supports play from an arbitrary position in the last X hours
@@ -195,17 +203,9 @@ export class RewindBuffer extends TypedEmitterClass<Events>() {
     this.emit("reset");
   }
 
-  getStatus() {
-    return {
-      buffer_length: this.buffer.length(),
-      first_buffer_ts: _.get(this.buffer.first(), 'ts', null),
-      last_buffer_ts: _.get(this.buffer.last(), 'ts', null)
-    };
-  }
-
   // convert buffered length to seconds
-  getBufferedSeconds() {
-    return Math.round(this.buffer.length() * this.vitals.chunkDuration);
+  getBufferedSeconds(): Seconds {
+    return Math.round(this.buffer.length() * this.vitals.chunkDuration) as Seconds;
   }
 
   secondsToOffset(seconds: Seconds) {
@@ -224,5 +224,16 @@ export class RewindBuffer extends TypedEmitterClass<Events>() {
     const copy = this.buffer.clone();
 
     return new RewindWriter(copy, this.vitals);
+  }
+
+  getStatus(): RewindBufferStatus {
+    return {
+      config: this.config,
+      vitals: this.vitals,
+      seconds: this.getBufferedSeconds(),
+      chunks: this.buffer.length(),
+      startDate: this.buffer.length() ? new Date(this.buffer.first().ts) : null,
+      endDate: this.buffer.length() ? new Date(this.buffer.last().ts) : null,
+    }
   }
 }

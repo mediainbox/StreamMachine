@@ -1,11 +1,12 @@
 import {makeOutput} from '../output/factory';
 import {Listener} from "./Listener";
-import {Client} from "./Client";
+import {clientFromRequest} from "./client";
 import {IListener} from "./IListener";
-import {SlaveEvent, slaveEvents, ListenerLandedEvent} from "../events";
+import {SlaveEvent, slaveEvents} from "../events";
 import {componentLogger} from "../../logger";
 import {Seconds} from "../../types/util";
-import {ListenOptions} from "../types";
+import {SlaveListenerLandedEvent} from "../events/types";
+import {ListenerObserver} from "./ListenerObserver";
 
 interface Config {
 }
@@ -24,34 +25,41 @@ export class ListenersConnector {
     slaveEvents().on(SlaveEvent.LISTENER_LANDED, this.receive);
   }
 
-  receive = ({stream, req, res}: ListenerLandedEvent) => {
+  receive = ({stream, req, res}: SlaveListenerLandedEvent) => {
     this.listenersCount++;
-    const listenerId = String(this.listenersCount);
 
+    const listenerId = req.tracking.unique_listener_id;
     const output = makeOutput({
-      listenerId,
       stream,
       req,
       res,
+      listenerId,
     });
 
     const streamConfig = stream.getConfig();
 
-    // TODO: validate options with stream
-    const listenOptions: ListenOptions = {
-      offset: (req.query.offset ? Number(req.query.offset) : 0) as Seconds,
-      initialBurst: streamConfig.listen.initialBurst,
-      pumpAndFinish: !!req.query.pumpAndFinish
-    };
+    const listener: IListener = new Listener(
+      listenerId,
+      req.tracking.session_id,
+      clientFromRequest(req),
 
-    const listener: IListener = new Listener(stream.getId(), listenerId)
-      .setClient(Client.fromRequest(req))
-      .setOutput(output)
-      .setOptions(listenOptions)
-      .setLogger(componentLogger(`stream[${stream.getId()}]:listener[#${listenerId}]`));
+      // TODO: validate options with stream
+      {
+        offset: (req.query.offset ? Number(req.query.offset) : 0) as Seconds,
+        initialBurst: streamConfig.listen.initialBurstSeconds,
+        pumpAndFinish: !!req.query.pumpAndFinish
+      }
+    )
+      .setLogger(componentLogger(`stream[${stream.getId()}]:listener[#${listenerId}]`))
+      .setOutput(output);
 
-    if (streamConfig.analytics.enabled) {
-      listener.emitListen(streamConfig.analytics.listenInterval);
+    if (streamConfig.eventsReport.listener.enabled) {
+      new ListenerObserver(
+        stream,
+        listener,
+        output,
+        streamConfig.eventsReport.listener.interval,
+      );
     }
 
     stream

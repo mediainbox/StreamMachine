@@ -8,7 +8,7 @@ import {componentLogger} from "../../logger";
 import {SlaveEvent, slaveEvents} from "../events";
 import {MasterWsMessage, SlaveWsMessage, SlaveWsSocket} from "../../messages";
 import {SlaveStreamsConfig} from "../types/streams";
-import {SlaveConfig} from "../types/config";
+import {SlaveConfig} from "../config";
 
 const REWIND_REQUEST_TIMEOUT = 15 * 1000;
 const ALIVE_INTERVAL = 5000;

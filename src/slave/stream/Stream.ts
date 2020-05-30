@@ -1,5 +1,5 @@
 import {ListenersCollection} from "../listeners/ListenersCollection";
-import {Chunk, Err} from "../../types";
+import {Chunk, Err, StreamChunk} from "../../types";
 import {ListenersCleaner} from "../listeners/ListenersCleaner";
 import {toTime} from "../../helpers/datetime";
 import {Preroller} from "../preroll/Preroller";
@@ -14,12 +14,12 @@ import {ISource} from "../output/ISource";
 import {TypedEmitterClass} from "../../helpers/events";
 import {componentLogger} from "../../logger";
 import {StreamStats, StreamStatus} from "../types";
-import {ListenEventData, SlaveEvent, slaveEvents} from "../events";
+import {SlaveEvent, slaveEvents} from "../events";
 import {SlaveStreamStatus, StreamEvent, StreamEvents} from "./types";
 import {createRewindReader} from "../../rewind/RewindReader";
 import {SlaveStreamConfig} from "../types/streams";
 import {RewindBuffer} from "../../rewind/RewindBuffer";
-import {StreamChunk} from "../../types/stream";
+import {SlaveListenerListenEvent} from "../events/types";
 
 /**
  * Stream is the componenent where that listeners connect to.
@@ -75,6 +75,10 @@ export class SlaveStream extends TypedEmitterClass<StreamEvents>() {
     return this.id;
   }
 
+  getClientId() {
+    return this.config.clientId;
+  }
+
   getFormat() {
     return this.config.format;
   }
@@ -96,12 +100,12 @@ export class SlaveStream extends TypedEmitterClass<StreamEvents>() {
       });
     });
 
-    slaveEvents().on(SlaveEvent.LISTENER_LISTEN, (data: ListenEventData) => {
-      if (data.streamId !== this.id) {
+    slaveEvents().on(SlaveEvent.LISTENER_LISTEN, (data: SlaveListenerListenEvent) => {
+      if (data.stream.getId() !== this.id) {
         return;
       }
 
-      this.stats.sentBytes += data.sentBytes;
+      this.stats.sentBytes += data.kbytes * 1024;
     });
   }
 
@@ -170,12 +174,12 @@ export class SlaveStream extends TypedEmitterClass<StreamEvents>() {
       this.runOrWait(StreamEvent.READY, async () => {
         this.stats.connections++;
 
-        this.listenersCol.add(listener.id, listener);
-        this.logger.debug(`Add listener #${listener.id}, create source`);
+        this.listenersCol.add(listener.getId(), listener);
+        this.logger.debug(`Add listener #${listener.getId()}, create source`);
 
         listener.once('disconnect', () => {
-          this.logger.debug(`Remove listener #${listener.id}`);
-          this.listenersCol.remove(listener.id);
+          this.logger.debug(`Remove listener #${listener.getId()}`);
+          this.listenersCol.remove(listener.getId());
         });
 
         try {
@@ -186,11 +190,11 @@ export class SlaveStream extends TypedEmitterClass<StreamEvents>() {
             rewindBuffer: this.rewindBuffer,
           });
 
-          this.logger.debug(`Built audio source for listener #${listener.id}`);
+          this.logger.debug(`Built audio source for listener #${listener.getId()}`);
 
           listener.send(source);
         } catch (error) {
-          this.logger.error(`Error ocurred while loading rewinder for listener #${listener.id}`, {
+          this.logger.error(`Error ocurred while loading rewinder for listener #${listener.getId()}`, {
             error,
           });
           reject(error);

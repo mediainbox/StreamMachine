@@ -1,14 +1,14 @@
 import {SourceVitals} from "../../types";
 import {BaseStreamConfig} from "src/types/stream";
-import {Seconds} from "../../types/util";
+import {Bytes, Seconds} from "../../types/util";
 
 export type SlaveStreamConfig = BaseStreamConfig & {
   readonly vitals: SourceVitals;
 };
 
 export interface StreamStats {
-  connections: 0;
-  sentBytes: 0;
+  connections: number;
+  sentBytes: Bytes;
 }
 
 export interface StreamStatus {

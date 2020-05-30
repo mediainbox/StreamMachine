@@ -3,48 +3,45 @@ import * as CustomTransports from "./transports";
 import cluster from 'cluster';
 import winston, {Logger} from "winston";
 import * as os from "os";
-import {LoggerConfig} from "../types";
+import {LoggerConfig} from "./config";
 
 const {combine, timestamp, label, json, errors} = winston.format;
 
 let loggerInstance: Logger;
 
-export function createLogger(mode: string, config: LoggerConfig): Logger {
-  console.log(`[logger] create logger`);
+interface Labels extends Record<string, string> {
+  readonly app: string;
+  readonly env: string;
+  readonly version: string;
+}
 
+export function createLogger(config: LoggerConfig, labels: Labels): Logger {
   const transports = [];
 
   // debug transport to stdout if not prod
   if (process.env.NODE_ENV !== 'production') {
-    console.log("[logger] add debug transport");
     transports.push(new CustomTransports.DebugTransport());
   }
 
   // json file output
-  if (config.transports.json) {
-    console.log("[logger] adding json file transport");
+  const cJson = config.transports?.json;
+  if (cJson) {
     transports.push(new winston.transports.File({
-      level: config.transports.json.level,
-      filename: config.transports.json.file,
+      level: cJson.level,
+      filename: cJson.file,
       maxsize: 10 * 1024 * 1024,
     }));
   }
 
   // gcp stackdriver
-  if (config.transports.stackdriver) {
-    console.log("[logger] adding stackdriver transport");
+  const cStackdriver = config.transports?.stackdriver;
+  if (cStackdriver) {
     transports.push(new StackdriverLogging({
-      // TODO: fix
-      //logName: 'stream_machine',
-      level: config.transports.stackdriver.level,
-      /*serviceContext: {
-        service: 'stream-machine',
-        version: '1.0.0'
-      },*/
-      labels: {
-        //mode: mode,
-        //env: config.env
-      },
+      logName: 'stream_machine',
+      level: cStackdriver.level,
+      serviceContext: cStackdriver.serviceContext,
+      prefix: labels.app,
+      labels
     }));
   }
 
@@ -59,17 +56,17 @@ export function createLogger(mode: string, config: LoggerConfig): Logger {
   const logger = winston.createLogger({
     format: combine(
       addMetadata(),
-      errors({stack: true}),
+      errors({ stack: true }),
       timestamp(),
       json(),
     ),
     level: config.level,
-    transports: transports
+    transports
   });
 
   winston.addColors((winston.config as any).npm.levels);
-
   loggerInstance = logger;
+
   return logger;
 }
 

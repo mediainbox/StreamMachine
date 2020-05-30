@@ -1,48 +1,37 @@
-import {EventEmitter} from 'events';
 import {Logger} from "winston";
 import {IOutput} from "../output/IOutput";
-import {Client} from "./Client";
 import {Mutable} from "../../helpers/types";
 import {IListener} from "./IListener";
 import {ISource} from "../output/ISource";
 import {ListenOptions} from "../types";
-import {slaveEvents, SlaveEvent} from "../events";
+import {Bytes, Seconds} from "../../types/util";
+import {TypedEmitterClass} from "../../helpers/events";
+import {ClientData} from "../../types";
 
-export class Listener extends EventEmitter implements IListener {
-  readonly connectedAt = Date.now();
-  readonly client: Client = null!;
-  readonly options: ListenOptions = null!;
+interface Events {
+  start: () => void;
+  disconnect: () => void;
+}
 
+export class Listener extends TypedEmitterClass<Events>() implements IListener {
   private readonly source: ISource = null!;
   private readonly output: IOutput = null!;
   private readonly logger: Logger = null!;
 
-  private readonly listenInterval?: number;
-  private listenIntervalHandle?: NodeJS.Timeout;
-
+  private started = false;
   private disconnected = false;
-  private sentBytes = 0;
-  private sentSeconds = 0;
 
   constructor(
-    readonly streamId: string,
-    readonly id: string,
+    private readonly id: string,
+    private readonly sessionId: string,
+    private readonly client: ClientData,
+    private readonly options: ListenOptions,
   ) {
     super();
   }
 
-  setClient(client: Client): this {
-    (this.client as Mutable<Client>) = client;
-    return this;
-  }
-
   setOutput(output: IOutput): this {
     (this.output as Mutable<IOutput>) = output;
-    return this;
-  }
-
-  setOptions(options: ListenOptions): this {
-    (this.options as Mutable<ListenOptions>) = options;
     return this;
   }
 
@@ -51,53 +40,40 @@ export class Listener extends EventEmitter implements IListener {
     return this;
   }
 
-  emitListen(listenInterval: number): this {
-    (this.listenInterval as Mutable<number>) = listenInterval;
-    return this;
+  getId() {
+    return this.id;
   }
 
-  hookEvents() {
-    this.output.once('disconnect', this.disconnect);
-
-    if (this.listenInterval) {
-      this.listenIntervalHandle = setInterval(this.emitListenEvent, this.listenInterval);
-    }
+  getSessionId() {
+    return this.sessionId;
   }
 
-  emitListenEvent = () => {
-    const sentBytes = this.output.getSentBytes();
-    const sentSeconds = this.output.getSentSeconds();
-
-    slaveEvents().emit(SlaveEvent.LISTENER_LISTEN, {
-      listener: this,
-      ts: Date.now(),
-      streamId: this.streamId,
-      sentBytes: sentBytes - this.sentBytes,
-      sentSeconds: sentSeconds - this.sentSeconds,
-    });
-
-    this.sentBytes = sentBytes;
-    this.sentSeconds = sentSeconds;
+  getOptions() {
+    return this.options;
   }
 
-  getQueuedBytes() {
+  getClient() {
+    return this.client;
+  }
+
+  getQueuedBytes(): Bytes {
     return this.output.getQueuedBytes();
   }
 
-  getSentBytes() {
+  getSentBytes(): Bytes {
     return this.output.getSentBytes();
   }
 
-  getSentSeconds() {
+  getSentSeconds(): Seconds {
     return this.output.getSentSeconds();
   }
 
-  getSource() {
+  getSource(): ISource {
     return this.source;
   }
 
   send(source: ISource) {
-    this.hookEvents();
+    this.output.once('disconnect', this.disconnect);
 
     if (this.disconnected) {
       this.logger.debug(`listener disconnected before send, destroy source`);
@@ -106,8 +82,10 @@ export class Listener extends EventEmitter implements IListener {
     }
 
     (this.source as Mutable<ISource>) = source;
-    slaveEvents().emit(SlaveEvent.LISTENER_SESSION_START, this);
     this.output.send(source);
+
+    this.started = true;
+    this.emit('start');
   }
 
   disconnect = () => {
@@ -115,17 +93,12 @@ export class Listener extends EventEmitter implements IListener {
       return;
     }
 
-    this.emitListenEvent();
-    this.listenIntervalHandle && clearInterval(this.listenIntervalHandle);
-
-    this.logger.debug(`Listener disconnected`);
-    slaveEvents().emit(SlaveEvent.LISTENER_DISCONNECT, this);
     this.disconnected = true;
 
-    this.output.removeListener('disconnect', this.disconnect);
-    this.output.disconnect();
-
     this.emit('disconnect');
+    this.logger.debug(`Listener disconnected`);
+
+    this.output.disconnect();
     this.removeAllListeners();
   }
 }

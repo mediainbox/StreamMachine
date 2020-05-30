@@ -3,7 +3,7 @@ import {SlaveStreamsConfig} from "../slave/types/streams";
 import SocketIOClient from "socket.io-client";
 import {EventsDefinition} from "../helpers/events";
 import SocketIO from "socket.io";
-import {StreamChunk} from "../types/stream";
+import {StreamChunk} from "../types";
 
 export enum MasterWsMessage { // master -> slave
   STREAMS = 'streams',

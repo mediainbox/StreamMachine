@@ -7,7 +7,7 @@ import {SlaveConnection} from "./SlaveConnection";
 import {StreamsCollection} from "../streams/StreamsCollection";
 import {MasterWsSocket, SlaveWsMessage} from "../../messages";
 import {MasterEvent, masterEvents} from "../events";
-import {StreamChunk} from "../../types/stream";
+import {StreamChunk} from "../../types";
 
 // Socket.IO server that listens for Slave connections
 // Will create a SlaveConnection for each connected Slave

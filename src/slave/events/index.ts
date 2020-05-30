@@ -1,9 +1,12 @@
-import {SlaveStream} from "../stream/Stream";
-import express from "express";
 import {EventsDefinition, TypedEmitter, TypedEmitterClass} from "../../helpers/events";
-import {IListener} from "../listeners/IListener";
 import {SlaveStreamsConfig} from "../types/streams";
-import {StreamChunk} from "../../types/stream";
+import {
+  SlaveListenerDisconnectEvent,
+  SlaveListenerLandedEvent,
+  SlaveListenerListenEvent,
+  SlaveListenerListenStartEvent
+} from "./types";
+import {StreamChunk} from "../../types";
 
 let instance: TypedEmitter<SlaveEvents>;
 
@@ -21,34 +24,21 @@ export enum SlaveEvent {
   CONFIGURE_STREAMS = 'configure_streams',
   DISCONNECT = 'disconnect',
   CHUNK = 'chunk',
-  LISTENER_LANDED = 'listener_landed',
-  LISTENER_SESSION_START = 'listener_session_start',
+  LISTENER_LANDED = 'listener_landed', // request received, no stream still selected
+  LISTENER_START = 'listener_start', // listening started
   LISTENER_LISTEN = 'listener_listen',
   LISTENER_DISCONNECT = 'listener_disconnect',
 }
 
 export interface SlaveEvents extends EventsDefinition<SlaveEvent> {
-  connect: () => void;
-  connect_error: (error: Error) => void;
-  configure_streams: (streamsConfig: SlaveStreamsConfig) => void;
-  disconnect: () => void;
-  chunk: (chunk: StreamChunk) => void;
-  listener_landed: (args: { stream: SlaveStream, req: express.Request, res: express.Response }) => void;
-  listener_session_start: (listener: IListener) => void;
-  listener_listen: (data: ListenEventData) => void;
-  listener_disconnect: (listener: IListener) => void;
+  [SlaveEvent.CONNECT]: () => void;
+  [SlaveEvent.CONNECT_ERROR]: (error: Error) => void;
+  [SlaveEvent.CONFIGURE_STREAMS]: (streamsConfig: SlaveStreamsConfig) => void;
+  [SlaveEvent.DISCONNECT]: () => void;
+  [SlaveEvent.CHUNK]: (chunk: StreamChunk) => void;
+  [SlaveEvent.LISTENER_LANDED]: (data: SlaveListenerLandedEvent) => void;
+  [SlaveEvent.LISTENER_START]: (data: SlaveListenerListenStartEvent) => void;
+  [SlaveEvent.LISTENER_LISTEN]: (data: SlaveListenerListenEvent) => void;
+  [SlaveEvent.LISTENER_DISCONNECT]: (data: SlaveListenerDisconnectEvent) => void;
 }
 
-export interface ListenerLandedEvent {
-  readonly stream: SlaveStream;
-  readonly req: express.Request;
-  readonly res: express.Response;
-}
-
-export interface ListenEventData {
-  readonly listener: IListener;
-  readonly ts: number;
-  readonly streamId: string;
-  readonly sentBytes: number;
-  readonly sentSeconds: number;
-}

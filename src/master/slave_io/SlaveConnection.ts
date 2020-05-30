@@ -5,7 +5,7 @@ import {MasterWsMessage, MasterWsSocket} from "../../messages";
 import {TypedEmitterClass} from "../../helpers/events";
 import {MasterStream} from "../stream/Stream";
 import {getStreamsDataForSlaves} from "./helpers";
-import {StreamChunk} from "../../types/stream";
+import {StreamChunk} from "../../types";
 
 interface Events {
   disconnect: () => void;

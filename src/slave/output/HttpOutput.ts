@@ -3,12 +3,15 @@ import {IOutput} from "./IOutput";
 import {Logger} from "winston";
 import {Socket} from "net";
 import {Err, Format} from "../../types";
-import {EventEmitter} from "events";
 import {ISource} from "./ISource";
+import {Bytes, Seconds} from "../../types/util";
+import {TypedEmitterClass} from "../../helpers/events";
 
-const _ = require("lodash");
+interface Events {
+  disconnect: () => void;
+}
 
-export abstract class HttpOutput extends EventEmitter implements IOutput {
+export abstract class HttpOutput extends TypedEmitterClass<Events>() implements IOutput {
   protected disconnected = false;
   protected isStreaming = false;
 
@@ -34,6 +37,7 @@ export abstract class HttpOutput extends EventEmitter implements IOutput {
 
   abstract configure(headers: any): void;
   abstract shouldPump(): boolean;
+  abstract getType(): string;
 
   hookEvents() {
     this.socket.on("end", this.disconnect);
@@ -57,15 +61,15 @@ export abstract class HttpOutput extends EventEmitter implements IOutput {
     const bufferSize = this.socket.bufferSize || 0;
     const queuedBytes = this.source?.getQueuedBytes() || 0;
 
-    return bufferSize + queuedBytes;
+    return bufferSize + queuedBytes as Bytes;
   }
 
   getSentBytes() {
-    return this.socket.bytesWritten;
+    return this.socket.bytesWritten as Bytes;
   }
 
   getSentSeconds() {
-    return this.source?.getSentSeconds() || 0;
+    return (this.source?.getSentSeconds() || 0) as Seconds;
   }
 
   send(source: ISource) {

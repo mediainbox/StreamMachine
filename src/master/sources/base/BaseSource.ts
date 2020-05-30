@@ -1,11 +1,15 @@
 import {TypedEmitterClass} from "../../../helpers/events";
 import {ISource, SourceEvents} from "./ISource";
-import {BaseSourceConfig} from "../../types/config";
+import {BaseSourceConfig, SourceConfig} from "../../config/source";
 import {SourceState, SourceStatus, SourceVitals} from "../../../types";
 import {Logger} from "winston";
 import {toTime} from "../../../helpers/datetime";
 
-export abstract class BaseSource<Config extends BaseSourceConfig> extends TypedEmitterClass<SourceEvents>() implements ISource<Config> {
+export function sourceLabel(config: SourceConfig): string {
+  return `${config.name || `#${config.id}`}(${config.type})`
+}
+
+export abstract class BaseSource<Config extends SourceConfig> extends TypedEmitterClass<SourceEvents>() implements ISource<Config> {
   protected state: SourceState = SourceState.CREATED;
   protected lastChunkTs: number | null = null;
   protected vitals: SourceVitals | null = null;
@@ -17,6 +21,11 @@ export abstract class BaseSource<Config extends BaseSourceConfig> extends TypedE
     super();
 
     this.hookEvents();
+
+    // allow child class to finish setup
+    process.nextTick(() => {
+      this.connect();
+    });
   }
 
   hookEvents() {
@@ -59,6 +68,10 @@ export abstract class BaseSource<Config extends BaseSourceConfig> extends TypedE
     return this.config.id;
   }
 
+  getLabel() {
+    return sourceLabel(this.config);
+  }
+
   getPriority() {
     return this.config.priority;
   }
@@ -71,7 +84,16 @@ export abstract class BaseSource<Config extends BaseSourceConfig> extends TypedE
     return this.state === SourceState.CONNECTED;
   }
 
-  abstract getStatus(): SourceStatus<Config>;
+  getStatus() {
+    return {
+      id: this.config.id,
+      type: this.config.type,
+      state: this.state,
+      config: this.config,
+      vitals: this.vitals,
+      lastChunkTs: this.lastChunkTs,
+    };
+  }
 
   abstract configure(config: Config): void;
 

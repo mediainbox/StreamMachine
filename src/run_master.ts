@@ -5,8 +5,8 @@ require('@google-cloud/trace-agent').start
 */
 
 import {Master} from "./master/Master";
-import {ConfigProviderConfig} from "./master/types/config";
-import { argv } from "yargs";
+import {validateMasterConfig} from "./master/config";
+import {runConfigurable} from "./config/runner";
 
 process.env.NEW_RELIC_NO_CONFIG_FILE = 'true';
 if (process.env.NEW_RELIC_APP_NAME && process.env.NEW_RELIC_LICENSE_KEY) {
@@ -14,24 +14,4 @@ if (process.env.NEW_RELIC_APP_NAME && process.env.NEW_RELIC_LICENSE_KEY) {
   require('newrelic');
 }
 
-let pConfig: ConfigProviderConfig;
-
-if (argv.configFile) {
-  pConfig = {
-    type: 'file',
-    filepath: argv.configFile as string
-  };
-} else if (argv.configUrl) {
-  pConfig = {
-    type: 'url',
-    url: argv.url as string,
-  };
-} else {
-  throw new Error('Missing config provider arguments');
-}
-
-new Master(pConfig);
-
-setInterval(function () {
-  //console.log("process alive timer");
-}, 1000 * 60 * 60);
+runConfigurable(Master, validateMasterConfig);
