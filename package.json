@@ -52,7 +52,7 @@
     "moment": "2.17.1",
     "nconf": "~0.6.7",
     "newrelic": "^6.7.0",
-    "node-forge": "^0.9.1",
+    "node-forge": "^0.10.0",
     "node-uuid": "1.4.8",
     "nodemailer": "~0.4.1",
     "pagerduty": "~0.0.3",
